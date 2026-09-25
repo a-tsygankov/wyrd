@@ -1,0 +1,15 @@
+#!/bin/sh
+# Same model as feedme2: auto-bump staged tier versions locally; CI is the backstop.
+PY=""
+for c in python3 python py; do
+  if command -v "$c" >/dev/null 2>&1 && "$c" -c "pass" >/dev/null 2>&1; then
+    PY="$c"
+    break
+  fi
+done
+if [ -z "$PY" ]; then
+  echo "pre-commit: no working python found — skipping auto version bump" >&2
+  echo "            (CI's version-check will still enforce bumps)" >&2
+  exit 0
+fi
+"$PY" "$(git rev-parse --show-toplevel)/scripts/bump_versions.py"

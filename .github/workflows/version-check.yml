@@ -1,0 +1,21 @@
+name: Version bump check
+on:
+  pull_request:
+    branches: [main]
+jobs:
+  check:
+    name: Verify patch bump
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Version tooling unit tests
+        run: python3 -m unittest discover -s scripts -v
+      - name: Run version-bump check
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: python3 scripts/check_version_bump.py
