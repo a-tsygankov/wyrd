@@ -44,7 +44,8 @@ class Rules(unittest.TestCase):
 
 class Bumper(unittest.TestCase):
     def setUp(self):
-        self.tmp=tempfile.TemporaryDirectory(); self.repo=Path(self.tmp.name)
+        # ignore_cleanup_errors: git can still be writing to the repo (background maintenance) when the test ends; a cleanup race must not fail the suite (seen in CI 2026-09-26).
+        self.tmp=tempfile.TemporaryDirectory(ignore_cleanup_errors=True); self.repo=Path(self.tmp.name)
         git(self.repo,"init","-b","main"); git(self.repo,"config","user.email","t@example.com"); git(self.repo,"config","user.name","t")
         for rel in VERSION_FILES: write(self.repo,rel,pkg("0.0.1"))
         for rel in SOURCE_FILES: write(self.repo,rel,"export {}\n")

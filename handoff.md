@@ -27,6 +27,7 @@ M0 grammar + playable browser duel POC. Cloudflare deployment pipeline (worker +
 - `wrangler pages project create` (wrangler ≥ 4.14x) delegates to Pages-on-Workers and reads the nearest `wrangler.toml`; run it from `apps/web` with `--force` (the `-Provision` script does). `wrangler pages deploy` from `apps/web` still targets the classic project.
 
 ## Log
+- 2026-09-26 — glyph help collapsed into a tap-to-expand row (native details, remembers open state) so the tray stays within thumb reach; the resolver summary stays visible.
 - 2026-09-26 — explanations: per-glyph help as glyphs are added (`wyrd-content/glyphHelp.ts`) with a live resolver-backed summary of what the cast will do and what it is open to; the selected reaction explained against the telegraph; a round verdict with reasons on top of the combat log and a match verdict naming the winning seals (`wyrd-simulation/explain.ts`).
 - 2026-09-26 — hot-seat mode: two players on one phone with a hand-off overlay (`hotseat.ts` state machine, mode toggle in the header, `?mode=hotseat`); telemetry gains `mode` (`0002_telemetry_mode.sql`) so solo and hot-seat rounds stay separable in the summary.
 - 2026-09-26 — admin mode: triple-tap the title (or `?admin=1`) for a console with hidden state, best-move advice with resolver explanations (`advisor.ts`: adviseReaction / adviseSpell over a reaction-probability model; the bot now exposes `reactionProbabilities`) and the client log ring buffer (`log.ts`).

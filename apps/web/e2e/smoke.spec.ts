@@ -18,14 +18,21 @@ test("a spell can be cast and scores a seal", async ({ page }) => {
     await expect(page.locator("#telegraph")).toHaveText("FIRE → SEEK → ?");
     await expect(page.locator("#scenario-note")).toContainText("Scenario 1/");
     const tray = page.locator("#glyph-tray");
-    // Each glyph explains itself as it is added; the summary says what the cast will do.
+    // Each glyph explains itself behind one tap-to-expand row; the summary
+    // of what the cast will do stays open.
+    await expect(page.locator("#glyph-help")).toBeHidden();
     await tray.getByRole("button", { name: "FIRE", exact: true }).click();
-    await expect(page.locator("#spell-explain li").first()).toContainText("Essence");
+    await expect(page.locator("#glyph-help-toggle")).toHaveText("What FIRE does");
+    await expect(page.locator("#glyph-help-list li").first()).toBeHidden();
+    await page.locator("#glyph-help-toggle").click();
+    await expect(page.locator("#glyph-help-list li").first()).toContainText("Essence");
     await expect(page.locator("#spell-explain .summary")).toContainText(/not yet castable/i);
     for (const glyph of ["SEEK", "ENEMY"]) {
         await tray.getByRole("button", { name: glyph, exact: true }).click();
     }
     await expect(page.locator("#spell-preview")).toContainText("FIRE → SEEK → ENEMY");
+    await expect(page.locator("#glyph-help-toggle")).toHaveText("What FIRE, SEEK, ENEMY do");
+    await expect(page.locator("#glyph-help-list li")).toHaveCount(3);
     await expect(page.locator("#spell-explain .summary").first()).toContainText(/seal to you/i);
     await expect(page.locator("#spell-explain")).toContainText(/open to REFLECT/i);
     // The reaction explanation follows the selection.
