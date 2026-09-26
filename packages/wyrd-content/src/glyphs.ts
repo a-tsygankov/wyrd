@@ -94,6 +94,9 @@ export const glyphs: GlyphDefinition[] = [
         baseFocusCost: 2,
         precedence: 100,
         attachment: "operator",
+        // Not in the spec's inverse table, but MEND is defined as the repair of
+        // what BREAK removes (spec §12 "MEND vs BREAK"); REVERSE uses the pair.
+        inverseOf: "mend",
         tags: ["action", "boundary-break"],
         canonStatus: "canon-anchor"
     },
@@ -106,6 +109,7 @@ export const glyphs: GlyphDefinition[] = [
         baseFocusCost: 2,
         precedence: 100,
         attachment: "operator",
+        inverseOf: "break",
         tags: ["action", "repair", "healing"],
         canonStatus: "canon-anchor"
     },

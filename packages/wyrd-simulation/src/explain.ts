@@ -72,6 +72,13 @@ export function glyphHelpText(token: string, rules: RuleOptions = CLASSIC_RULES)
         case "ANCHOR":
             if (rules.reactionCosts) extra.push("Makes REFLECT (2 Focus) a wasted reaction for the opponent.");
             break;
+        case "SPLIT":
+            if (rules.wardIntegrity > 0) extra.push("Two branches of magnitude 1 shatter a fresh ward like one amplified hit.");
+            if (rules.resolve > 0) extra.push("Under Resolve, a split SEEK deals 1 twice.");
+            break;
+        case "WEAKEN":
+            if (rules.wardIntegrity > 0) extra.push("A magnitude-0 hit leaves a ward undented.");
+            break;
     }
     return extra.length ? `${base} ${extra.join(" ")}` : base;
 }
@@ -145,6 +152,21 @@ export function explainSpell(
     }
     const damage = plain.steps.find(s => s.code === "RESOLVE_DAMAGE");
     if (damage) summary.push(damage.text);
+    // The transformations the modifiers make, in the resolver's words: what
+    // REVERSE turned the action into, what WEAKEN did to the magnitude.
+    for (const code of ["REVERSE_APPLIED", "REVERSE_MAGNITUDE", "WEAKEN_APPLIED"]) {
+        const step = plain.steps.find(s => s.code === code);
+        if (step) summary.push(code === "REVERSE_APPLIED" ? `${step.text} The telegraph still shows ${tokens.find(t => t !== "REVERSE" && glyphHelp[t]?.role === "action") ?? "the original action"}.` : step.text);
+    }
+    const split = plain.steps.some(s => s.code === "SPLIT_APPLIED");
+    if (split) {
+        const reflectedSplit = cast("reflect");
+        const both = reflectedSplit.sealsAwarded?.player && reflectedSplit.sealsAwarded?.opponent;
+        summary.push(
+            `SPLIT: two branches, each at full magnitude${rules.wardIntegrity > 0 ? " (two dents on a ward)" : ""}.` +
+                (both ? ` REFLECT${price("reflect", rules)} turns back only one branch: you keep a seal and ${names.them} takes one too.` : "")
+        );
+    }
 
     if (uncontested === "blocked") {
         const ward = state.players[defenderId].ward;
@@ -159,7 +181,7 @@ export function explainSpell(
     const silenced = cast("silence");
     const anchored = plain.effect?.anchored ?? false;
     const amplified = (plain.effect?.magnitude ?? 1) > 1;
-    if (reflected === "opponent-seal") {
+    if (reflected === "opponent-seal" && !split) {
         summary.push(cap(`open to REFLECT${price("reflect", rules)}: ${names.them} could send it back and take the seal instead. ANCHOR would fix the route.`));
     } else if (anchored && plain.effect?.target === "enemy") {
         summary.push(`ANCHOR fixes the route: REFLECT${price("reflect", rules)} fails against this spell.`);
@@ -198,7 +220,7 @@ export function explainReaction(
     focusLeft?: number
 ): string {
     const seen = shown(telegraph);
-    const action = ["SEEK", "BIND", "WARD", "CLOSE"].find(a => seen.tokens.has(a));
+    const action = ["SEEK", "BIND", "WARD", "CLOSE", "OPEN", "BREAK", "MEND"].find(a => seen.tokens.has(a));
     const spellName = action ?? "their spell";
     const hiddenNote = seen.hidden > 0 ? ` ${seen.hidden} glyph${seen.hidden > 1 ? "s are" : " is"} hidden.` : "";
     const costNote = (r: ReactionGlyph): string => {
@@ -215,14 +237,14 @@ export function explainReaction(
         return `NULL cancels ${spellName} outright, whatever the hidden glyphs are. The hard counter - it also teaches you nothing about the spell.${costNote("null")}${hiddenNote}`;
     }
     if (reaction === "reflect") {
-        if (action === "CLOSE" || action === "WARD") {
-            return `REFLECT against ${action}: nothing to reverse - ${action} has no hostile route, so REFLECT is wasted here.${costNote("reflect")}`;
+        if (action === "CLOSE" || action === "OPEN" || action === "WARD" || action === "MEND") {
+            return `REFLECT against ${action}: nothing to reverse - ${action} has no hostile route (even REVERSEd, a gate spell stays on the gate), so REFLECT is wasted here.${costNote("reflect")}`;
         }
         return `REFLECT: if ${spellName}'s hidden target is ENEMY and it carries no ANCHOR, it returns to its caster and you gain the seal${rules.resolve > 0 ? " (and any Resolve damage)" : ""}. Against SELF, GATE or an ANCHORed route it does nothing.${costNote("reflect")}${hiddenNote}`;
     }
     // silence
     const integrityNote = rules.wardIntegrity > 0 ? " With wards that shatter, stripping AMPLIFY also spares your ward one dent." : "";
-    return `SILENCE strips AMPLIFY and ANCHOR from ${spellName} but the base spell still lands - use it to reopen an ANCHORed route for a later round, not to stop a seal.${integrityNote}${costNote("silence")}${hiddenNote}`;
+    return `SILENCE strips every modifier - AMPLIFY, WEAKEN, SPLIT, REVERSE, ANCHOR - from ${spellName} but the base spell still lands as telegraphed: it undoes a REVERSEd gate trick or a SPLIT, and reopens an ANCHORed route, but never stops a plain seal.${integrityNote}${costNote("silence")}${hiddenNote}`;
 }
 
 export type Contribution = {
@@ -268,14 +290,24 @@ export function explainRound(incoming: Contribution, outgoing: Contribution | un
         const outcome = classifyOutcome(c.result, casterIsYou ? "player" : "opponent");
         const effect = c.result.steps.find(s => s.stage === "effect" && s.code !== "RESOLVE_DAMAGE")?.text;
         const damage = c.result.steps.find(s => s.code === "RESOLVE_DAMAGE")?.text;
-        if (outcome === "player-seal") {
+        // A SPLIT branch turned by REFLECT scores for both sides at once.
+        const casterId: PlayerId = casterIsYou ? "player" : "opponent";
+        const defenderId: PlayerId = casterIsYou ? "opponent" : "player";
+        const awarded = c.result.sealsAwarded ?? (outcome === "player-seal" ? { [casterId]: 1 } : outcome === "opponent-seal" ? { [defenderId]: 1 } : {});
+        const casterScored = (awarded[casterId] ?? 0) > 0;
+        const defenderScored = (awarded[defenderId] ?? 0) > 0;
+        if (casterScored) {
             if (casterIsYou) yours++;
             else theirs++;
             reasons.push(cap(`${caster} gained a seal: ${spell} ${effect ? "- " + effect : "landed."}${damage ? " " + damage : ""}`));
-        } else if (outcome === "opponent-seal") {
+        }
+        if (defenderScored) {
             if (casterIsYou) theirs++;
             else yours++;
-            reasons.push(cap(`${defender} gained a seal: ${c.reaction?.toUpperCase() ?? "the reaction"} returned ${spell} to its caster.${damage ? " " + damage : ""}`));
+            reasons.push(cap(`${defender} gained a seal: ${c.reaction?.toUpperCase() ?? "the reaction"} returned ${casterScored ? "one branch of " : ""}${spell} to its caster.${damage && !casterScored ? " " + damage : ""}`));
+        }
+        if (casterScored || defenderScored) {
+            // fallthrough to the reaction note below
         } else if (outcome === "blocked") {
             const ward = c.result.steps.find(s => s.code === "WARD_BROKEN" || s.code === "WARD_DENTED")?.text;
             reasons.push(cap(`${caster}'s ${spell} was blocked by ${defender}'s ward.${ward ? " " + ward : ""}`));

@@ -9,6 +9,7 @@ import {
     chooseBotSpell,
     createRng,
     enumerateLegalSpells,
+    glyphFits,
     explainMatch,
     explainReaction,
     explainRound,
@@ -379,12 +380,17 @@ function appendLesson(scenario: Scenario, roundStart: DuelState): void {
 
 function renderGlyphTray(): void {
     glyphTray.replaceChildren();
+    // Which glyph can come next: completes a castable spell, keeps one
+    // possible, or leads nowhere (dimmed but still tappable - the parser's
+    // diagnostic then says why). The legal pool is the authority.
+    const fits = glyphFits(playerSpell, glyphChoices.map(c => c.token), spellPool, composeBudget().budget);
 
     for (const choice of glyphChoices) {
         const button = document.createElement("button");
         button.type = "button";
         button.className = "glyph-button";
         button.dataset.family = choice.family;
+        button.dataset.fit = fits[choice.token] ?? "open";
         button.textContent = choice.token;
         button.disabled = roundResolved || playerSpell.length >= 4;
         button.addEventListener("click", () => {

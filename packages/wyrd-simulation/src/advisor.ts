@@ -23,6 +23,14 @@ export function classifyOutcome(result: ResolutionResult, perspective: PlayerId 
 
 const VALUE: Record<Outcome, number> = { "player-seal": 1, "opponent-seal": -1, blocked: 0, canceled: 0, "no-seal": 0 };
 
+/** Net seals for `perspective`: both sides can score when a SPLIT branch is REFLECTed. */
+export function sealValue(result: ResolutionResult, perspective: PlayerId = "player"): number {
+    const awarded = result.sealsAwarded;
+    if (!awarded) return VALUE[classifyOutcome(result, perspective)];
+    const other: PlayerId = perspective === "player" ? "opponent" : "player";
+    return (awarded[perspective] ?? 0) - (awarded[other] ?? 0);
+}
+
 function keySteps(result: ResolutionResult): string {
     // The interesting steps: anything a reaction, ward or outcome did.
     const picked = result.steps.filter(s => s.stage !== "validation" && s.result !== "info");
@@ -98,7 +106,7 @@ export function adviseSpell(
                 ...(reaction === "none" ? {} : { reaction: reaction as ReactionGlyph })
             });
             const outcome = classifyOutcome(result, "player");
-            expectedValue += probability * VALUE[outcome];
+            expectedValue += probability * sealValue(result, "player");
             breakdown.push({ reaction, probability, outcome });
             notes.push(
                 `${Math.round(probability * 100)}% ${reaction === "none" ? "no reaction" : reaction.toUpperCase()} → ${outcome.replace("-", " ")}`

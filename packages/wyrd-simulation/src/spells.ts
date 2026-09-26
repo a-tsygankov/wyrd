@@ -16,6 +16,8 @@ export type LegalSpell = {
     essence?: string;
     amplified: boolean;
     anchored: boolean;
+    /** Postfix modifiers as written (lowercase glyph ids), e.g. ["split", "anchor"]. */
+    modifiers: string[];
 };
 
 export type SpellLimits = { minGlyphs: number; maxGlyphs: number; maxFocus: number };
@@ -24,6 +26,7 @@ export type SpellLimits = { minGlyphs: number; maxGlyphs: number; maxFocus: numb
 export const POC_LIMITS: SpellLimits = { minGlyphs: 2, maxGlyphs: 4, maxFocus: 7 };
 
 const familyByToken: ReadonlyMap<string, GlyphFamily> = new Map(glyphs.map(g => [g.displayName, g.family]));
+const postfixTokens: ReadonlySet<string> = new Set(glyphs.filter(g => g.attachment === "postfix").map(g => g.displayName));
 
 // The parser is order-tolerant but not order-free (AMPLIFY first, or an
 // essence after BIND, fails). Two canonical orders cover every POC shape,
@@ -81,7 +84,8 @@ export function classifySpell(tokens: readonly string[], limits: SpellLimits = P
         ...(effect.target ? { target: effect.target } : {}),
         ...(effect.essence ? { essence: effect.essence } : {}),
         amplified: effect.magnitude > 1,
-        anchored: effect.anchored
+        anchored: effect.anchored,
+        modifiers: tokens.filter(t => postfixTokens.has(t)).map(t => t.toLowerCase())
     };
 }
 

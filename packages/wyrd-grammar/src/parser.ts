@@ -185,14 +185,49 @@ function assignPorts(
     return next;
 }
 
-function operatorCandidates(definitions: GlyphDefinition[], operatorIndex: number): Candidate[] {
+type CandidateSearch = {
+    candidates: Candidate[];
+    /** Why no complete parse exists, naming the glyph at fault; undefined when candidates exist. */
+    failure?: ParseDiagnostic;
+};
+
+function names(definitions: readonly GlyphDefinition[]): string {
+    const list = definitions.map((definition) => definition.displayName);
+    if (list.length <= 1) {
+        return list.join("");
+    }
+    return list.slice(0, -1).join(", ") + " or " + list[list.length - 1];
+}
+
+/** Value glyphs of the registry that would satisfy `port`, for "add one of …" hints. */
+function fillers(port: Port, registry: GlyphRegistry): GlyphDefinition[] {
+    return [...registry.values()].filter((definition) =>
+        definition.attachment === "value" && definition.produces.some((type) => port.accepts.includes(type))
+    );
+}
+
+function describePorts(ports: Port[]): string {
+    return ports.map((port) => (port.optional ? `an optional ${port.name}` : `a ${port.name}`)).join(" and ");
+}
+
+function operatorCandidates(definitions: GlyphDefinition[], operatorIndex: number, registry: GlyphRegistry): CandidateSearch {
     const operator = definitions[operatorIndex]!;
     const modifierEntries = definitions
         .map((definition, index) => ({ definition, index }))
         .filter(({ definition }) => definition.attachment === "postfix");
 
-    if (modifierEntries.some(({ index }) => index < operatorIndex)) {
-        return [];
+    // Postfix modifiers attach to the complete effect on their left (spec §7);
+    // one placed before the action has nothing to attach to yet.
+    const early = modifierEntries.find(({ index }) => index < operatorIndex);
+    if (early) {
+        return {
+            candidates: [],
+            failure: {
+                code: "INVALID",
+                glyphId: early.definition.id,
+                message: `${early.definition.displayName} modifies the effect on its left: place it after ${operator.displayName}.`
+            }
+        };
     }
 
     const values = definitions
@@ -200,9 +235,38 @@ function operatorCandidates(definitions: GlyphDefinition[], operatorIndex: numbe
         .filter(({ definition }) => definition.attachment === "value")
         .map(({ definition, index }) => ({ index, node: valueNode(definition) }));
 
-    const assignments = assignPorts(operator.inputs ?? [], values, operatorIndex);
+    const ports = operator.inputs ?? [];
+    const assignments = assignPorts(ports, values, operatorIndex);
     const complete = assignments.filter((assignment) => assignment.used.size === values.length);
     const candidates: Candidate[] = [];
+    let failure: ParseDiagnostic | undefined;
+
+    if (assignments.length === 0) {
+        // A required port has no compatible value: say which glyphs would fill it.
+        const missing = ports.find((port) => !port.optional && !values.some(({ node }) => matches(node, port.accepts)));
+        const port = missing ?? ports.find((port) => !port.optional) ?? ports[0];
+        // Name the values that feed no slot at all (GATE in "FIRE SEEK GATE").
+        const strays = values
+            .filter(({ node }) => !ports.some((candidate) => matches(node, candidate.accepts)))
+            .map(({ index }) => definitions[index]!);
+        const stray = strays.length > 0 ? `${names(strays)} cannot feed ${operator.displayName}. ` : "";
+        failure = {
+            code: "MISSING_INPUT",
+            glyphId: operator.id,
+            message: port
+                ? `${stray}${operator.displayName} needs ${describePorts([port])}: add ${names(fillers(port, registry))}.`
+                : `${stray}${operator.displayName} does not have a complete type-compatible set of inputs.`
+        };
+    } else if (complete.length === 0) {
+        // Every slot is taken; the values left over have nowhere to go.
+        const best = [...assignments].sort((a, b) => b.used.size - a.used.size)[0]!;
+        const orphans = values.filter(({ index }) => !best.used.has(index)).map(({ index }) => definitions[index]!);
+        failure = {
+            code: "ORPHAN_GLYPH",
+            glyphId: orphans[0]?.id ?? operator.id,
+            message: `${names(orphans)} ${orphans.length > 1 ? "have" : "has"} no slot in ${operator.displayName}, which takes ${describePorts(ports)} - and those are filled.`
+        };
+    }
 
     for (const assignment of complete) {
         let ast: SpellNode = {
@@ -214,17 +278,24 @@ function operatorCandidates(definitions: GlyphDefinition[], operatorIndex: numbe
 
         let score = assignment.score;
         let legal = true;
+        let previous: GlyphDefinition = operator;
 
         for (const { definition: modifier, index } of modifierEntries.sort((a, b) => a.index - b.index)) {
             const input = modifier.inputs?.[0];
             if (!input || !matches(ast, input.accepts)) {
                 legal = false;
+                failure ??= {
+                    code: "INVALID",
+                    glyphId: modifier.id,
+                    message: `${modifier.displayName} cannot modify what ${previous.displayName} produces (${ast.outputType}); place ${previous.displayName} after it.`
+                };
                 break;
             }
 
             const distance = Math.max(1, index - operatorIndex);
             score += 100 + (distance === 1 ? 20 : Math.max(0, 10 - distance));
             ast = makeModifier(modifier, ast);
+            previous = modifier;
         }
 
         if (legal) {
@@ -232,29 +303,48 @@ function operatorCandidates(definitions: GlyphDefinition[], operatorIndex: numbe
         }
     }
 
-    return candidates;
+    return candidates.length > 0 ? { candidates } : { candidates, ...(failure ? { failure } : {}) };
 }
 
-function postfixOnlyCandidates(definitions: GlyphDefinition[]): Candidate[] {
-    if (definitions.length !== 2) {
-        return [];
+function postfixOnlyCandidates(definitions: GlyphDefinition[], registry: GlyphRegistry): CandidateSearch {
+    const operators = [...registry.values()].filter((definition) => definition.attachment === "operator");
+    const modifier = definitions.find((definition) => definition.attachment === "postfix");
+
+    if (definitions.length === 2) {
+        const [value, postfix] = definitions;
+        if (value && postfix && value.attachment === "value" && postfix.attachment === "postfix") {
+            const node = valueNode(value);
+            const port = postfix.inputs?.[0];
+            if (port && matches(node, port.accepts)) {
+                return {
+                    candidates: [{
+                        ast: makeModifier(postfix, node),
+                        score: 120 + semanticBonus(port, node)
+                    }]
+                };
+            }
+        }
     }
 
-    const [value, modifier] = definitions;
-    if (!value || !modifier || value.attachment !== "value" || modifier.attachment !== "postfix") {
-        return [];
+    // No action glyph: nothing executes (spec §7, "value glyphs do not
+    // execute by themselves"). Name the actions that would.
+    if (modifier) {
+        return {
+            candidates: [],
+            failure: {
+                code: "INVALID",
+                glyphId: modifier.id,
+                message: `${modifier.displayName} needs an action to modify: add ${names(operators)}.`
+            }
+        };
     }
-
-    const node = valueNode(value);
-    const port = modifier.inputs?.[0];
-    if (!port || !matches(node, port.accepts)) {
-        return [];
-    }
-
-    return [{
-        ast: makeModifier(modifier, node),
-        score: 120 + semanticBonus(port, node)
-    }];
+    return {
+        candidates: [],
+        failure: {
+            code: "INVALID",
+            message: `${names(definitions)} need an action to act through: add ${names(operators)}.`
+        }
+    };
 }
 
 function parseFragmentWithRegistry(
@@ -394,12 +484,13 @@ function parseFragmentWithRegistry(
         }]);
     }
 
-    const candidates = operatorIndexes.length === 1
-        ? operatorCandidates(definitions, operatorIndexes[0]!)
-        : postfixOnlyCandidates(definitions);
+    const search = operatorIndexes.length === 1
+        ? operatorCandidates(definitions, operatorIndexes[0]!, registry)
+        : postfixOnlyCandidates(definitions, registry);
+    const candidates = search.candidates;
 
     if (candidates.length === 0) {
-        return invalid(definitions, [missingInputDiagnostic(definitions)]);
+        return invalid(definitions, [search.failure ?? missingInputDiagnostic(definitions)]);
     }
 
     const ordered = [...candidates].sort((a, b) => b.score - a.score);

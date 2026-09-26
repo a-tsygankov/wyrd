@@ -2,7 +2,10 @@
  * The POC tray: the glyphs the composer exposes. The parser knows all 30
  * registry glyphs; the resolver implements these seven actions
  * (SEEK, BIND, WARD, BREAK, MEND, OPEN, CLOSE), four essences, three
- * targets and two modifiers. Bot pool, help text and tests all derive
+ * targets and five modifiers (AMPLIFY, WEAKEN, SPLIT, REVERSE, ANCHOR).
+ * REFLECT, SILENCE and NULL are reactions and live in the reaction row;
+ * FORCE, ALLY, AREA, PUSH, PULL, DELAY and IF wait for their resolver
+ * semantics (see glyphHelp). Bot pool, help text and tests all derive
  * from this list.
  */
 export type TrayFamily = "essence" | "target" | "action" | "modifier";
@@ -23,6 +26,9 @@ export const POC_TRAY: readonly string[] = [
     "OPEN",
     "CLOSE",
     "AMPLIFY",
+    "WEAKEN",
+    "SPLIT",
+    "REVERSE",
     "ANCHOR"
 ];
 
@@ -42,5 +48,8 @@ export const TRAY_FAMILY: Record<string, TrayFamily> = {
     OPEN: "action",
     CLOSE: "action",
     AMPLIFY: "modifier",
+    WEAKEN: "modifier",
+    SPLIT: "modifier",
+    REVERSE: "modifier",
     ANCHOR: "modifier"
 };
