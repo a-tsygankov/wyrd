@@ -174,6 +174,8 @@ Use generators for what the packs lack: five personality props (hat, mask, gaunt
 
 ## 6. Suggested order of work
 
+Status 2026-09-26: step 1 and the renderer half of step 2 shipped as the sandbox behind Settings → "3D arena" (`apps/web/src/arena.ts`; mages by personality from `arenaMap.ts`; assets prepared by `scripts/prepare_arena_assets.mjs` to ~480 KB each). Steps 3–5 open.
+
 1. Two mages from one CC0 rig with the twelve clips above, the gate arch, the hex shield, and a bolt: load in a Three.js sandbox (`apps/web` stays framework-free; the scene mounts into the stage card), one HDRI, ≤ 5 MB.
 2. Wire the existing beat timeline to the 3D scene behind a Stage setting; keep the 2D stage as the fallback and the test path.
 3. Layout A's bottom sheet: telegraph cards, lit sentence, commit ritual.

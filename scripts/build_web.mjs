@@ -2,7 +2,7 @@
 // in ./dist. Run via `pnpm build:web` (which runs tsc first). The output
 // directory sits next to apps/web/functions so `wrangler pages deploy
 // dist` from apps/web picks up the /api/* proxy function.
-import { cpSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 
 const out = "apps/web/dist";
 const webVersion = JSON.parse(readFileSync("apps/web/package.json", "utf8")).version;
@@ -22,6 +22,17 @@ cpSync("apps/web/icons", `${out}/icons`, { recursive: true });
 // Every compiled client module ships: a hand-kept list once dropped two new
 // modules and Pages served index.html in their place (test/build_web.test.mjs).
 for (const file of readdirSync("dist/apps/web/src").filter(f => f.endsWith(".js"))) cpSync(`dist/apps/web/src/${file}`, `${out}/apps/web/src/${file}`);
+
+// The 3D arena's dependencies: Three.js (MIT) vendored from node_modules for the
+// import map in index.html, and the prepared KayKit GLBs (CC0) from apps/web/assets.
+const three = "apps/web/node_modules/three";
+mkdirSync(`${out}/vendor/three/addons/loaders`, { recursive: true });
+mkdirSync(`${out}/vendor/three/addons/utils`, { recursive: true });
+for (const file of ["three.module.js", "three.core.js"]) cpSync(`${three}/build/${file}`, `${out}/vendor/three/${file}`);
+cpSync(`${three}/examples/jsm/loaders/GLTFLoader.js`, `${out}/vendor/three/addons/loaders/GLTFLoader.js`);
+for (const file of ["BufferGeometryUtils.js", "SkeletonUtils.js"]) cpSync(`${three}/examples/jsm/utils/${file}`, `${out}/vendor/three/addons/utils/${file}`);
+cpSync(`${three}/LICENSE`, `${out}/vendor/three/LICENSE`);
+if (existsSync("apps/web/assets")) cpSync("apps/web/assets", `${out}/assets`, { recursive: true });
 
 mkdirSync(`${out}/packages`, { recursive: true });
 for (const pkg of ["wyrd-grammar", "wyrd-content", "wyrd-resolver", "wyrd-simulation"]) {

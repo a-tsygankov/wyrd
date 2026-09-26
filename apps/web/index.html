@@ -67,6 +67,9 @@
         <!-- The stage: the resolver's steps replayed as a fight. Pure presentation;
              every beat comes from a ResolutionStep (apps/web/src/stage.ts). Tap to skip. -->
         <section class="stage card" aria-label="Duel stage">
+            <!-- The Three.js arena (apps/web/src/arena.ts): a second renderer of the
+                 same beats, behind the "3D arena" setting; hidden until it mounts. -->
+            <div id="arena" class="arena hidden" aria-label="Duel arena"></div>
             <svg id="stage" viewBox="0 0 360 170" role="img" aria-labelledby="stage-caption" preserveAspectRatio="xMidYMid meet">
                 <defs>
                     <linearGradient id="stage-floor" x1="0" y1="0" x2="0" y2="1">
@@ -245,6 +248,10 @@
                     <span><strong>Animations</strong><span class="settings-summary">Play each resolution on the stage. Off, or a reduced-motion system setting, shows the result at once.</span></span>
                 </label>
                 <label class="settings-switch">
+                    <input id="settings-arena3d" type="checkbox">
+                    <span><strong>3D arena</strong><span class="settings-summary">Experimental: two KayKit mages and the gate in a small Three.js scene, playing the same beats. Loads about 4 MB once; falls back to the flat stage without WebGL. <code>?stage=3d</code></span></span>
+                </label>
+                <label class="settings-switch">
                     <input id="settings-sound" type="checkbox">
                     <span><strong>Sound</strong><span class="settings-summary">Short synthesised cues for casts, blocks, seals. Starts after your first tap.</span></span>
                 </label>
@@ -313,6 +320,7 @@
         <footer id="version-line" class="versions muted">web v__WEB_VERSION__</footer>
     </main>
 
-    <script type="module" src="./apps/web/src/main.js"></script>
+    <script type="importmap">{ "imports": { "three": "./vendor/three/three.module.js", "three/addons/": "./vendor/three/addons/" } }</script>
+        <script type="module" src="./apps/web/src/main.js"></script>
 </body>
 </html>
