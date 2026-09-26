@@ -5,14 +5,14 @@ compatibility_flags = ["nodejs_compat"]
 
 # Provisioned once with `scripts/setup-secrets.local.ps1 -Provision`
 # (or by hand: `wrangler d1 create wyrd-db`), then paste the printed
-# database_id below. The placeholder is fine for `wrangler dev`, tests
+# database_id below (done 2026-09-26). A placeholder is fine for `wrangler dev`, tests
 # and `--local` migrations (Miniflare never validates it); a remote
 # deploy refuses it.
 
 [[d1_databases]]
 binding = "DB"
 database_name = "wyrd-db"
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "68b495d9-ab5a-4a84-b996-702dc4c2de0e"
 migrations_dir = "migrations"
 
 [vars]

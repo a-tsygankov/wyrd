@@ -109,13 +109,22 @@ if ($Provision) {
     Write-Host '-- provision (one-time) --' -ForegroundColor Cyan
     if ($DryRun) {
         Write-Host '  [dry-run] wrangler d1 create wyrd-db'
-        Write-Host '  [dry-run] wrangler pages project create wyrd-web --production-branch=main'
+        Write-Host '  [dry-run] (apps/web) wrangler pages project create wyrd-web --production-branch=main --force'
     } else {
         Push-Location apps/api
         try {
             pnpm exec wrangler d1 create wyrd-db
             if ($LASTEXITCODE -ne 0) { throw 'wrangler d1 create wyrd-db failed (already exists? use `wrangler d1 list` for the id)' }
-            pnpm exec wrangler pages project create wyrd-web --production-branch=main
+        } finally { Pop-Location }
+        # From apps/web, not apps/api: wrangler >= 4.14x delegates `pages
+        # project create` to Pages-on-Workers and would read the worker's
+        # wrangler.toml as the project config (seen 2026-09-26: it tried to
+        # create a Worker script named wyrd-web with the api's D1 binding).
+        # --force keeps the classic Pages project that `pages deploy
+        # --project-name` in deploy.yml targets.
+        Push-Location apps/web
+        try {
+            pnpm exec wrangler pages project create wyrd-web --production-branch=main --force
             if ($LASTEXITCODE -ne 0) { throw 'wrangler pages project create wyrd-web failed (already exists? use `wrangler pages project list` to check)' }
         } finally { Pop-Location }
         Write-Host ''

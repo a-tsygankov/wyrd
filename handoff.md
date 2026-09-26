@@ -3,29 +3,26 @@
 Single page. Update at the end of any session that changes phase, adds a resource, or resolves an open question.
 
 ## Phase
-M0 grammar + playable browser duel POC on `main`. Cloudflare deployment pipeline (worker + D1 schema + Pages client, gigsy/feedme2 model) scaffolded on 2026-09-26 on branch `feature/cloudflare-deploy`; **not yet provisioned or deployed**. The earlier GitHub Pages deploy workflow was removed (it failed: Pages was never enabled on the repo) in favour of Cloudflare Pages.
+M0 grammar + playable browser duel POC. Cloudflare deployment pipeline (worker + D1 schema + Pages client, gigsy/feedme2 model) landed 2026-09-26 via PR #6; resources provisioned and first-deployed from the workstation the same day. The earlier GitHub Pages deploy workflow was removed (it failed: Pages was never enabled on the repo).
 
-## Live resources
-| Thing | Name / URL | Status |
+## Live resources (provisioned and first-deployed 2026-09-26)
+| Thing | Name / URL | Notes |
 |---|---|---|
-| Worker | `wyrd-api` → https://wyrd-api.atsyg-feedme.workers.dev | not provisioned; deployed by `.github/workflows/deploy.yml` on push to main once secrets exist |
-| Pages | `wyrd-web` → https://wyrd-web.pages.dev | not provisioned; per-branch previews `<branch>.wyrd-web.pages.dev` |
-| D1 | `wyrd-db` | not provisioned; id placeholder in `apps/api/wrangler.toml` |
-| GitHub secrets | `CLOUDFLARE_API_KEY`, `CLOUDFLARE_ACCOUNT_ID` | not set; `scripts/setup-secrets.local.ps1 -GitHub` |
+| Worker | `wyrd-api` → https://wyrd-api.atsyg-feedme.workers.dev | deployed by `.github/workflows/deploy.yml` on push to main |
+| Pages | `wyrd-web` → https://wyrd-web.pages.dev | per-branch previews `<branch>.wyrd-web.pages.dev`; `/api/*` proxied to the worker |
+| D1 | `wyrd-db` (`68b495d9-ab5a-4a84-b996-702dc4c2de0e`) | migrations via `wrangler d1 migrations apply`; `0000_init.sql` applied |
+| GitHub secrets | `CLOUDFLARE_API_KEY`, `CLOUDFLARE_ACCOUNT_ID` | **not set yet** — CI deploy jobs fail until `scripts/setup-secrets.local.ps1 -GitHub` runs |
 | Worker secrets | none | — |
 
-## Go-live checklist (one-time, from the workstation)
-1. `pnpm install` (installs the pre-commit hook and wrangler).
-2. `cp scripts/setup-secrets.ps1 scripts/setup-secrets.local.ps1`; fill in the Cloudflare token + account id.
-3. `./scripts/setup-secrets.local.ps1 -Provision` → paste the D1 `database_id` into `apps/api/wrangler.toml`, commit.
-4. `./scripts/setup-secrets.local.ps1 -GitHub`.
-5. Merge to `main` (or `gh workflow run deploy.yml`) — the dispatch path deploys every tier regardless of the change filter.
-6. Check https://wyrd-web.pages.dev shows `web vX · worker vY · schema 0000_init.sql` in the footer; record the run id here.
-
-## Open questions
+## Open items
+- Set the two GitHub secrets (the gigsy/feedme2 API token works if it carries Workers + D1 + Pages edit scopes). Until then, deploys happen from the workstation with `scripts/deploy.ps1 -All`.
 - Whether the worker should become the authoritative resolver for the browser POC now (it already logs `POST /api/duel/resolve` to `duel_log`) or only with M3 multiplayer.
 - Playwright smoke suite for the web client (gigsy/feedme2 have one; the preview job currently uses curl).
 
+## Gotchas
+- `wrangler pages project create` (wrangler ≥ 4.14x) delegates to Pages-on-Workers and reads the nearest `wrangler.toml`; run it from `apps/web` with `--force` (the `-Provision` script does). `wrangler pages deploy` from `apps/web` still targets the classic project.
+
 ## Log
-- 2026-09-26 — deployment pipeline scaffolded: `apps/api` worker (health, version, duel/resolve) + `0000_init.sql`, Pages proxy function, worker + schema version tiers, `deploy.yml`, deploy/secrets scripts. Awaiting provisioning + secrets.
+- 2026-09-26 — PR #6: pipeline scaffolded (`apps/api` worker with health/version/duel-resolve + `0000_init.sql`, Pages proxy function, worker + schema version tiers, `deploy.yml`, deploy/secrets scripts). CI test jobs green; preview deploy red (no secrets).
+- 2026-09-26 — D1 `wyrd-db` and Pages `wyrd-web` provisioned; migrations applied; worker v0.0.1 and web v0.0.2 deployed from the workstation; `/api/version` live through the proxy.
 - 2026-09-26 — playable browser duel POC merged; GitHub Pages deploy attempt failed (Pages not enabled).
