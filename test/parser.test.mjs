@@ -118,10 +118,10 @@ test("multiple base actions are rejected explicitly", () => {
     assert.match(result.diagnostics[0]?.message ?? "", /one base action/i);
 });
 
-test("infix grammar is rejected until conditional parsing lands", () => {
+test("IF without both operands reports MISSING_INPUT", () => {
     const result = parseSpell(["IF"]);
     assert.equal(result.status, "invalid");
-    assert.match(result.diagnostics[0]?.message ?? "", /not implemented/i);
+    assert.equal(result.diagnostics[0]?.code, "MISSING_INPUT");
 });
 
 test("synthetic equal-score candidates return AMBIGUOUS", () => {
@@ -221,3 +221,88 @@ for (const [a,b] of [["open","close"],["push","pull"],["amplify","weaken"]]) {
         assert.equal(right?.inverseOf,a);
     });
 }
+
+
+test("synthetic CONDITION -> IF -> EFFECT builds a ConditionalNode", () => {
+    const registry = new Map([
+        ["TRUE", {
+            id: "true", displayName: "TRUE", family: "logic", produces: ["Condition"],
+            baseFocusCost: 0, precedence: 10, attachment: "value", tags: ["condition"], canonStatus: "game-original"
+        }],
+        ["ENEMY", {
+            id: "enemy", displayName: "ENEMY", family: "target", produces: ["EntityRef"],
+            baseFocusCost: 0, precedence: 10, attachment: "value", tags: ["target"], canonStatus: "game-original"
+        }],
+        ["BIND", {
+            id: "bind", displayName: "BIND", family: "action", produces: ["PersistentEffect"],
+            inputs: [{ name: "target", accepts: ["EntityRef"] }],
+            baseFocusCost: 2, precedence: 100, attachment: "operator", tags: ["bind"], canonStatus: "game-original"
+        }],
+        ["IF", {
+            id: "if", displayName: "IF", family: "logic", produces: ["TriggeredEffect"],
+            inputs: [
+                { name: "condition", accepts: ["Condition"] },
+                { name: "effect", accepts: ["InstantEffect", "PersistentEffect", "TransformEffect"] }
+            ],
+            baseFocusCost: 1, precedence: 200, attachment: "infix", tags: ["logic"], canonStatus: "game-original"
+        }]
+    ]);
+
+    const result = parseSpellWithRegistry(["TRUE", "IF", "ENEMY", "BIND"], registry);
+    assert.equal(result.status, "valid");
+    assert.deepEqual(result.ast, {
+        kind: "conditional",
+        glyphId: "if",
+        outputType: "TriggeredEffect",
+        condition: { kind: "value", glyphId: "true", outputType: "Condition" },
+        effect: {
+            kind: "operator",
+            glyphId: "bind",
+            outputType: "PersistentEffect",
+            arguments: {
+                target: { kind: "value", glyphId: "enemy", outputType: "EntityRef" }
+            }
+        }
+    });
+});
+
+test("conditional rejects a non-Condition left operand", () => {
+    const registry = new Map([
+        ["SELF", {
+            id: "self", displayName: "SELF", family: "target", produces: ["EntityRef"],
+            baseFocusCost: 0, precedence: 10, attachment: "value", tags: ["target"], canonStatus: "game-original"
+        }],
+        ["ENEMY", {
+            id: "enemy", displayName: "ENEMY", family: "target", produces: ["EntityRef"],
+            baseFocusCost: 0, precedence: 10, attachment: "value", tags: ["target"], canonStatus: "game-original"
+        }],
+        ["BIND", {
+            id: "bind", displayName: "BIND", family: "action", produces: ["PersistentEffect"],
+            inputs: [{ name: "target", accepts: ["EntityRef"] }],
+            baseFocusCost: 2, precedence: 100, attachment: "operator", tags: ["bind"], canonStatus: "game-original"
+        }],
+        ["IF", {
+            id: "if", displayName: "IF", family: "logic", produces: ["TriggeredEffect"],
+            inputs: [
+                { name: "condition", accepts: ["Condition"] },
+                { name: "effect", accepts: ["PersistentEffect"] }
+            ],
+            baseFocusCost: 1, precedence: 200, attachment: "infix", tags: ["logic"], canonStatus: "game-original"
+        }]
+    ]);
+
+    const result = parseSpellWithRegistry(["SELF", "IF", "ENEMY", "BIND"], registry);
+    assert.equal(result.status, "invalid");
+    assert.equal(result.diagnostics[0]?.code, "MISSING_INPUT");
+});
+
+test("standalone Condition value is not a complete spell", () => {
+    const registry = new Map([
+        ["TRUE", {
+            id: "true", displayName: "TRUE", family: "logic", produces: ["Condition"],
+            baseFocusCost: 0, precedence: 10, attachment: "value", tags: ["condition"], canonStatus: "game-original"
+        }]
+    ]);
+    const result = parseSpellWithRegistry(["TRUE"], registry);
+    assert.equal(result.status, "invalid");
+});

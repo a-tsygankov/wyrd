@@ -74,7 +74,15 @@ export type ModifierNode = {
     child: SpellNode;
 };
 
-export type SpellNode = ValueNode | OperatorNode | ModifierNode;
+export type ConditionalNode = {
+    kind: "conditional";
+    glyphId: string;
+    outputType: SemanticType;
+    condition: SpellNode;
+    effect: SpellNode;
+};
+
+export type SpellNode = ValueNode | OperatorNode | ModifierNode | ConditionalNode;
 
 export type ParseDiagnostic = {
     code: "UNKNOWN_GLYPH" | "INVALID" | "AMBIGUOUS" | "ORPHAN_GLYPH" | "MISSING_INPUT";
