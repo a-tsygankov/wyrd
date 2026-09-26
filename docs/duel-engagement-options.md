@@ -1,6 +1,6 @@
 # Wyrd — making the duel more interesting: options and battle examples
 
-Status: decided 2026-09-26 - all four proposals in §6 accepted. Options A, B, C, D (timer + quick cast) and E (ignite) are implemented as the selectable rulesets Classic / Teeth / Pulse / Resolve (Settings in the app, `packages/wyrd-content/src/rulesets.ts`); the Stats panel shows the per-ruleset numbers §5 asks for. F (the stage, SVG/CSS with WebAudio cues) shipped 2026-09-26. Still open: E counter-counter and crests, G progressive reveal and Scry, H weather and sudden death, I personalities, J draft. Originally written as options; Everything is written against the rules the POC resolver actually has today, so every example below could be replayed once the option is built.
+Status: decided 2026-09-26 - all four proposals in §6 accepted. Options A, B, C, D (timer + quick cast) and E (ignite) are implemented as the selectable rulesets Classic / Teeth / Pulse / Resolve (Settings in the app, `packages/wyrd-content/src/rulesets.ts`); the Stats panel shows the per-ruleset numbers §5 asks for. F (the stage, SVG/CSS with WebAudio cues) and G (progressive reveal and Scry) shipped 2026-09-26; the vocabulary grew to 16 glyphs with a contested gate the same day. Still open: E counter-counter and crests, H weather and sudden death, I personalities, J draft. Originally written as options; Everything is written against the rules the POC resolver actually has today, so every example below could be replayed once the option is built.
 
 ## 1. What the duel is right now
 

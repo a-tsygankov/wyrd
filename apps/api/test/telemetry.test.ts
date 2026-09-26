@@ -46,7 +46,7 @@ describe("POST /api/telemetry", () => {
         expect(await count()).toBe(before + 2);
 
         const row = await env.DB.prepare(
-            "SELECT session_id, match_seed, round, scenario_id, telegraph_preset, telegraph, opponent_spell, player_spell, player_reaction, opponent_reaction, player_seals, opponent_seals, player_gained, opponent_gained, time_to_commit_ms, web_version, mode, rules, end_reason, event FROM telemetry_events WHERE event = 'round' ORDER BY ts DESC LIMIT 1"
+            "SELECT session_id, match_seed, round, scenario_id, telegraph_preset, telegraph, opponent_spell, player_spell, player_reaction, opponent_reaction, player_seals, opponent_seals, player_gained, opponent_gained, time_to_commit_ms, web_version, mode, rules, end_reason, scries, event FROM telemetry_events WHERE event = 'round' ORDER BY ts DESC LIMIT 1"
         ).first<Record<string, unknown>>();
         expect(row).toEqual({
             session_id: roundEvent.sessionId,
@@ -68,6 +68,7 @@ describe("POST /api/telemetry", () => {
             mode: "solo",
             rules: "classic",
             end_reason: null,
+            scries: 0,
             event: "round"
         });
     });
@@ -85,13 +86,18 @@ describe("POST /api/telemetry", () => {
         expect((await post({ ...roundEvent, mode: "lan" })).status).toBe(400);
         expect((await post({ ...roundEvent, rules: "chaos" })).status).toBe(400);
         expect((await post({ ...roundEvent, endReason: "forfeit" })).status).toBe(400);
+        expect((await post({ ...roundEvent, scries: 99 })).status).toBe(400);
     });
 
     it("stores the ruleset and how a match ended", async () => {
         const res = await post({ events: [{ ...roundEvent, round: 42, rules: "resolve" }, { ...roundEvent, event: "match_end", round: 43, rules: "resolve", endReason: "resolve" }] });
         expect(res.status).toBe(202);
-        const rows = (await env.DB.prepare("SELECT rules, end_reason FROM telemetry_events WHERE round IN (42, 43) ORDER BY round").all<{ rules: string; end_reason: string | null }>()).results;
-        expect(rows).toEqual([{ rules: "resolve", end_reason: null }, { rules: "resolve", end_reason: "resolve" }]);
+        const rows = (await env.DB.prepare("SELECT rules, end_reason, scries FROM telemetry_events WHERE round IN (42, 43) ORDER BY round").all<{ rules: string; end_reason: string | null; scries: number }>()).results;
+        expect(rows).toEqual([{ rules: "resolve", end_reason: null, scries: 0 }, { rules: "resolve", end_reason: "resolve", scries: 0 }]);
+        const scried = await post({ ...roundEvent, round: 44, rules: "teeth", scries: 2 });
+        expect(scried.status).toBe(202);
+        const row = await env.DB.prepare("SELECT scries FROM telemetry_events WHERE round = 44").first<{ scries: number }>();
+        expect(row).toEqual({ scries: 2 });
     });
 
     it("rejects malformed input without writing anything", async () => {
@@ -129,7 +135,7 @@ describe("GET /api/telemetry/summary", () => {
             rounds: number;
             rematches: number;
             sessions: number;
-            rulesets: Array<{ rules: string; mode: string; rounds: number; matches: number; endedByResolve: number; playerSealRate: number; medianTimeToCommitMs: number | null }>;
+            rulesets: Array<{ rules: string; mode: string; rounds: number; matches: number; endedByResolve: number; playerSealRate: number; scriesPerRound: number; medianTimeToCommitMs: number | null }>;
             scenarios: Array<{ scenarioId: string | null; rounds: number; reactions: Record<string, number>; playerSealRate: number; medianTimeToCommitMs: number | null }>;
         };
         expect(body.rounds).toBeGreaterThanOrEqual(2);
@@ -147,5 +153,6 @@ describe("GET /api/telemetry/summary", () => {
         expect(classic!.rounds).toBe(2);
         expect(classic!.playerSealRate).toBe(0.5);
         expect(classic!.medianTimeToCommitMs).toBe(8400);
+        expect(classic!.scriesPerRound).toBe(0);
     });
 });

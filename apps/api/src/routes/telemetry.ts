@@ -39,6 +39,7 @@ export type TelemetryEvent = {
     mode: "solo" | "hotseat";
     rules: "classic" | "teeth" | "pulse" | "resolve";
     endReason: "seals" | "resolve" | null;
+    scries: number;
 };
 
 type Raw = Record<string, unknown>;
@@ -105,7 +106,8 @@ export function parseEvent(raw: unknown): TelemetryEvent {
         webVersion: text(r.webVersion, "webVersion"),
         mode: optEnum<"solo" | "hotseat">(r.mode, "mode", MODES) ?? "solo",
         rules: optEnum<"classic" | "teeth" | "pulse" | "resolve">(r.rules, "rules", RULES) ?? "classic",
-        endReason: optEnum<"seals" | "resolve">(r.endReason, "endReason", END_REASONS)
+        endReason: optEnum<"seals" | "resolve">(r.endReason, "endReason", END_REASONS),
+        scries: r.scries === undefined ? 0 : int(r.scries, "scries", { max: 8 })
     };
 }
 
@@ -116,7 +118,7 @@ export function parseBatch(body: unknown): TelemetryEvent[] {
 }
 
 const INSERT =
-    "INSERT INTO telemetry_events (id, ts, event, session_id, match_seed, round, scenario_id, telegraph_preset, telegraph, opponent_spell, player_spell, player_reaction, opponent_reaction, player_seals, opponent_seals, player_gained, opponent_gained, time_to_commit_ms, web_version, mode, rules, end_reason) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    "INSERT INTO telemetry_events (id, ts, event, session_id, match_seed, round, scenario_id, telegraph_preset, telegraph, opponent_spell, player_spell, player_reaction, opponent_reaction, player_seals, opponent_seals, player_gained, opponent_gained, time_to_commit_ms, web_version, mode, rules, end_reason, scries) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
 export const telemetryRouter = new Hono<{ Bindings: Bindings }>()
     .post("/", async c => {
@@ -160,7 +162,8 @@ export const telemetryRouter = new Hono<{ Bindings: Bindings }>()
                     e.webVersion,
                     e.mode,
                     e.rules,
-                    e.endReason
+                    e.endReason,
+                    e.scries
                 )
             )
         );
@@ -211,9 +214,9 @@ export const telemetryRouter = new Hono<{ Bindings: Bindings }>()
         const perRules = (
             await db
                 .prepare(
-                    "SELECT rules, mode, SUM(event = 'round') AS rounds, SUM(event = 'match_end') AS matches, SUM(event = 'match_end' AND end_reason = 'resolve') AS by_resolve, SUM(event = 'rematch') AS rematches, SUM(event = 'round' AND player_gained > 0) AS scored, COUNT(DISTINCT session_id) AS sessions FROM telemetry_events GROUP BY rules, mode"
+                    "SELECT rules, mode, SUM(event = 'round') AS rounds, SUM(event = 'match_end') AS matches, SUM(event = 'match_end' AND end_reason = 'resolve') AS by_resolve, SUM(event = 'rematch') AS rematches, SUM(event = 'round' AND player_gained > 0) AS scored, SUM(CASE WHEN event = 'round' THEN scries ELSE 0 END) AS scries, COUNT(DISTINCT session_id) AS sessions FROM telemetry_events GROUP BY rules, mode"
                 )
-                .all<{ rules: string; mode: string; rounds: number; matches: number; by_resolve: number; rematches: number; scored: number; sessions: number }>()
+                .all<{ rules: string; mode: string; rounds: number; matches: number; by_resolve: number; rematches: number; scored: number; scries: number; sessions: number }>()
         ).results;
         const rulesTimes = (
             await db
@@ -240,6 +243,7 @@ export const telemetryRouter = new Hono<{ Bindings: Bindings }>()
                 rematches: row.rematches,
                 sessions: row.sessions,
                 playerSealRate: row.rounds === 0 ? 0 : row.scored / row.rounds,
+                scriesPerRound: row.rounds === 0 ? 0 : row.scries / row.rounds,
                 medianTimeToCommitMs: median(timesByRules.get(row.rules) ?? [])
             })),
             scenarios: [...byScenario.entries()].map(([scenarioId, b]) => ({

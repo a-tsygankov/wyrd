@@ -442,3 +442,7 @@ h2 {
 #stage-gate.broken rect:first-of-type { stroke-dasharray: 5 4; opacity: 0.45; }
 #stage-gate.broken circle { opacity: 0.15; }
 #stage-gate.closed circle { fill: #ffc457; opacity: 0.9; }
+
+.scry { margin-top: 10px; border-color: rgba(255, 196, 87, 0.5); color: #ffc457; }
+.scry:disabled { opacity: 0.45; }
+#telegraph .revealed { color: #ffc457; }

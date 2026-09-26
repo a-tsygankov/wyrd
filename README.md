@@ -41,6 +41,10 @@ The pre-commit hook needs a working `python`/`python3`/`py`; without one it skip
 
 **Stats** (header) shows this device's games per ruleset (matches, win rate, seal rate, average time to commit, top reaction, rematches, streak) from local storage, and everyone's numbers from `GET /api/telemetry/summary` (per ruleset and mode, per scenario).
 
+## Telegraph reveal and Scry
+
+Under Pulse and Resolve (timers on) the hidden glyphs of the telegraph flip face-up one by one across the 8-second reaction window: react early with less information, or wait and risk the lock. In every reaction-cost ruleset (Teeth and up) **Scry** in the reaction card reveals one hidden glyph now for 1 Focus, paid from the same budget as your spell and reaction. Scries are counted in telemetry.
+
 ## Stage
 
 Each resolution is replayed on an inline SVG stage between the scoreboard and the telegraph: two mages, the gate, hexagon wards that crack and shatter, a bolt coloured by essence, seal orbs, an impact flash. `apps/web/src/stage.ts` maps the resolver's steps to beats (so the picture always agrees with the combat log) and plays them with the Web Animations API; tap the stage to skip. Settings → Stage: Animations (also follows the system reduced-motion preference) and Sound (eight synthesised cues, off by default, start after the first tap).
