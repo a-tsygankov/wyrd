@@ -88,6 +88,37 @@ test("a personality also shapes reactions, and the trickster is harder to predic
     assert.ok(spread(p("trickster")) < spread(p("balanced")), "the trickster's reactions are flatter");
 });
 
+test("no reaction is a certainty: the best answer stays under 85%, self-harming ones stay at zero", () => {
+    const state = fresh();
+    for (const personality of PERSONALITIES) {
+        const p = reactionProbabilities(["FIRE", "SEEK", "ENEMY"], { state, botId: "opponent", personality });
+        assert.ok(p.reflect < 0.85, `${personality.id} reflects ${p.reflect}`);
+        assert.ok(p.reflect > 0.5, `${personality.id} still mostly finds the right answer (${p.reflect})`);
+        assert.ok(p.none > 0.02 && p.null > 0.02, `${personality.id} sometimes does something else`);
+        // GATE CLOSE REVERSE on an open gate fails; SILENCE would make it score. Never.
+        const trap = reactionProbabilities(["GATE", "CLOSE", "REVERSE"], { state, botId: "opponent", personality });
+        assert.equal(trap.silence, 0, `${personality.id} falls for the trap`);
+    }
+    const trickster = reactionProbabilities(["FIRE", "SEEK", "ENEMY"], { state, botId: "opponent", personality: by("trickster") });
+    const adept = reactionProbabilities(["FIRE", "SEEK", "ENEMY"], { state, botId: "opponent", personality: by("balanced") });
+    assert.ok(trickster.reflect < adept.reflect, "the trickster is the least predictable");
+});
+
+test("the aggressor, the narrowest personality, still spreads its spells", () => {
+    const rng = createRng(21);
+    const view = { state: fresh(), botId: "opponent", personality: by("aggressor") };
+    const recent = [];
+    const counts = new Map();
+    for (let round = 0; round < 24; round++) {
+        const plan = choosePlan({ ...view, recentBotSpells: recent }, rng);
+        const spell = chooseBotSpell(pool, { ...view, plan, recentBotSpells: recent }, rng);
+        counts.set(spell.join(" "), (counts.get(spell.join(" ")) ?? 0) + 1);
+        recent.push(spell);
+    }
+    assert.ok(counts.size >= 12, `24 rounds, only ${counts.size} distinct spells`);
+    assert.ok(Math.max(...counts.values()) <= 5, "no spell dominates");
+});
+
 test("legality survives the variety: every chosen spell resolves", () => {
     const rng = createRng(5);
     for (const personality of PERSONALITIES) {
