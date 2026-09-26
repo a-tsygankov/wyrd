@@ -1,6 +1,6 @@
 # wyrd — agent rules
 
-Live state: `handoff.md` (one page, update when a phase changes or a URL/resource is added). Layout and commands: `README.md`.
+Live state: `handoff.md` (one page, update when a phase changes or a URL/resource is added). Layout and commands: `README.md`. Architecture: `docs/architecture.md`. Plan: `docs/poc-plan.md`. **Gameplay is a browser/PWA app on iPhone and Android; never propose a native or Unity client.**
 
 ## Layout
 - `packages/` TypeScript sources (grammar, content, resolver) imported by relative path; no build step of their own. Root `tsconfig.json` compiles them plus `apps/web` and `apps/duel-sim` into `dist/`.
