@@ -48,7 +48,8 @@ import { QUICK_CAST_MS, REACTION_WINDOW_MS, timerState } from "./timers.js";
 import { buildTimeline, createStage, type Contribution, type Stage, type StageHooks, type StageState } from "./stage.js";
 import type { Arena } from "./arena.js";
 import { PHASES, derivePhase, phaseTarget, type RoundPhase } from "./phase.js";
-import { modelFor } from "./arenaMap.js";
+import { modelFor, personaFor } from "./arenaMap.js";
+import { playRitual, ritualCopy, type RitualHandle } from "./ritual.js";
 import { hiddenCount, revealSchedule, revealedSlots, scrySlot, type Reveal } from "./reveal.js";
 import { createSound, cueFor, extraCueFor, urgencyCue } from "./sound.js";
 import { focusMeter } from "./meter.js";
@@ -199,6 +200,8 @@ const sound = createSound(settings.sound);
 const stageRoot = byId<SVGSVGElement & HTMLElement>("stage");
 const arenaRoot = byId<HTMLElement>("arena");
 const phaseStrip = byId<HTMLOListElement>("phase-strip");
+const ritualRoot = byId<HTMLElement>("commit-ritual");
+let ritual: RitualHandle | undefined;
 const phaseHint = document.createElement("p");
 phaseHint.id = "phase-hint";
 phaseHint.className = "phase-hint";
@@ -276,10 +279,9 @@ async function mountStage(): Promise<void> {
                     models: { player: modelFor("player"), opponent: modelFor("opponent", personality?.id) }
                 });
                 await arena.ready;
-            } else if (personality) {
-                await arena.setModel("opponent", modelFor("opponent", personality.id));
             }
             stage = arena;
+            if (personality) applyPersonas();
             if (currentPhase) arena.setPhase?.(currentPhase);
             arenaRoot.classList.remove("hidden");
             stageRoot.classList.add("hidden");
@@ -310,7 +312,8 @@ function stageState(): StageState {
 }
 document.addEventListener("pointerdown", () => sound.unlock(), { passive: true });
 const skipReplay = (): void => {
-    // A tap skips the current animation: an empty run supersedes it.
+    // A tap skips the current animation: the ritual first, then an empty run supersedes the replay.
+    ritual?.skip();
     if (stageRoot.dataset.playing === "1") void stage.play([], stageState());
 };
 arenaRoot.addEventListener("click", skipReplay);
@@ -372,10 +375,17 @@ function newMatchSeed(): void {
     // A separate stream for the personality keeps the main one - and so the
     // telegraphs of old seeds - exactly where they were.
     personality = choosePersonality(createRng(seedFromString(matchSeedLabel + ":bot")));
-    if (arena && settings.arena3d) void arena.setModel("opponent", modelFor("opponent", personality.id));
+    applyPersonas();
     lastBotSpell = undefined;
     recentBotSpells = [];
     roundPlan = undefined;
+}
+
+/** Both renderers learn who the mages are this match: you, and the opponent's personality. */
+function applyPersonas(): void {
+    stage.setPersona?.("player", personaFor("player"));
+    stage.setPersona?.("opponent", personaFor(personality.id));
+    stage.setPriority?.(undefined);
 }
 
 function botView(): { state: DuelState; botId: "opponent"; lastBotSpell: string[] | undefined; recentBotSpells: string[][]; personality: Personality; plan: Plan | undefined } {
@@ -1078,6 +1088,19 @@ function resolveRound(): void {
             if (id === "opponent" && incoming) contributions.push({ result: incoming, casterId: "opponent", defenderId: "player", spell: opponentSpell, reaction: selectedReaction });
             if (id === "player" && outgoing) contributions.push({ result: outgoing, casterId: "player", defenderId: "opponent", spell: playerSpell, reaction: botReaction });
         }
+        // The commit ritual: seals crack, spells reveal in initiative order, the
+        // first mover takes the gold rim - then the replay shows what followed.
+        ritual = playRitual(
+            ritualRoot,
+            ritualCopy(round.initiative, { player: playerSpell, opponent: opponentSpell }, who, {
+                player: parseSpell(playerSpell).focusCost,
+                opponent: parseSpell(opponentSpell).focusCost
+            }),
+            { reduced: motion.reduced(), first: round.initiative.first }
+        );
+        await ritual.done;
+        ritual = undefined;
+        stage.setPriority?.(round.initiative.first);
         const [lead, follow] = contributions;
         if (lead) await stage.play(buildTimeline(lead, follow), stageState());
         delete stageRoot.dataset.playing;
@@ -1092,6 +1115,7 @@ function startNextRound(): void {
     }
 
     state = beginNextRound(state);
+    stage.setPriority?.(undefined);
     playerSpell = [];
     selectedReaction = undefined;
     roundResolved = false;

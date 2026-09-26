@@ -97,12 +97,50 @@ export function createArena(container: HTMLElement, options: ArenaOptions): Aren
     const floor = new THREE.Mesh(new THREE.CircleGeometry(5.2, 48), new THREE.MeshStandardMaterial({ color: 0x1d1430, roughness: 0.95 }));
     floor.rotation.x = -Math.PI / 2;
     scene.add(floor);
-    const ringMaterial = new THREE.MeshBasicMaterial({ color: 0x5b3fd1, transparent: true, opacity: 0.35 });
+    // The ring under each mage takes its persona's tint; the gold torus is the
+    // priority rim of the mage who resolves first this round.
+    const rings: Record<Side, THREE.Mesh> = { player: new THREE.Mesh(), opponent: new THREE.Mesh() };
+    const priority: Record<Side, THREE.Mesh> = { player: new THREE.Mesh(), opponent: new THREE.Mesh() };
+    const plates: Record<Side, THREE.Sprite> = { player: new THREE.Sprite(), opponent: new THREE.Sprite() };
     for (const side of SIDES) {
-        const ring = new THREE.Mesh(new THREE.RingGeometry(0.75, 0.82, 48), ringMaterial);
+        const ring = new THREE.Mesh(new THREE.RingGeometry(0.75, 0.82, 48), new THREE.MeshBasicMaterial({ color: 0x5b3fd1, transparent: true, opacity: 0.35 }));
         ring.rotation.x = -Math.PI / 2;
         ring.position.set(POSITIONS[side].x, 0.005, POSITIONS[side].z);
         scene.add(ring);
+        rings[side] = ring;
+        const rim = new THREE.Mesh(new THREE.TorusGeometry(0.92, 0.035, 8, 48), new THREE.MeshBasicMaterial({ color: 0xf2c46b }));
+        rim.rotation.x = Math.PI / 2;
+        rim.position.set(POSITIONS[side].x, 0.02, POSITIONS[side].z);
+        rim.visible = false;
+        scene.add(rim);
+        priority[side] = rim;
+        const plate = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false }));
+        plate.position.set(POSITIONS[side].x, 2.55, POSITIONS[side].z);
+        plate.scale.set(1.5, 0.375, 1);
+        scene.add(plate);
+        plates[side] = plate;
+    }
+
+    /** A nameplate texture: the title in its tint on a dark pill. */
+    function labelTexture(text: string, tint: string): THREE.Texture {
+        const canvas = document.createElement("canvas");
+        canvas.width = 512;
+        canvas.height = 128;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+            ctx.fillStyle = "rgba(20, 13, 34, 0.78)";
+            ctx.beginPath();
+            ctx.roundRect(24, 20, 464, 88, 44);
+            ctx.fill();
+            ctx.font = "700 48px 'Segoe UI', system-ui, sans-serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillStyle = tint;
+            ctx.fillText(text, 256, 66);
+        }
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.colorSpace = THREE.SRGBColorSpace;
+        return texture;
     }
 
     // The gate: two pillars, a lintel, a slab that drops when closed.
@@ -179,6 +217,8 @@ export function createArena(container: HTMLElement, options: ArenaOptions): Aren
         scene.add(mages[side].root);
     }
 
+    const showOverride: Partial<Record<Side, readonly string[]>> = {};
+
     async function setModel(side: Side, file: string): Promise<void> {
         const gltf = await loader.loadAsync(options.assetBase + file);
         const mage = mages[side];
@@ -200,7 +240,8 @@ export function createArena(container: HTMLElement, options: ArenaOptions): Aren
             if (!mesh.isMesh) return;
             mesh.frustumCulled = false;
             // One file carries every weapon variant; show the body and the listed props only.
-            if (spec) mesh.visible = isBodyPart(mesh.name, spec) || spec.show.includes(mesh.name);
+            const show = showOverride[side] ?? spec?.show ?? [];
+            if (spec) mesh.visible = isBodyPart(mesh.name, spec) || show.includes(mesh.name);
             const material = mesh.material as THREE.MeshStandardMaterial;
             if (material && "emissive" in material) {
                 material.emissive = new THREE.Color(tint);
@@ -541,6 +582,21 @@ export function createArena(container: HTMLElement, options: ArenaOptions): Aren
         }
     }
 
+    function setPersona(side: Side, persona: { title: string; tint: string; model: string; show: readonly string[] }): void {
+        showOverride[side] = persona.show;
+        container.dataset[side === "player" ? "personaPlayer" : "personaOpponent"] = persona.title;
+        (rings[side].material as THREE.MeshBasicMaterial).color.set(persona.tint);
+        const material = plates[side].material as THREE.SpriteMaterial;
+        material.map?.dispose();
+        material.map = labelTexture(persona.title, persona.tint);
+        material.needsUpdate = true;
+        void setModel(side, persona.model);
+    }
+
+    function setPriority(side: Side | undefined): void {
+        for (const s of SIDES) priority[s].visible = s === side;
+    }
+
     function dispose(): void {
         disposed = true;
         cancelAnimationFrame(frame);
@@ -552,6 +608,8 @@ export function createArena(container: HTMLElement, options: ArenaOptions): Aren
     return {
         setIdle,
         setPhase,
+        setPersona,
+        setPriority,
         play,
         clearMarks: () => marks.clear(),
         reducedMotion: () => motion.reduced(),

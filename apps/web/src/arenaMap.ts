@@ -1,3 +1,4 @@
+import { PERSONALITIES } from "../../../packages/wyrd-simulation/src/bot.js";
 import type { Beat, Side } from "./stage.js";
 
 /**
@@ -58,6 +59,36 @@ const OPPONENT_MODEL: Record<string, string> = {
     trickster: "rogue_hooded.glb",
     gatekeeper: "rogue.glb"
 };
+
+/**
+ * A persona: what a mage looks like on both renderers. The opponent's
+ * follows its personality (title from the bot, a distinct tint, a KayKit
+ * character and the props it holds); the player is always the Mage.
+ */
+export type Persona = {
+    title: string;
+    blurb: string;
+    /** CSS hex colour for robes, rings and nameplates. */
+    tint: string;
+    model: string;
+    /** Weapon and prop meshes shown on the KayKit character. */
+    show: readonly string[];
+};
+
+const PERSONA_PROPS: Record<string, Pick<Persona, "tint" | "model" | "show">> = {
+    balanced: { tint: "#a56bff", model: "mage.glb", show: ["2H_Staff"] },
+    aggressor: { tint: "#ff7a3d", model: "barbarian.glb", show: ["2H_Axe"] },
+    warden: { tint: "#4fb3ff", model: "knight.glb", show: ["1H_Sword", "Round_Shield"] },
+    trickster: { tint: "#6ee7a8", model: "rogue_hooded.glb", show: ["Knife", "Knife_Offhand"] },
+    gatekeeper: { tint: "#f2c46b", model: "rogue.glb", show: ["1H_Crossbow"] }
+};
+
+export function personaFor(id: string): Persona {
+    if (id === "player") return { title: "You", blurb: "The mage on the left; your spells, your seals.", tint: "#ad63ff", model: "mage.glb", show: ["2H_Staff"] };
+    const personality = PERSONALITIES.find(p => p.id === id) ?? PERSONALITIES[0]!;
+    const props = PERSONA_PROPS[personality.id] ?? PERSONA_PROPS.balanced!;
+    return { title: personality.title, blurb: personality.blurb, ...props };
+}
 
 export function modelFor(side: Side, personalityId?: string): string {
     if (side === "player") return "mage.glb";

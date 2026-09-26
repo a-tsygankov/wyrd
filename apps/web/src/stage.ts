@@ -314,6 +314,10 @@ export type Stage = {
     setIdle(state: StageState): void;
     /** The round's phase changed (layout A): a renderer may move its camera. */
     setPhase?(phase: "read" | "react" | "shape" | "cast" | "resolve" | "verdict"): void;
+    /** Who a mage is this match: title and tint (and, for the arena, character and props). */
+    setPersona?(side: Side, persona: { title: string; tint: string; model: string; show: readonly string[] }): void;
+    /** The mage who resolves first this round wears a gold rim; undefined clears it. */
+    setPriority?(side: Side | undefined): void;
     /** Play beats in order; resolves when done. A second call skips the current run. */
     play(beats: Beat[], state: StageState): Promise<void>;
     /** Forget the floor marks (a new match). */
@@ -668,5 +672,25 @@ export function createStage(root: SVGSVGElement, hooks: StageHooks = {}, motion:
         }
     }
 
-    return { setIdle, play, clearMarks: () => marks.replaceChildren(), reducedMotion: () => motion.reduced() };
+    // Persona: the robe and hat take the tint, the nameplate the title.
+    const shade = (hex: string, factor: number): string => {
+        const n = parseInt(hex.replace("#", ""), 16);
+        const channel = (shift: number): number => Math.max(0, Math.min(255, Math.round(((n >> shift) & 255) * factor)));
+        return `#${[16, 8, 0].map(s => channel(s).toString(16).padStart(2, "0")).join("")}`;
+    };
+    function setPersona(side: Side, persona: { title: string; tint: string }): void {
+        const robe = mage[side].querySelector<SVGPathElement>(".robe");
+        const hat = mage[side].querySelector<SVGPathElement>(".hat");
+        robe?.setAttribute("fill", shade(persona.tint, 0.55));
+        hat?.setAttribute("fill", persona.tint);
+        const plate = root.querySelector<SVGTextElement>(`#stage-name-${side}`);
+        if (plate) plate.textContent = persona.title;
+    }
+    function setPriority(side: Side | undefined): void {
+        for (const s of ["player", "opponent"] as const) {
+            root.querySelector<SVGElement>(`#stage-priority-${s}`)?.setAttribute("opacity", s === side ? "1" : "0");
+        }
+    }
+
+    return { setIdle, setPersona, setPriority, play, clearMarks: () => marks.replaceChildren(), reducedMotion: () => motion.reduced() };
 }
