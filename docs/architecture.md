@@ -54,7 +54,8 @@ packages/
   wyrd-grammar/     parser, AST, type system, diagnostics         (exists)
   wyrd-resolver/    deterministic game resolution                 (exists)
   wyrd-protocol/    intents, events, serialized contracts         (planned, with PvP)
-  wyrd-simulation/  bots, replay verification, balance batches    (planned)
+  wyrd-simulation/  seeded rng, legal-spell pool, heuristic bot,
+                    telegraph presets                             (exists; balance batches planned)
 apps/
   web/              the PWA (client)                              (exists)
   api/              Cloudflare Worker + D1                        (exists)

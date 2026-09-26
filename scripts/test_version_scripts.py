@@ -6,9 +6,9 @@ sys.path.insert(0,str(Path(__file__).parent))
 import bump_versions as bv
 import version_rules as vr
 
-VERSION_FILES=["packages/wyrd-grammar/package.json","packages/wyrd-content/package.json","packages/wyrd-resolver/package.json","apps/duel-sim/package.json","apps/web/package.json","apps/api/package.json"]
-SOURCE_FILES=["packages/wyrd-grammar/src/parser.ts","packages/wyrd-content/src/glyphs.ts","packages/wyrd-resolver/src/index.ts","apps/duel-sim/src/index.ts","apps/web/src/main.ts","apps/api/src/index.ts","apps/api/migrations/0000_init.sql"]
-ALL_TIERS=["grammar","content","resolver","duel-sim","web","worker"]
+VERSION_FILES=["packages/wyrd-grammar/package.json","packages/wyrd-content/package.json","packages/wyrd-resolver/package.json","packages/wyrd-simulation/package.json","apps/duel-sim/package.json","apps/web/package.json","apps/api/package.json"]
+SOURCE_FILES=["packages/wyrd-grammar/src/parser.ts","packages/wyrd-content/src/glyphs.ts","packages/wyrd-resolver/src/index.ts","packages/wyrd-simulation/src/bot.ts","apps/duel-sim/src/index.ts","apps/web/src/main.ts","apps/api/src/index.ts","apps/api/migrations/0000_init.sql"]
+ALL_TIERS=["grammar","content","resolver","simulation","duel-sim","web","worker"]
 
 def git(repo,*args):
     return subprocess.check_output(["git","-C",str(repo),*args],text=True,stderr=subprocess.PIPE)
@@ -27,8 +27,10 @@ class Rules(unittest.TestCase):
         self.assertEqual(self.matching("apps/api/README.md"),[])
     def test_dependency_cascade(self):
         self.assertEqual(self.matching("packages/wyrd-grammar/src/parser.ts"),ALL_TIERS)
-        self.assertEqual(self.matching("packages/wyrd-content/src/glyphs.ts"),["content","resolver","duel-sim","web","worker"])
-        self.assertEqual(self.matching("packages/wyrd-resolver/src/resolver.ts"),["resolver","duel-sim","web","worker"])
+        self.assertEqual(self.matching("packages/wyrd-content/src/glyphs.ts"),["content","resolver","simulation","duel-sim","web","worker"])
+        self.assertEqual(self.matching("packages/wyrd-resolver/src/resolver.ts"),["resolver","simulation","duel-sim","web","worker"])
+        # The bot is bundled into the clients but not into the worker.
+        self.assertEqual(self.matching("packages/wyrd-simulation/src/bot.ts"),["simulation","duel-sim","web"])
         self.assertEqual(self.matching("apps/duel-sim/src/index.ts"),["duel-sim"])
         self.assertEqual(self.matching("apps/web/src/main.ts"),["web"])
         self.assertEqual(self.matching("apps/web/functions/api/[[path]].ts"),["web"])

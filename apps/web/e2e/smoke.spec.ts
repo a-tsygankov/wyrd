@@ -13,6 +13,10 @@ test("the duel board loads with its version footer", async ({ page }) => {
 
 test("a spell can be cast and scores a seal", async ({ page }) => {
     await page.goto("/");
+    // Round 1 is the deck's teaching scenario on the high-information
+    // telegraph: essence and action shown, target hidden.
+    await expect(page.locator("#telegraph")).toHaveText("FIRE → SEEK → ?");
+    await expect(page.locator("#scenario-note")).toContainText("Scenario 1/");
     const tray = page.locator("#glyph-tray");
     for (const glyph of ["FIRE", "SEEK", "ENEMY"]) {
         await tray.getByRole("button", { name: glyph, exact: true }).click();
@@ -25,7 +29,45 @@ test("a spell can be cast and scores a seal", async ({ page }) => {
     // against the round-1 opponent script, so one seal is deterministic.
     await expect(page.locator("#player-seals")).toHaveText("1");
     await expect(page.locator("#combat-log li")).not.toHaveCount(1);
+    await expect(page.locator("#combat-log .lesson")).toContainText("Lesson");
     await expect(page.locator("#next-round")).toBeVisible();
+});
+
+test("a full match through the scenario deck is won by reading the telegraph", async ({ page }) => {
+    const errors: string[] = [];
+    page.on("pageerror", error => errors.push(error.message));
+    // A fixed seed pins the medium-information telegraphs and the bot's
+    // rolls, so the walkthrough below is deterministic.
+    await page.goto("/?seed=smoke");
+    const tray = page.locator("#glyph-tray");
+    const cast = async (glyphs: string[], reaction?: string) => {
+        for (const glyph of glyphs) await tray.getByRole("button", { name: glyph, exact: true }).click();
+        if (reaction) await page.locator(`#reaction-tray [data-reaction="${reaction}"]`).click();
+        await page.locator("#resolve-round").click();
+        await expect(page.locator("#combat-log .lesson")).toBeVisible();
+    };
+
+    // Round 1 (direct threat): no reaction, the opponent's SEEK lands; ours does too.
+    await cast(["FIRE", "SEEK", "ENEMY"]);
+    await expect(page.locator("#player-seals")).toHaveText("1");
+    await expect(page.locator("#opponent-seals")).toHaveText("1");
+    await page.locator("#next-round").click();
+
+    // Round 2 (open route): REFLECT the amplified SEEK for a seal, then take
+    // the GATE objective, which the opponent's fixed SILENCE cannot stop.
+    await expect(page.locator("#scenario-note")).toContainText("Scenario 2/");
+    await expect(page.locator("#telegraph")).toHaveText("SHADOW → SEEK → ? → ?");
+    await cast(["GATE", "CLOSE"], "reflect");
+    await expect(page.locator("#player-seals")).toHaveText("3");
+    await expect(page.locator("#opponent-seals")).toHaveText("1");
+    await expect(page.locator("#match-status")).toHaveText("You win the duel");
+    await expect(page.locator("#next-round")).toBeHidden();
+
+    // Reset with the same seed replays the same opening telegraph.
+    await page.locator("#reset-match").click();
+    await expect(page.locator("#telegraph")).toHaveText("FIRE → SEEK → ?");
+    await expect(page.locator("#scenario-note")).toContainText("seed smoke");
+    expect(errors).toEqual([]);
 });
 
 test("the service worker installs and the shell reloads offline", async ({ page, context, browserName }) => {

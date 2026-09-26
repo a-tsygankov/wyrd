@@ -225,3 +225,14 @@ h2 {
     color: white;
     font-weight: 800;
 }
+
+.combat-log .lesson {
+    margin-top: 12px;
+    color: #a994e8;
+    font-weight: 700;
+}
+
+.combat-log .lesson-option {
+    color: #bdb3d3;
+    font-size: 0.82rem;
+}

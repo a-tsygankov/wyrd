@@ -105,3 +105,24 @@ test("invalid spell returns validation failure", () => {
     assert.equal(result.sealAwardedTo, undefined);
     assert.equal(result.steps[0]?.code, "INVALID_SPELL");
 });
+
+test("self-targeted SEEK or BIND does not score and hits the caster", () => {
+    // Before this rule a SELF-targeted attack ignored its own target glyph,
+    // hit the defender and scored an unreflectable, unwardable seal - the
+    // bot would have found and abused it immediately.
+    const seek = resolve(["FIRE", "SEEK", "SELF"]);
+    assert.equal(seek.sealAwardedTo, undefined);
+    assert.equal(seek.state.players.player.seals, 0);
+    assert.ok(seek.steps.some(step => step.code === "NO_SEAL"));
+    const bind = resolve(["SELF", "BIND"]);
+    assert.equal(bind.sealAwardedTo, undefined);
+    assert.equal(bind.state.players.player.bound, true, "SELF BIND binds the caster");
+    assert.equal(bind.state.players.opponent.bound, undefined);
+});
+
+test("REFLECT still scores for the defender after the self-target rule", () => {
+    const result = resolve(["FIRE", "SEEK", "ENEMY"], "reflect");
+    assert.equal(result.sealAwardedTo, "opponent");
+    assert.equal(result.state.players.opponent.seals, 1);
+});
+
