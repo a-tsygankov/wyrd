@@ -19,7 +19,7 @@ pnpm build && node scripts/balance_report.mjs teeth
 - **Flags**: `UNANSWERABLE` (no reaction helps), `NULL-ONLY` (the 3-Focus hard counter is the only one), `TEMPO-NEGATIVE` (the cheapest counter costs more than the spell), `CHEAP-ANSWER` (a counter at half the spell's price or less).
 - **Dominance**: each player spell's expected seals against the balanced bot's reaction table, fresh and against a warded opponent.
 
-Wards raised *this* round never stop *this* round's incoming spell (the incoming spell resolves first), so the analysis treats a ward as a previous-round investment, which is what it is.
+Wards raised *this* round never stop *this* round's incoming spell when the incoming spell resolves first (since fix 3, the cheaper spell does), so the analysis treats a ward as a previous-round investment, which is what it usually is.
 
 ## 2. Headline results
 
@@ -111,4 +111,6 @@ Each step should move the NULL-only share (108 of 250 rows under Teeth) down; th
 
 **2. Any ward blocks an ANCHORed hostile spell — shipped.** `FIRE SEEK ENEMY ANCHOR` into a SHADOW ward is now blocked ("ANCHOR fixed its route, and a fixed route is a known route"), dents the ward like any blocked hit, and SILENCE, by stripping the anchor, lets the mismatched spell through again — the reaction text warns about it. Help for ANCHOR and WARD, the bot's ward model and the composer summary follow. The NULL-only row count does not move because the report's situations pair a FIRE ward with FIRE spells; the rule bites on mismatched essences, which the `--all` listing shows.
 
-**3. Contested gate and initiative by Focus — next.** **4. Gate wards — after.** **5. Prices — only if telemetry still shows the pattern.**
+**3. Contested gate and initiative by Focus — shipped.** `resolveRound` in the resolver now resolves both spells in initiative order (the only quick cast under timers; else the cheaper spell; else the mage behind on seals; else the player on odd rounds and the opponent on even ones) and, when both spells aim at the GATE, marks the round contested: the gate shudders and holds, nobody scores (`GATE_CONTESTED`). The client, the stage replay, the combat log and the verdict all follow that order, and the verdict's first line names who went first and why. The report's "Resolution order" section now confirms it.
+
+**4. Gate wards — next.** **5. Prices — only if telemetry still shows the pattern.**

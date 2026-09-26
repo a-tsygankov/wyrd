@@ -8,7 +8,7 @@
 // their Resolve, breaks their ward or binds them. A "counter" is a reaction
 // that removes that gain (the player ends the encounter no worse off in
 // seals, ward and Resolve). Prices are the Teeth reaction costs.
-import { createInitialDuelState, resolveEncounter, REACTION_COSTS } from "../dist/packages/wyrd-resolver/src/index.js";
+import { createInitialDuelState, resolveEncounter, resolveRound, REACTION_COSTS } from "../dist/packages/wyrd-resolver/src/index.js";
 import { POC_TRAY } from "../dist/packages/wyrd-content/src/tray.js";
 import { rulesets } from "../dist/packages/wyrd-content/src/rulesets.js";
 import { enumerateLegalSpells } from "../dist/packages/wyrd-simulation/src/spells.js";
@@ -125,13 +125,13 @@ for (const situation of situations.slice(0, 2)) {
     md.push("");
 }
 
-// --- Resolution order: the incoming spell resolves first.
+// --- Resolution order: initiative and the contested gate (fix 3).
 md.push("## Resolution order");
 md.push("");
 {
     const state = createInitialDuelState(rules);
-    const incoming = resolveEncounter(state, { casterId: "opponent", defenderId: "player", spellTokens: ["GATE", "CLOSE"] });
-    const outgoing = resolveEncounter(incoming.state, { casterId: "player", defenderId: "opponent", spellTokens: ["GATE", "CLOSE"] });
-    md.push(`Both mages cast GATE CLOSE on an open gate: the opponent's spell resolves first and ${incoming.sealAwardedTo === "opponent" ? "scores" : "does not score"}; the player's then ${outgoing.steps.some(s => s.code === "GATE_ALREADY_CLOSED") ? "fails as 'already closed'" : "resolves"}. The client always resolves the incoming spell first, so the same-round gate race is decided by seat, not by play.`);
+    const race = resolveRound(state, { player: { spellTokens: ["GATE", "CLOSE"] }, opponent: { spellTokens: ["GATE", "CLOSE"] } });
+    const cheap = resolveRound(state, { player: { spellTokens: ["SEEK", "ENEMY"] }, opponent: { spellTokens: ["FIRE", "SEEK", "ENEMY"] } });
+    md.push(`Both mages cast GATE CLOSE on an open gate: ${race.contested ? "the gate is contested - it shudders and holds, nobody scores" : "the first to resolve scores"} (initiative: ${race.initiative.first} by ${race.initiative.reason}). SEEK ENEMY (2) against FIRE SEEK ENEMY (3): ${cheap.initiative.first} resolves first by ${cheap.initiative.reason}.`);
 }
 console.log(md.join("\n"));

@@ -6,6 +6,7 @@ import {
     FALTERING_AT,
     REACTION_COSTS,
     type DuelState,
+    type Initiative,
     type PlayerId,
     type ReactionGlyph,
     type ResolutionResult,
@@ -35,6 +36,11 @@ const MAX_FOCUS = 7;
 
 function cap(text: string): string {
     return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+/** "your" for the player addressed as "you", otherwise "<name>'s". */
+function possessive(name: string): string {
+    return name.toLowerCase() === "you" ? "your" : `${name}'s`;
 }
 
 function price(reaction: ReactionGlyph, rules: RuleOptions): string {
@@ -286,10 +292,31 @@ function reactionNote(result: ResolutionResult, reaction: ReactionGlyph | undefi
  * effects that changed the board - a dented or shattered ward, Resolve
  * damage, an unpaid reaction - get their own line.
  */
-export function explainRound(incoming: Contribution, outgoing: Contribution | undefined, names: Names): RoundExplanation {
+export function explainRound(
+    incoming: Contribution,
+    outgoing: Contribution | undefined,
+    names: Names,
+    who?: Initiative
+): RoundExplanation {
     const reasons: string[] = [];
     let yours = 0;
     let theirs = 0;
+
+    // Who went first and why, before what happened (docs/balance-analysis.md §3.5).
+    if (who) {
+        const first = who.first === "player" ? outgoing : incoming;
+        const firstName = who.first === "player" ? names.you : names.them;
+        const spellText = first ? first.spell.join(" ") : "the spell";
+        const why =
+            who.reason === "quick"
+                ? "the quick cast"
+                : who.reason === "focus"
+                    ? `the cheaper spell (${first?.result.steps.find(s => s.code === "SPELL_VALID")?.text.match(/Focus (\d+)/)?.[1] ?? "?"} Focus)`
+                    : who.reason === "seals"
+                        ? "the mage behind on seals goes first"
+                        : `${who.first === "player" ? "odd" : "even"} rounds go to ${firstName}`;
+        reasons.push(cap(`${possessive(firstName)} ${spellText} resolved first: ${why}.`));
+    }
 
     const describe = (c: Contribution, caster: string, defender: string, casterIsYou: boolean): void => {
         const spell = c.spell.join(" ");
@@ -319,6 +346,8 @@ export function explainRound(incoming: Contribution, outgoing: Contribution | un
             reasons.push(cap(`${caster}'s ${spell} was blocked by ${defender}'s ward.${ward ? " " + ward : ""}`));
         } else if (outcome === "canceled") {
             reasons.push(cap(`${caster}'s ${spell} was canceled by ${defender}'s NULL.`));
+        } else if (c.result.steps.some(s => s.code === "GATE_CONTESTED")) {
+            reasons.push(cap(`${possessive(caster)} ${spell} met ${possessive(defender)} hand on the GATE: it shudders and holds, no seal for either.`));
         } else {
             reasons.push(cap(`${caster}'s ${spell} scored nothing${effect ? " - " + effect : "."}`));
         }
@@ -328,8 +357,14 @@ export function explainRound(incoming: Contribution, outgoing: Contribution | un
         if (note && outcome !== "opponent-seal" && outcome !== "canceled") reasons.push(cap(note));
     };
 
-    describe(incoming, names.them, names.you, false);
-    if (outgoing) describe(outgoing, names.you, names.them, true);
+    // In resolution order, so the log reads as it happened.
+    if (who?.first === "player" && outgoing) {
+        describe(outgoing, names.you, names.them, true);
+        describe(incoming, names.them, names.you, false);
+    } else {
+        describe(incoming, names.them, names.you, false);
+        if (outgoing) describe(outgoing, names.you, names.them, true);
+    }
 
     const verdict =
         yours > theirs

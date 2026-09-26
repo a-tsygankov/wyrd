@@ -62,7 +62,7 @@ export const glyphHelp: Record<string, GlyphHelp> = {
     },
     GATE: {
         role: "target",
-        text: "The objective between the mages, not a player. CLOSE scores while it stands open, OPEN scores while it is closed; BREAK shatters it until someone MENDs it. Wards and REFLECT cannot touch it; only NULL stops a GATE spell."
+        text: "The objective between the mages, not a player. CLOSE scores while it stands open, OPEN scores while it is closed; BREAK shatters it until someone MENDs it. Wards and REFLECT cannot touch it; only NULL stops a GATE spell - and if both mages cast a gate spell in the same round, the gate shudders and holds for both."
     },
 
     // --- actions ------------------------------------------------------------

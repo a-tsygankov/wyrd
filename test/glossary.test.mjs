@@ -29,7 +29,7 @@ test("every registry glyph appears once in the glyph group, castable ones first,
 
 test("terms the interface shows are all explained", () => {
     const terms = glossary.filter(e => e.group === "terms").map(e => e.term);
-    for (const term of ["Focus", "Seal", "Telegraph", "Reaction window", "Scry", "Ward", "Integrity", "Gate", "Bound", "Resolve", "Faltering", "Exposed", "Ignite", "Quick cast", "Magnitude", "Seed", "Hot-seat", "Opponent personality"]) {
+    for (const term of ["Focus", "Seal", "Telegraph", "Reaction window", "Scry", "Ward", "Integrity", "Gate", "Bound", "Resolve", "Faltering", "Exposed", "Ignite", "Quick cast", "Magnitude", "Seed", "Hot-seat", "Opponent personality", "Initiative"]) {
         assert.ok(terms.includes(term), `${term} not explained`);
     }
     for (const entry of glossary) assert.ok(entry.text.length > 25, `${entry.term} is too short`);
