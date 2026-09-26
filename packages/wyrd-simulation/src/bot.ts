@@ -1,4 +1,4 @@
-import { REACTION_COSTS, type DuelState, type PlayerId, type ReactionGlyph } from "../../wyrd-resolver/src/index.js";
+import { REACTION_COSTS, resolveEncounter, type DuelState, type PlayerId, type ReactionGlyph } from "../../wyrd-resolver/src/index.js";
 import type { Rng } from "./rng.js";
 import { classifySpell, type LegalSpell } from "./spells.js";
 
@@ -127,13 +127,13 @@ function opponentOf(id: PlayerId): PlayerId {
     return id === "player" ? "opponent" : "player";
 }
 
-/** Would the defender's ward stop this spell? Mirrors the resolver's boundary rule. */
+/** Would the defender's ward stop this spell? Mirrors the resolver's boundary rule (an anchored route is a known route: any ward). */
 function wardStops(spell: LegalSpell, defender: DuelState["players"][PlayerId]): boolean {
     if (spell.action !== "seek" && spell.action !== "bind") return false;
     if (spell.target !== "enemy") return false;
     const ward = defender.ward;
     if (!ward) return false;
-    return !ward.essence || !spell.essence || ward.essence === spell.essence;
+    return spell.anchored || !ward.essence || !spell.essence || ward.essence === spell.essence;
 }
 
 export function scoreSpell(spell: LegalSpell, view: BotView): number {
@@ -286,15 +286,52 @@ export function scoreReactions(playerSpell: readonly string[], view: BotView): R
     if (scoresAgainstMe && !alreadyWarded) {
         // NULL always works but teaches the player nothing and (in later
         // rules) will cost Focus; reserve it for when losing the round
-        // loses the match.
-        scores.null = matchPoint ? 6 : 0.5;
+        // loses the match - except against the gate, which nothing else
+        // answers (docs/balance-analysis.md §3.6).
+        scores.null = matchPoint ? 6 : gateScores ? 2.5 : 0.5;
     }
     if (alreadyWarded) scores.none = 4; // the ward already answers it
     // Who the bot is: the aggressor keeps its Focus, the warden answers, the
     // gatekeeper will not let a scoring gate spell through.
     const personality = view.personality ?? BALANCED;
     for (const [choice, bias] of Object.entries(personality.reactionBias) as Array<[ReactionChoice, number]>) scores[choice] += bias;
-    if (personality.id === "gatekeeper" && gateScores) scores.null = Math.max(scores.null, 3);
+    // The gate has no other answer: every personality keeps NULL on the table for a scoring gate spell.
+    if (gateScores && !alreadyWarded) scores.null = Math.max(scores.null, personality.id === "gatekeeper" ? 3 : 2.5);
+
+    // Then ask the resolver (the bot sees the whole spell): a reaction that
+    // leaves the bot worse off - SILENCE turning a failing REVERSEd gate
+    // spell back into the scoring one, REFLECT into ANCHOR - is never worth
+    // it, and when NULL is the only reaction that removes the harm it gets
+    // the gate treatment (docs/balance-analysis.md §3.2, §3.6).
+    const harmOf = (reaction: ReactionGlyph | undefined): number => {
+        const result = resolveEncounter(view.state, {
+            casterId: opponentOf(view.botId),
+            defenderId: view.botId,
+            spellTokens: [...playerSpell],
+            ...(reaction ? { reaction } : {})
+        });
+        const mine = result.state.players[view.botId];
+        const seals = (result.sealsAwarded?.[opponentOf(view.botId)] ?? 0) - (result.sealsAwarded?.[view.botId] ?? 0);
+        const wardLost = me.ward && !mine.ward ? 1 : 0;
+        return seals + wardLost;
+    };
+    const baseline = harmOf(undefined);
+    const helps: ReactionGlyph[] = [];
+    for (const reaction of ["silence", "reflect", "null"] as const) {
+        const harm = harmOf(reaction);
+        if (harm > baseline) scores[reaction] = -5;
+        else if (harm < baseline) helps.push(reaction);
+        else if (baseline > 0 && reaction !== "null") scores[reaction] = Math.min(scores[reaction], -1); // changes nothing that matters
+    }
+    if (baseline > 0 && helps.length > 0) {
+        // Something answers it: doing nothing is no longer the safe default,
+        // whatever the ward heuristic said (an amplified SPLIT shatters a
+        // fresh ward and lands), and the cheap answers are worth their Focus.
+        scores.none = Math.min(scores.none, 1);
+        for (const reaction of helps) scores[reaction] = Math.max(scores[reaction], reaction === "null" ? 1.5 : 3);
+        if (helps.length === 1 && helps[0] === "null") scores.null = Math.max(scores.null, 2.5);
+    }
+    if (baseline <= 0) scores.null = Math.min(scores.null, -2); // nothing to stop
     return scores;
 }
 
