@@ -16,9 +16,11 @@ export type Settings = {
     animations: boolean;
     /** Synthesised sound cues on stage beats. */
     sound: boolean;
+    /** Render the duel in the Three.js arena (experimental) instead of the SVG stage. `?stage=3d`. */
+    arena3d: boolean;
 };
 
-export const DEFAULT_SETTINGS: Settings = { ruleset: "classic", timers: true, telemetry: true, glyphHelpOpen: false, animations: true, sound: false };
+export const DEFAULT_SETTINGS: Settings = { ruleset: "classic", timers: true, telemetry: true, glyphHelpOpen: false, animations: true, sound: false, arena3d: false };
 
 type StorageLike = { getItem(key: string): string | null; setItem(key: string, value: string): void };
 
@@ -46,6 +48,7 @@ export function loadSettings(storage: StorageLike, params: URLSearchParams): Set
             if (typeof saved.glyphHelpOpen === "boolean") settings.glyphHelpOpen = saved.glyphHelpOpen;
             if (typeof saved.animations === "boolean") settings.animations = saved.animations;
             if (typeof saved.sound === "boolean") settings.sound = saved.sound;
+            if (typeof saved.arena3d === "boolean") settings.arena3d = saved.arena3d;
         }
     } catch {
         // Unreadable storage or corrupt JSON: defaults.
@@ -60,6 +63,9 @@ export function loadSettings(storage: StorageLike, params: URLSearchParams): Set
     if (animations !== undefined) settings.animations = animations;
     const sound = parseSwitch(params.get("sound"));
     if (sound !== undefined) settings.sound = sound;
+    const stage = params.get("stage");
+    if (stage === "3d") settings.arena3d = true;
+    if (stage === "2d") settings.arena3d = false;
     return settings;
 }
 

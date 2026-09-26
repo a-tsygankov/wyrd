@@ -1,7 +1,7 @@
 {
     "name": "@wyrd/web",
     "private": true,
-    "version": "0.0.25",
+    "version": "0.0.26",
     "type": "module",
     "scripts": {
         "typecheck": "tsc -p tsconfig.functions.json && tsc -p tsconfig.e2e.json",
@@ -12,7 +12,9 @@
         "@cloudflare/workers-types": "^4.20250101.0",
         "@playwright/test": "^1.49.0",
         "@types/node": "^22.0.0",
+        "@types/three": "0.186.0",
         "sharp": "^0.35.0",
+        "three": "0.186.1",
         "typescript": "^5.9.3",
         "wrangler": "^4.0.0"
     }

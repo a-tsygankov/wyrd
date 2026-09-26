@@ -45,7 +45,9 @@ import { buildRoundEvent, createTelemetry, getSessionId } from "./telemetry.js";
 import { loadSettings, saveSettings, type Settings } from "./settings.js";
 import { loadStats, recordMatchEnd, recordRematch, recordRound, saveStats, summarize, type Stats } from "./stats.js";
 import { QUICK_CAST_MS, REACTION_WINDOW_MS, timerState } from "./timers.js";
-import { buildTimeline, createStage, type Contribution, type StageState } from "./stage.js";
+import { buildTimeline, createStage, type Contribution, type Stage, type StageHooks, type StageState } from "./stage.js";
+import type { Arena } from "./arena.js";
+import { modelFor } from "./arenaMap.js";
 import { hiddenCount, revealSchedule, revealedSlots, scrySlot, type Reveal } from "./reveal.js";
 import { createSound, cueFor, extraCueFor, urgencyCue } from "./sound.js";
 import { focusMeter } from "./meter.js";
@@ -118,6 +120,7 @@ const settingsTimers = byId<HTMLInputElement>("settings-timers");
 const settingsTimersNote = byId<HTMLElement>("settings-timers-note");
 const settingsHelp = byId<HTMLInputElement>("settings-help");
 const settingsAnimations = byId<HTMLInputElement>("settings-animations");
+const settingsArena3d = byId<HTMLInputElement>("settings-arena3d");
 const settingsSound = byId<HTMLInputElement>("settings-sound");
 const settingsTelemetry = byId<HTMLInputElement>("settings-telemetry");
 const statsToggle = byId<HTMLButtonElement>("stats-toggle");
@@ -193,9 +196,8 @@ let stats: Stats = loadStats(deviceStorage);
 const reducedMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
 const sound = createSound(settings.sound);
 const stageRoot = byId<SVGSVGElement & HTMLElement>("stage");
-const stage = createStage(
-    stageRoot,
-    {
+const arenaRoot = byId<HTMLElement>("arena");
+const stageHooks: StageHooks = {
         onBeat: beat => {
             stageRoot.dataset.lastBeat = beat.kind;
             const cue = cueFor(beat);
@@ -203,9 +205,49 @@ const stage = createStage(
             const layer = extraCueFor(beat);
             if (layer) sound.play(layer);
         }
-    },
-    { reduced: () => !settings.animations || reducedMotionQuery.matches }
-);
+};
+const motion = { reduced: () => !settings.animations || reducedMotionQuery.matches };
+const svgStage = createStage(stageRoot, stageHooks, motion);
+/** The active renderer: the SVG stage, or the Three.js arena when the setting is on and WebGL is there. */
+let stage: Stage = svgStage;
+let arena: Arena | undefined;
+
+async function mountStage(): Promise<void> {
+    if (settings.arena3d) {
+        try {
+            const module = await import("./arena.js");
+            if (!module.supportsWebGL()) throw new Error("WebGL unavailable");
+            if (!arena) {
+                arena = module.createArena(arenaRoot, {
+                    assetBase: "./assets/arena/",
+                    motion,
+                    hooks: stageHooks,
+                    models: { player: modelFor("player"), opponent: modelFor("opponent", personality?.id) }
+                });
+                await arena.ready;
+            } else if (personality) {
+                await arena.setModel("opponent", modelFor("opponent", personality.id));
+            }
+            stage = arena;
+            arenaRoot.classList.remove("hidden");
+            stageRoot.classList.add("hidden");
+            arenaRoot.dataset.renderer = "3d";
+            log.info("stage: 3D arena mounted");
+        } catch (error) {
+            log.warn("stage: 3D arena unavailable, using the flat stage", { error: String(error) });
+            settings = { ...settings, arena3d: false };
+            stage = svgStage;
+            arenaRoot.classList.add("hidden");
+            stageRoot.classList.remove("hidden");
+        }
+    } else {
+        stage = svgStage;
+        arenaRoot.classList.add("hidden");
+        stageRoot.classList.remove("hidden");
+        delete arenaRoot.dataset.renderer;
+    }
+    stage.setIdle(stageState());
+}
 function stageState(): StageState {
     return {
         wards: { player: state.players.player.ward, opponent: state.players.opponent.ward },
@@ -215,9 +257,13 @@ function stageState(): StageState {
     };
 }
 document.addEventListener("pointerdown", () => sound.unlock(), { passive: true });
-stageRoot.addEventListener("click", () => {
+const skipReplay = (): void => {
     // A tap skips the current animation: an empty run supersedes it.
     if (stageRoot.dataset.playing === "1") void stage.play([], stageState());
+};
+arenaRoot.addEventListener("click", skipReplay);
+stageRoot.addEventListener("click", () => {
+    skipReplay();
 });
 
 glyphHelpDetails.open = settings.glyphHelpOpen;
@@ -274,6 +320,7 @@ function newMatchSeed(): void {
     // A separate stream for the personality keeps the main one - and so the
     // telegraphs of old seeds - exactly where they were.
     personality = choosePersonality(createRng(seedFromString(matchSeedLabel + ":bot")));
+    if (arena && settings.arena3d) void arena.setModel("opponent", modelFor("opponent", personality.id));
     lastBotSpell = undefined;
     recentBotSpells = [];
     roundPlan = undefined;
@@ -1237,6 +1284,7 @@ function renderSettings(): void {
     settingsTelemetry.checked = settings.telemetry;
     settingsHelp.checked = settings.glyphHelpOpen;
     settingsAnimations.checked = settings.animations;
+    settingsArena3d.checked = settings.arena3d;
     settingsSound.checked = settings.sound;
 }
 
@@ -1269,6 +1317,12 @@ settingsTelemetry.addEventListener("change", () => {
     settings = { ...settings, telemetry: settingsTelemetry.checked };
     saveSettings(deviceStorage, settings);
     log.info(`telemetry: ${settings.telemetry ? "on" : "off"}`);
+});
+settingsArena3d.addEventListener("change", () => {
+    settings = { ...settings, arena3d: settingsArena3d.checked };
+    saveSettings(deviceStorage, settings);
+    log.info(`3D arena: ${settings.arena3d ? "on" : "off"}`);
+    void mountStage().then(() => renderSettings());
 });
 settingsAnimations.addEventListener("change", () => {
     settings = { ...settings, animations: settingsAnimations.checked };
@@ -1545,3 +1599,6 @@ if (versionLine) {
 }
 
 render();
+
+// The renderer choice (SVG stage or Three.js arena) is applied once the page is wired.
+void mountStage();
