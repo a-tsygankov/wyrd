@@ -3,7 +3,7 @@ from __future__ import annotations
 import json, os, subprocess, sys, tempfile, unittest
 from pathlib import Path
 SCRIPT=Path(__file__).parent/"check_version_bump.py"
-VERSION_FILES=["packages/wyrd-grammar/package.json","packages/wyrd-content/package.json","packages/wyrd-resolver/package.json","apps/duel-sim/package.json","apps/web/package.json","apps/api/package.json"]
+VERSION_FILES=["packages/wyrd-grammar/package.json","packages/wyrd-content/package.json","packages/wyrd-resolver/package.json","packages/wyrd-simulation/package.json","apps/duel-sim/package.json","apps/web/package.json","apps/api/package.json"]
 def git(repo,*args): return subprocess.check_output(["git","-C",str(repo),*args],text=True,stderr=subprocess.PIPE)
 def write(repo,rel,content):
     p=repo/rel; p.parent.mkdir(parents=True,exist_ok=True); p.write_text(content,encoding="utf-8")

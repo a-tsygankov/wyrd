@@ -8,10 +8,11 @@ Consumed by:
 Tiers and their version sources (all package.json `.version`):
   grammar   packages/wyrd-grammar/package.json
   content   packages/wyrd-content/package.json   (+ grammar)
-  resolver  packages/wyrd-resolver/package.json  (+ content, grammar)
-  duel-sim  apps/duel-sim/package.json           (+ resolver chain)
-  web       apps/web/package.json                (+ resolver chain)
-  worker    apps/api/package.json                (+ resolver chain)
+  resolver    packages/wyrd-resolver/package.json    (+ content, grammar)
+  simulation  packages/wyrd-simulation/package.json  (+ resolver chain)
+  duel-sim    apps/duel-sim/package.json             (+ simulation chain)
+  web         apps/web/package.json                  (+ simulation chain)
+  worker      apps/api/package.json                  (+ resolver chain; no bot)
   schema    apps/api/migrations/   the numbered .sql filename IS the
                                    version - no file to bump, so it has
                                    no Tier entry; check_version_bump.py
@@ -47,11 +48,14 @@ def _content(p: str) -> bool:
 def _resolver(p: str) -> bool:
     return _content(p) or _source(p, "packages/wyrd-resolver/")
 
+def _simulation(p: str) -> bool:
+    return _resolver(p) or _source(p, "packages/wyrd-simulation/")
+
 def _duel_sim(p: str) -> bool:
-    return _resolver(p) or _source(p, "apps/duel-sim/")
+    return _simulation(p) or _source(p, "apps/duel-sim/")
 
 def _web(p: str) -> bool:
-    return _resolver(p) or _source(p, "apps/web/")
+    return _simulation(p) or _source(p, "apps/web/")
 
 def _worker(p: str) -> bool:
     # Migrations are the schema tier, not the worker: a new numbered
@@ -84,6 +88,7 @@ TIERS = [
     Tier("grammar", "packages/wyrd-grammar/package.json", read_package_json_version, write_package_json_version, _grammar),
     Tier("content", "packages/wyrd-content/package.json", read_package_json_version, write_package_json_version, _content),
     Tier("resolver", "packages/wyrd-resolver/package.json", read_package_json_version, write_package_json_version, _resolver),
+    Tier("simulation", "packages/wyrd-simulation/package.json", read_package_json_version, write_package_json_version, _simulation),
     Tier("duel-sim", "apps/duel-sim/package.json", read_package_json_version, write_package_json_version, _duel_sim),
     Tier("web", "apps/web/package.json", read_package_json_version, write_package_json_version, _web),
     Tier("worker", "apps/api/package.json", read_package_json_version, write_package_json_version, _worker),

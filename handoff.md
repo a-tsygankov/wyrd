@@ -17,6 +17,7 @@ M0 grammar + playable browser duel POC. Cloudflare deployment pipeline (worker +
 | Worker secrets | none | — |
 
 ## Open items
+- Rules decision surfaced by the bot: SELF-targeted SEEK/BIND used to hit the defender and score an unwardable seal; fixed 2026-09-26 so they land on the caster and score nothing. SILENCE never prevents a seal in the POC rules (it only strips modifiers, and magnitude does not affect seals) - keep or give SILENCE teeth? Decide from playtests.
 - POC-4b (`docs/poc-plan.md`): items 3-5 done in code (install banner, versioned service worker, Playwright iPhone/Pixel smoke on PR previews). **Still needs a human with real phones**: install from Safari and Chrome, reload offline, finish a match; then a manual Lighthouse PWA audit.
 - Whether the worker should become the authoritative resolver for the browser POC now (it already logs `POST /api/duel/resolve` to `duel_log`) or only with M3 multiplayer.
 
@@ -25,6 +26,7 @@ M0 grammar + playable browser duel POC. Cloudflare deployment pipeline (worker +
 - `wrangler pages project create` (wrangler ≥ 4.14x) delegates to Pages-on-Workers and reads the nearest `wrangler.toml`; run it from `apps/web` with `--force` (the `-Provision` script does). `wrangler pages deploy` from `apps/web` still targets the classic project.
 
 ## Log
+- 2026-09-26 — POC-3/POC-5: `packages/wyrd-simulation` (seeded rng, legal-spell pool, heuristic bot, telegraph presets high/medium) and the 8-scenario deck in `wyrd-content`; the client plays the deck then the bot, shows lessons, `?seed=` replays a match. New `simulation` version tier. Resolver fix for SELF-targeted scoring.
 - 2026-09-26 — POC-4b code: iOS Add-to-Home-Screen coach mark + Android install prompt (`apps/web/src/install.ts`), service-worker cache versioned by the web tier and bypassing `/api/*`, Playwright smoke (WebKit iPhone 15 + Chromium Pixel 7) replacing the curl check on PR previews.
 - 2026-09-26 — browser/PWA-only directive; architecture doc v2 (Unity path removed, Cloudflare + Durable Objects, PWA platform constraints) and POC plan v2 written to `docs/` and uploaded to Drive as *_v2.md.
 - 2026-09-26 — GitHub secrets set; `workflow_dispatch` run 36232457853 green across all tiers (worker deploy + web deploy from CI). Pipeline complete.

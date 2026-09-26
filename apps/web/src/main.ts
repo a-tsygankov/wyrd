@@ -1,4 +1,16 @@
+import { scenarios, type Scenario, type ScenarioOutcome } from "../../../packages/wyrd-content/src/scenarios.js";
 import { parseSpell } from "../../../packages/wyrd-grammar/src/parser.js";
+import {
+    chooseBotReaction,
+    chooseBotSpell,
+    createRng,
+    enumerateLegalSpells,
+    formatTelegraph,
+    projectTelegraph,
+    seedFromString,
+    type Rng,
+    type TelegraphSlot
+} from "../../../packages/wyrd-simulation/src/index.js";
 import { installHint } from "./install.js";
 import {
     createInitialDuelState,
@@ -29,13 +41,6 @@ const glyphChoices: GlyphChoice[] = [
     { token: "ANCHOR", family: "modifier" }
 ];
 
-const opponentSpells: string[][] = [
-    ["FIRE", "SEEK", "ENEMY", "AMPLIFY"],
-    ["SHADOW", "SEEK", "ENEMY"],
-    ["ENEMY", "BIND"],
-    ["GATE", "CLOSE", "ANCHOR"]
-];
-
 function byId<T extends HTMLElement>(id: string): T {
     const element = document.getElementById(id);
     if (!element) {
@@ -61,40 +66,97 @@ const undoButton = byId<HTMLButtonElement>("undo-glyph");
 const clearButton = byId<HTMLButtonElement>("clear-spell");
 const resetButton = byId<HTMLButtonElement>("reset-match");
 
+const scenarioNote = byId<HTMLElement>("scenario-note");
+
 let state: DuelState = createInitialDuelState();
 let playerSpell: string[] = [];
 let selectedReaction: ReactionGlyph | undefined;
 let roundResolved = false;
 
-function currentOpponentSpell(): string[] {
-    return opponentSpells[(state.round - 1) % opponentSpells.length]!;
+// The opponent: the curated scenario deck (packages/wyrd-content) round by
+// round, then the heuristic bot (packages/wyrd-simulation). Everything the
+// opponent does derives from the match seed, so `?seed=<text>` in the URL
+// replays the same opponent - a shareable challenge.
+const seedParam = new URLSearchParams(location.search).get("seed");
+const spellPool = enumerateLegalSpells(glyphChoices.map(choice => choice.token));
+
+type RoundPlan = {
+    scenario?: Scenario;
+    opponentSpell: string[];
+    telegraph: TelegraphSlot[];
+    reaction: (spell: string[]) => ReactionGlyph | undefined;
+};
+
+let matchSeedLabel = "";
+let rng: Rng = createRng(0);
+let lastBotSpell: string[] | undefined;
+let plan: RoundPlan;
+
+function newMatchSeed(): void {
+    matchSeedLabel = seedParam ?? String(Math.floor(Math.random() * 1_000_000));
+    rng = createRng(seedFromString(matchSeedLabel));
+    lastBotSpell = undefined;
 }
+
+function botView(): { state: DuelState; botId: "opponent"; lastBotSpell: string[] | undefined } {
+    return { state, botId: "opponent", lastBotSpell };
+}
+
+function planRound(): RoundPlan {
+    const scenario = scenarios[state.round - 1];
+    if (scenario) {
+        // Scenario setup (an existing ward) is applied as the round opens so
+        // the situation matches the lesson regardless of earlier rounds.
+        if (scenario.setup?.playerWard) {
+            state.players.player.ward = { ownerId: "player", ...scenario.setup.playerWard };
+        }
+        if (scenario.setup?.opponentWard) {
+            state.players.opponent.ward = { ownerId: "opponent", ...scenario.setup.opponentWard };
+        }
+        const fixed = scenario.opponentReaction;
+        return {
+            scenario,
+            opponentSpell: scenario.opponentSpell,
+            telegraph: projectTelegraph(scenario.opponentSpell, scenario.telegraph, rng),
+            reaction: spell =>
+                fixed === "bot" ? chooseBotReaction(spell, botView(), rng) : fixed === "none" ? undefined : fixed
+        };
+    }
+    const spell = chooseBotSpell(spellPool, botView(), rng);
+    return {
+        opponentSpell: spell,
+        telegraph: projectTelegraph(spell, "high", rng),
+        reaction: playerCast => chooseBotReaction(playerCast, botView(), rng)
+    };
+}
+
+newMatchSeed();
+plan = planRound();
 
 function formatSpell(tokens: string[]): string {
     return tokens.length > 0 ? tokens.join(" → ") : "Choose glyphs";
 }
 
-function telegraphSpell(tokens: string[]): string {
-    return tokens
-        .map(token =>
-            ["FIRE", "SHADOW", "SEEK", "BIND", "WARD", "CLOSE"].includes(token)
-                ? token
-                : "?"
-        )
-        .join(" → ");
-}
+const OUTCOME_TEXT: Record<ScenarioOutcome, string> = {
+    "player-seal": "seal to you",
+    "opponent-seal": "seal to the opponent",
+    blocked: "blocked by the ward",
+    canceled: "canceled",
+    "no-seal": "no seal"
+};
 
-function chooseBotReaction(tokens: string[]): ReactionGlyph | undefined {
-    if (tokens.includes("AMPLIFY")) {
-        return "silence";
+function appendLesson(scenario: Scenario): void {
+    const heading = document.createElement("li");
+    heading.className = "lesson";
+    heading.textContent = "Lesson — " + scenario.title + ": " + scenario.lesson;
+    combatLog.append(heading);
+    for (const response of scenario.responses) {
+        const li = document.createElement("li");
+        li.className = "lesson-option";
+        const what = response.spell ? "Cast " + response.spell.join(" ") : response.label;
+        li.textContent = what + " → " + OUTCOME_TEXT[response.expect];
+        combatLog.append(li);
     }
-    if (tokens.includes("ENEMY") && !tokens.includes("ANCHOR") && state.round % 2 === 0) {
-        return "reflect";
-    }
-    if (state.round % 3 === 0) {
-        return "null";
-    }
-    return undefined;
 }
 
 function renderGlyphTray(): void {
@@ -156,7 +218,10 @@ function renderScoreboard(): void {
     playerSeals.textContent = String(state.players.player.seals);
     opponentSeals.textContent = String(state.players.opponent.seals);
     roundNumber.textContent = String(state.round);
-    telegraph.textContent = telegraphSpell(currentOpponentSpell());
+    telegraph.textContent = formatTelegraph(plan.telegraph);
+    scenarioNote.textContent = plan.scenario
+        ? "Scenario " + state.round + "/" + scenarios.length + " · " + plan.scenario.title + " · seed " + matchSeedLabel
+        : "Heuristic opponent · seed " + matchSeedLabel + " · some glyphs are hidden; infer the threat before reacting.";
 
     const winner =
         state.players.player.seals >= 3
@@ -213,7 +278,7 @@ function resolveRound(): void {
 
     combatLog.replaceChildren();
 
-    const opponentSpell = currentOpponentSpell();
+    const opponentSpell = plan.opponentSpell;
     const incoming = resolveEncounter(state, {
         casterId: "opponent",
         defenderId: "player",
@@ -222,10 +287,13 @@ function resolveRound(): void {
     });
 
     state = incoming.state;
-    appendSteps("Opponent: " + formatSpell(opponentSpell), incoming.steps);
+    appendSteps(
+        "Opponent: " + formatSpell(opponentSpell) + (selectedReaction ? " • you used " + selectedReaction.toUpperCase() : ""),
+        incoming.steps
+    );
 
     if (state.players.opponent.seals < 3 && state.players.player.seals < 3) {
-        const botReaction = chooseBotReaction(playerSpell);
+        const botReaction = plan.reaction(playerSpell);
         const outgoing = resolveEncounter(state, {
             casterId: "player",
             defenderId: "opponent",
@@ -241,6 +309,10 @@ function resolveRound(): void {
         );
     }
 
+    lastBotSpell = opponentSpell;
+    if (plan.scenario) {
+        appendLesson(plan.scenario);
+    }
     roundResolved = true;
     render();
 }
@@ -261,6 +333,7 @@ function startNextRound(): void {
     playerSpell = [];
     selectedReaction = undefined;
     roundResolved = false;
+    plan = planRound();
     combatLog.innerHTML = "<li>Opponent spell is waiting.</li>";
     render();
 }
@@ -270,6 +343,9 @@ function resetMatch(): void {
     playerSpell = [];
     selectedReaction = undefined;
     roundResolved = false;
+    // A seeded URL replays the same match; otherwise every reset is a new one.
+    newMatchSeed();
+    plan = planRound();
     combatLog.innerHTML = "<li>Opponent spell is waiting.</li>";
     render();
 }

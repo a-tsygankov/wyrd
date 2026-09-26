@@ -73,8 +73,8 @@ Remaining: freeze the exact POC glyph subset in content (currently frozen in the
 
 Deviation from v1: React/Vite was deferred (architecture doc §2). Adopt React only when UI complexity (grimoire, replay, map) demands it; grammar/resolver stay untouched.
 
-### POC-3 — simple opponent — **partially done**
-A scripted opponent with rotating spells and a small reaction heuristic ships in the web client. Remaining, in order: heuristic bot that composes legal spells from the same tray; same-device hot-seat; challenge seed (shareable URL replays the same opponent script).
+### POC-3 — simple opponent — **done (bot + challenge seed); hot-seat deferred**
+`packages/wyrd-simulation`: seeded RNG, enumeration of every legal spell the tray allows (parser + resolver as the authority), a scoring-table bot for spells (prefers scoring threats, never walks into a ward, bluffs with AMPLIFY/ANCHOR, never repeats) and reactions (REFLECT open routes, SILENCE modifiers, NULL only at match point). `?seed=<text>` replays the same opponent. Same-device hot-seat is deferred until playtests ask for it.
 
 ### POC-4 — deploy — **done**
 Cloudflare Pages `wyrd-web` (HTTPS, stable URL, auto-deploy from `main`, per-branch previews), Worker `wyrd-api`, D1 `wyrd-db`, GitHub Actions `deploy.yml`, tier version bumps enforced. Secrets set; first CI deploy green.
@@ -89,8 +89,10 @@ Cloudflare Pages `wyrd-web` (HTTPS, stable URL, auto-deploy from `main`, per-bra
 
 Definition of done: a tester with a link, on either platform, installs and finishes a first-to-3-seals match with no help.
 
-### POC-5 — gameplay experiment
-Unchanged content: 6–10 curated situations (direct threat, AMPLIFY bluff, REFLECT opportunity, ANCHOR protecting route, SILENCE stripping a modifier, NULL as expensive hard counter, WARD interaction, SPLIT if included). Test high-information telegraph first, then medium. Ask after each duel: understood why you won/lost? inference or guess? more than one reasonable choice? useless glyph? mandatory glyph? another duel?
+### POC-5 — gameplay experiment — **deck ready, playtests pending**
+The curated deck ships as data in `packages/wyrd-content/src/scenarios.ts` (8 scenarios: direct threat, open route, protected route, AMPLIFY bluff, SILENCE vs modifier, NULL hard counter, reading a ward, behind your own ward). The client plays it in order before handing over to the bot and prints each scenario's lesson and documented responses after the round; `test/scenarios.test.mjs` proves every documented response resolves as the lesson claims. Rounds 1–4 and 7 use the high-information telegraph, 5, 6 and 8 the medium one.
+
+Original content: 6–10 curated situations (direct threat, AMPLIFY bluff, REFLECT opportunity, ANCHOR protecting route, SILENCE stripping a modifier, NULL as expensive hard counter, WARD interaction, SPLIT if included). Test high-information telegraph first, then medium. Ask after each duel: understood why you won/lost? inference or guess? more than one reasonable choice? useless glyph? mandatory glyph? another duel?
 
 **[v2]** Telemetry, now cheap: `POST /api/telemetry` (telegraph shown, spell, reaction, outcome, time-to-commit, rematch) into a D1 table via a new migration; anonymous session id in IndexedDB; fire-and-forget so offline play is unaffected.
 
@@ -117,12 +119,12 @@ apps/      web (PWA — primary deliverable)   api (Worker + D1)   duel-sim (deb
 
 ## Immediate coding order **[v2]**
 
-1. POC-4b items 1–4 (install UX, versioned service worker, safe-area check on a real iPhone and Android).
-2. Playwright WebKit + Chromium smoke against the preview URL in `deploy.yml`.
-3. Heuristic bot composing legal spells from the tray.
-4. 6–10 curated scenarios + high-information telegraph preset.
+1. ~~POC-4b items 3–5~~ done; items 1, 2, 6 need a human with phones.
+2. ~~Playwright smoke~~ done.
+3. ~~Heuristic bot~~ done.
+4. ~~Scenario deck + telegraph presets~~ done.
 5. Telemetry endpoint + migration.
-6. Playtest on phones; tune rules/costs; repeat.
+6. Playtest on phones; tune rules/costs (the bot's scoring weights and the deck are the knobs); repeat.
 7. Only then decide between deeper resolver work, React migration, or PvP.
 
 ## Explicit changes from v1

@@ -234,9 +234,13 @@ export function resolveEncounter(
         return { state: next, effect, steps };
     }
 
-    const targetPlayerId: PlayerId = effect.reflected
-        ? context.casterId
-        : context.defenderId;
+    // Who the effect lands on follows the target glyph: SELF stays with the
+    // caster, ENEMY (or a REFLECTed ENEMY, which becomes SELF+reflected)
+    // crosses to the other side. Before this, the target glyph only gated
+    // wards/REFLECT and a SELF-targeted SEEK quietly hit the defender and
+    // scored an unwardable, unreflectable seal (test: self-targeted SEEK).
+    const landsOnCaster = effect.reflected || effect.target === "self";
+    const targetPlayerId: PlayerId = landsOnCaster ? context.casterId : context.defenderId;
 
     const scoringPlayerId: PlayerId = effect.reflected
         ? context.defenderId
@@ -330,9 +334,12 @@ export function resolveEncounter(
             break;
     }
 
+    // Seals reward reaching the other side (or the GATE objective). A spell
+    // that lands on its own caster - SELF-targeted, or REFLECTed back - scores
+    // for whoever it landed against: nobody for SELF, the reflector for REFLECT.
+    const reachedOpponent = effect.reflected || effect.target === "enemy";
     const awardsSeal =
-        effect.action === "seek" ||
-        effect.action === "bind" ||
+        ((effect.action === "seek" || effect.action === "bind") && reachedOpponent) ||
         effect.action === "close";
 
     if (awardsSeal) {

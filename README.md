@@ -9,8 +9,9 @@ Current implementation focus: **M0 — grammar**, with a playable browser duel P
 | Dir | What | Deploys to |
 |---|---|---|
 | `packages/wyrd-grammar` | semantic types, AST, parser, diagnostics | bundled into web + worker |
-| `packages/wyrd-content` | v0 glyph registry and data-first content | bundled into web + worker |
+| `packages/wyrd-content` | v0 glyph registry, curated scenario deck | bundled into web + worker |
 | `packages/wyrd-resolver` | deterministic resolver (M1) | bundled into web + worker |
+| `packages/wyrd-simulation` | seeded RNG, legal-spell enumeration, heuristic bot, telegraph presets | bundled into web |
 | `apps/duel-sim` | text-only duel simulator boundary (M2) | — |
 | `apps/web` | static PWA duel POC + Pages Functions `/api/*` proxy | Cloudflare Pages `wyrd-web` |
 | `apps/api` | Hono Worker `wyrd-api` on D1 `wyrd-db`; migrations in `apps/api/migrations/` | Cloudflare Workers |
