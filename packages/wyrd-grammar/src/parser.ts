@@ -1,5 +1,23 @@
 import { glyphRegistryByDisplayName } from "../../wyrd-content/src/glyphs.js";
-import type { GlyphDefinition, ParseDiagnostic, ParseResult, SemanticType, SpellNode, ValueNode } from "./types.js";
+import type { GlyphDefinition, ParseDiagnostic, ParseResult, Port, SemanticType, SpellNode, ValueNode } from "./types.js";
+
+export type GlyphRegistry = ReadonlyMap<string, GlyphDefinition>;
+
+type IndexedNode = {
+    index: number;
+    node: ValueNode;
+};
+
+type Assignment = {
+    arguments: Record<string, SpellNode | SpellNode[]>;
+    used: Set<number>;
+    score: number;
+};
+
+type Candidate = {
+    ast: SpellNode;
+    score: number;
+};
 
 const effectTypes = new Set<SemanticType>([
     "InstantEffect",
@@ -19,11 +37,7 @@ function matches(node: SpellNode, accepted: SemanticType[]): boolean {
         return true;
     }
 
-    if (accepted.includes("SpellRef") && effectTypes.has(node.outputType)) {
-        return true;
-    }
-
-    return false;
+    return accepted.includes("SpellRef") && effectTypes.has(node.outputType);
 }
 
 function valueNode(glyph: GlyphDefinition): ValueNode {
@@ -79,135 +93,190 @@ function invalid(definitions: GlyphDefinition[], diagnostics: ParseDiagnostic[])
     };
 }
 
-function parsePostfixOnly(definitions: GlyphDefinition[]): ParseResult | undefined {
+function semanticBonus(port: Port, node: SpellNode): number {
+    if (port.name === "target" && ["EntityRef", "RegionRef"].includes(node.outputType)) {
+        return 10;
+    }
+    if (port.name === "essence" && node.outputType === "Essence") {
+        return 10;
+    }
+    return 0;
+}
+
+function attachmentScore(operatorIndex: number, valueIndex: number, port: Port, node: SpellNode): number {
+    const distance = Math.abs(valueIndex - operatorIndex);
+    const adjacency = distance === 1 ? 20 : Math.max(0, 10 - distance);
+    const rightBias = valueIndex > operatorIndex ? 2 : 0;
+    return 100 + adjacency + rightBias + semanticBonus(port, node);
+}
+
+function assignPorts(
+    ports: Port[],
+    values: IndexedNode[],
+    operatorIndex: number,
+    portIndex = 0,
+    used = new Set<number>(),
+    args: Record<string, SpellNode | SpellNode[]> = {},
+    score = 0
+): Assignment[] {
+    if (portIndex >= ports.length) {
+        return [{
+            arguments: args,
+            used,
+            score
+        }];
+    }
+
+    const port = ports[portIndex]!;
+    const compatible = values.filter(({ index, node }) => !used.has(index) && matches(node, port.accepts));
+    const next: Assignment[] = [];
+
+    if (port.optional) {
+        next.push(...assignPorts(
+            ports,
+            values,
+            operatorIndex,
+            portIndex + 1,
+            new Set(used),
+            { ...args },
+            score
+        ));
+    }
+
+    if (port.variadic) {
+        if (compatible.length > 0) {
+            const usedNext = new Set(used);
+            let branchScore = score;
+            const nodes = compatible.map(({ index, node }) => {
+                usedNext.add(index);
+                branchScore += attachmentScore(operatorIndex, index, port, node);
+                return node;
+            });
+            next.push(...assignPorts(
+                ports,
+                values,
+                operatorIndex,
+                portIndex + 1,
+                usedNext,
+                { ...args, [port.name]: nodes },
+                branchScore
+            ));
+        }
+        return next;
+    }
+
+    for (const { index, node } of compatible) {
+        const usedNext = new Set(used);
+        usedNext.add(index);
+        next.push(...assignPorts(
+            ports,
+            values,
+            operatorIndex,
+            portIndex + 1,
+            usedNext,
+            { ...args, [port.name]: node },
+            score + attachmentScore(operatorIndex, index, port, node)
+        ));
+    }
+
+    return next;
+}
+
+function operatorCandidates(definitions: GlyphDefinition[], operatorIndex: number): Candidate[] {
+    const operator = definitions[operatorIndex]!;
+    const modifierEntries = definitions
+        .map((definition, index) => ({ definition, index }))
+        .filter(({ definition }) => definition.attachment === "postfix");
+
+    if (modifierEntries.some(({ index }) => index < operatorIndex)) {
+        return [];
+    }
+
+    const values = definitions
+        .map((definition, index) => ({ definition, index }))
+        .filter(({ definition }) => definition.attachment === "value")
+        .map(({ definition, index }) => ({ index, node: valueNode(definition) }));
+
+    const assignments = assignPorts(operator.inputs ?? [], values, operatorIndex);
+    const complete = assignments.filter((assignment) => assignment.used.size === values.length);
+    const candidates: Candidate[] = [];
+
+    for (const assignment of complete) {
+        let ast: SpellNode = {
+            kind: "operator",
+            glyphId: operator.id,
+            outputType: operator.produces[0]!,
+            arguments: assignment.arguments
+        };
+
+        let score = assignment.score;
+        let legal = true;
+
+        for (const { definition: modifier, index } of modifierEntries.sort((a, b) => a.index - b.index)) {
+            const input = modifier.inputs?.[0];
+            if (!input || !matches(ast, input.accepts)) {
+                legal = false;
+                break;
+            }
+
+            const distance = Math.max(1, index - operatorIndex);
+            score += 100 + (distance === 1 ? 20 : Math.max(0, 10 - distance));
+            ast = makeModifier(modifier, ast);
+        }
+
+        if (legal) {
+            candidates.push({ ast, score });
+        }
+    }
+
+    return candidates;
+}
+
+function postfixOnlyCandidates(definitions: GlyphDefinition[]): Candidate[] {
     if (definitions.length !== 2) {
-        return undefined;
+        return [];
     }
 
     const [value, modifier] = definitions;
     if (!value || !modifier || value.attachment !== "value" || modifier.attachment !== "postfix") {
-        return undefined;
+        return [];
     }
 
     const node = valueNode(value);
     const port = modifier.inputs?.[0];
     if (!port || !matches(node, port.accepts)) {
-        return undefined;
+        return [];
     }
 
-    const ast = makeModifier(modifier, node);
-    return {
-        status: "valid",
-        ast,
-        focusCost: focusCost(definitions),
-        complexity: complexity(ast, definitions.length),
-        diagnostics: []
-    };
+    return [{
+        ast: makeModifier(modifier, node),
+        score: 120 + semanticBonus(port, node)
+    }];
 }
 
-function parseOperatorSequence(definitions: GlyphDefinition[]): ParseResult | undefined {
-    const operatorIndexes = definitions
-        .map((definition, index) => definition.attachment === "operator" ? index : -1)
-        .filter((index) => index >= 0);
-
-    if (operatorIndexes.length !== 1) {
-        return undefined;
+function missingInputDiagnostic(definitions: GlyphDefinition[]): ParseDiagnostic {
+    const operator = definitions.find((definition) => definition.attachment === "operator");
+    if (!operator) {
+        return {
+            code: "INVALID",
+            message: "The glyph sequence does not form a complete typed spell."
+        };
     }
 
-    const operatorIndex = operatorIndexes[0]!;
-    const operator = definitions[operatorIndex]!;
-    const before = definitions.slice(0, operatorIndex).map(valueNode);
-    const afterDefinitions = definitions.slice(operatorIndex + 1);
-
-    const modifiers: GlyphDefinition[] = [];
-    const afterValues: ValueNode[] = [];
-    for (const definition of afterDefinitions) {
-        if (definition.attachment === "postfix") {
-            modifiers.push(definition);
-        } else if (definition.attachment === "value") {
-            afterValues.push(valueNode(definition));
-        } else {
-            return undefined;
-        }
-    }
-
-    const candidates = [...before, ...afterValues];
-    const used = new Set<number>();
-    const args: Record<string, SpellNode | SpellNode[]> = {};
-
-    for (const port of operator.inputs ?? []) {
-        const matchesForPort = candidates
-            .map((node, index) => ({ node, index }))
-            .filter(({ node, index }) => !used.has(index) && matches(node, port.accepts));
-
-        if (matchesForPort.length === 0) {
-            if (port.optional) {
-                continue;
-            }
-            return undefined;
-        }
-
-        if (port.variadic) {
-            args[port.name] = matchesForPort.map(({ node, index }) => {
-                used.add(index);
-                return node;
-            });
-            continue;
-        }
-
-        matchesForPort.sort((a, b) => {
-            const posA = definitions.findIndex((definition) => definition.id === a.node.glyphId);
-            const posB = definitions.findIndex((definition) => definition.id === b.node.glyphId);
-            const distA = Math.abs(posA - operatorIndex);
-            const distB = Math.abs(posB - operatorIndex);
-            if (distA !== distB) {
-                return distA - distB;
-            }
-            const aRight = posA > operatorIndex ? 0 : 1;
-            const bRight = posB > operatorIndex ? 0 : 1;
-            return aRight - bRight;
-        });
-
-        const chosen = matchesForPort[0]!;
-        used.add(chosen.index);
-        args[port.name] = chosen.node;
-    }
-
-    if (used.size !== candidates.length) {
-        return undefined;
-    }
-
-    let ast: SpellNode = {
-        kind: "operator",
+    return {
+        code: "MISSING_INPUT",
         glyphId: operator.id,
-        outputType: operator.produces[0]!,
-        arguments: args
-    };
-
-    for (const modifier of modifiers) {
-        const input = modifier.inputs?.[0];
-        if (!input || !matches(ast, input.accepts)) {
-            return undefined;
-        }
-        ast = makeModifier(modifier, ast);
-    }
-
-    return {
-        status: "valid",
-        ast,
-        focusCost: focusCost(definitions),
-        complexity: complexity(ast, definitions.length),
-        diagnostics: []
+        message: `${operator.displayName} does not have a complete type-compatible set of inputs.`
     };
 }
 
-export function parseSpell(tokens: string[]): ParseResult {
+export function parseSpellWithRegistry(tokens: string[], registry: GlyphRegistry): ParseResult {
     const diagnostics: ParseDiagnostic[] = [];
     const definitions: GlyphDefinition[] = [];
 
     for (const rawToken of tokens) {
         const token = normalizeToken(rawToken);
-        const glyph = glyphRegistryByDisplayName.get(token);
+        const glyph = registry.get(token);
         if (!glyph) {
             diagnostics.push({
                 code: "UNKNOWN_GLYPH",
@@ -223,29 +292,69 @@ export function parseSpell(tokens: string[]): ParseResult {
         return invalid(definitions, diagnostics);
     }
 
-    const candidates = [
-        parseOperatorSequence(definitions),
-        parsePostfixOnly(definitions)
-    ].filter((candidate): candidate is ParseResult => candidate !== undefined);
-
-    if (candidates.length === 0) {
+    if (definitions.length === 0) {
         return invalid(definitions, [{
             code: "INVALID",
-            message: "The glyph sequence does not form a complete typed spell."
+            message: "A spell must contain at least one glyph."
         }]);
     }
 
-    if (candidates.length > 1) {
+    const unsupported = definitions.filter((definition) =>
+        !["value", "operator", "postfix"].includes(definition.attachment)
+    );
+    if (unsupported.length > 0) {
+        return invalid(definitions, unsupported.map((definition) => ({
+            code: "INVALID",
+            glyphId: definition.id,
+            message: `${definition.displayName} uses ${definition.attachment} syntax, which is not implemented in parser v0.2.`
+        })));
+    }
+
+    const operatorIndexes = definitions
+        .map((definition, index) => definition.attachment === "operator" ? index : -1)
+        .filter((index) => index >= 0);
+
+    if (operatorIndexes.length > 1) {
+        return invalid(definitions, [{
+            code: "INVALID",
+            message: "Parser v0.2 supports one base action per spell; nested actions will be added separately."
+        }]);
+    }
+
+    const candidates = operatorIndexes.length === 1
+        ? operatorCandidates(definitions, operatorIndexes[0]!)
+        : postfixOnlyCandidates(definitions);
+
+    if (candidates.length === 0) {
+        return invalid(definitions, [missingInputDiagnostic(definitions)]);
+    }
+
+    const ordered = [...candidates].sort((a, b) => b.score - a.score);
+    const bestScore = ordered[0]!.score;
+    const best = ordered.filter((candidate) => candidate.score === bestScore);
+
+    if (best.length > 1) {
         return {
             status: "ambiguous",
             focusCost: focusCost(definitions),
             complexity: definitions.length,
             diagnostics: [{
                 code: "AMBIGUOUS",
-                message: "Multiple equally valid parses were found."
+                message: `${best.length} equally scored complete parses were found (score ${bestScore}). Add or reorder glyphs to disambiguate the spell.`
             }]
         };
     }
 
-    return candidates[0]!;
+    const ast = best[0]!.ast;
+    return {
+        status: "valid",
+        ast,
+        focusCost: focusCost(definitions),
+        complexity: complexity(ast, definitions.length),
+        diagnostics: []
+    };
+}
+
+export function parseSpell(tokens: string[]): ParseResult {
+    return parseSpellWithRegistry(tokens, glyphRegistryByDisplayName);
 }
