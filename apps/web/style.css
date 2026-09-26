@@ -267,3 +267,25 @@ h2 {
 .admin-log { max-height: 220px; overflow: auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.72rem; }
 .admin-log .warn { color: #ffc457; }
 .admin-log .error { color: #ff7a7a; }
+
+.topbar-actions { display: flex; gap: 8px; flex-shrink: 0; }
+
+.handoff {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(8, 7, 13, 0.96);
+}
+
+.handoff-card {
+    width: min(100%, 420px);
+    margin: 0;
+    text-align: center;
+}
+
+.handoff-card h2 { margin: 8px 0 6px; font-size: 1.4rem; }
+.handoff-card .cast-button { margin-top: 16px; }

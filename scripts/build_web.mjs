@@ -23,6 +23,7 @@ cpSync("dist/apps/web/src/main.js", `${out}/apps/web/src/main.js`);
 cpSync("dist/apps/web/src/install.js", `${out}/apps/web/src/install.js`);
 cpSync("dist/apps/web/src/telemetry.js", `${out}/apps/web/src/telemetry.js`);
 cpSync("dist/apps/web/src/log.js", `${out}/apps/web/src/log.js`);
+cpSync("dist/apps/web/src/hotseat.js", `${out}/apps/web/src/hotseat.js`);
 
 mkdirSync(`${out}/packages`, { recursive: true });
 for (const pkg of ["wyrd-grammar", "wyrd-content", "wyrd-resolver", "wyrd-simulation"]) {

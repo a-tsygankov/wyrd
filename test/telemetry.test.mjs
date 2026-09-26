@@ -46,7 +46,8 @@ test("buildRoundEvent captures what the plan asks for and nothing personal", () 
         playerSeals: 3,
         opponentSeals: 1,
         roundStartedAt: 1000,
-        committedAt: 9400
+        committedAt: 9400,
+        mode: "hotseat"
     });
     assert.deepEqual(event, {
         event: "round",
@@ -65,7 +66,8 @@ test("buildRoundEvent captures what the plan asks for and nothing personal", () 
         opponentSeals: 1,
         playerGained: 2,
         opponentGained: 0,
-        timeToCommitMs: 8400
+        timeToCommitMs: 8400,
+        mode: "hotseat"
     });
     assert.ok(!("userAgent" in event) && !("ip" in event));
 });

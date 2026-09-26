@@ -29,6 +29,7 @@ export type TelemetryEvent = {
     playerGained?: number;
     opponentGained?: number;
     timeToCommitMs?: number | null;
+    mode?: "solo" | "hotseat";
 };
 
 type StorageLike = { getItem(key: string): string | null; setItem(key: string, value: string): void };
@@ -69,6 +70,7 @@ export type RoundFacts = {
     opponentSeals: number;
     roundStartedAt: number;
     committedAt: number;
+    mode: "solo" | "hotseat";
 };
 
 export function buildRoundEvent(facts: RoundFacts): TelemetryEvent {
@@ -89,7 +91,8 @@ export function buildRoundEvent(facts: RoundFacts): TelemetryEvent {
         opponentSeals: facts.opponentSeals,
         playerGained: Math.max(0, facts.playerSeals - facts.playerSealsBefore),
         opponentGained: Math.max(0, facts.opponentSeals - facts.opponentSealsBefore),
-        timeToCommitMs: Math.max(0, Math.round(facts.committedAt - facts.roundStartedAt))
+        timeToCommitMs: Math.max(0, Math.round(facts.committedAt - facts.roundStartedAt)),
+        mode: facts.mode
     };
 }
 

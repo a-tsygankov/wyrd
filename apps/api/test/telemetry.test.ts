@@ -46,7 +46,7 @@ describe("POST /api/telemetry", () => {
         expect(await count()).toBe(before + 2);
 
         const row = await env.DB.prepare(
-            "SELECT session_id, match_seed, round, scenario_id, telegraph_preset, telegraph, opponent_spell, player_spell, player_reaction, opponent_reaction, player_seals, opponent_seals, player_gained, opponent_gained, time_to_commit_ms, web_version, event FROM telemetry_events WHERE event = 'round' ORDER BY ts DESC LIMIT 1"
+            "SELECT session_id, match_seed, round, scenario_id, telegraph_preset, telegraph, opponent_spell, player_spell, player_reaction, opponent_reaction, player_seals, opponent_seals, player_gained, opponent_gained, time_to_commit_ms, web_version, mode, event FROM telemetry_events WHERE event = 'round' ORDER BY ts DESC LIMIT 1"
         ).first<Record<string, unknown>>();
         expect(row).toEqual({
             session_id: roundEvent.sessionId,
@@ -65,20 +65,22 @@ describe("POST /api/telemetry", () => {
             opponent_gained: 0,
             time_to_commit_ms: 8400,
             web_version: "0.0.4",
+            mode: "solo",
             event: "round"
         });
     });
 
-    it("accepts a single event object and nullable fields", async () => {
+    it("accepts a single event object, nullable fields and the hot-seat mode", async () => {
         const before = await count();
         const { playerReaction, opponentReaction, scenarioId, ...rest } = roundEvent;
-        const res = await post({ ...rest, round: 9, telegraphPreset: "medium" });
+        const res = await post({ ...rest, round: 9, telegraphPreset: "medium", mode: "hotseat" });
         expect(res.status).toBe(202);
         expect(await count()).toBe(before + 1);
         const row = await env.DB.prepare(
-            "SELECT scenario_id, player_reaction, opponent_reaction FROM telemetry_events WHERE round = 9"
+            "SELECT scenario_id, player_reaction, opponent_reaction, mode FROM telemetry_events WHERE round = 9"
         ).first<Record<string, unknown>>();
-        expect(row).toEqual({ scenario_id: null, player_reaction: null, opponent_reaction: null });
+        expect(row).toEqual({ scenario_id: null, player_reaction: null, opponent_reaction: null, mode: "hotseat" });
+        expect((await post({ ...roundEvent, mode: "lan" })).status).toBe(400);
     });
 
     it("rejects malformed input without writing anything", async () => {
