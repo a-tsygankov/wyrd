@@ -1,1 +1,6 @@
-{"name":"@wyrd/grammar","private":true,"version":"0.0.1","type":"module"}
+{
+  "name": "@wyrd/grammar",
+  "private": true,
+  "version": "0.0.2",
+  "type": "module"
+}
