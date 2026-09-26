@@ -206,8 +206,8 @@ export function resolveEncounter(
 
     const effect: ResolvedEffect = {
         action: flat.action,
-        target: flat.target,
-        essence: flat.essence,
+        ...(flat.target ? { target: flat.target } : {}),
+        ...(flat.essence ? { essence: flat.essence } : {}),
         magnitude: flat.modifiers.includes("amplify") ? 2 : 1,
         anchored: flat.modifiers.includes("anchor"),
         reflected: false,
