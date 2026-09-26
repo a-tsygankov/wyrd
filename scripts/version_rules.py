@@ -25,6 +25,9 @@ def _resolver(p: str) -> bool:
 def _duel_sim(p: str) -> bool:
     return _resolver(p) or _source(p, "apps/duel-sim/")
 
+def _web(p: str) -> bool:
+    return _resolver(p) or _source(p, "apps/web/")
+
 def read_package_json_version(content: str) -> Optional[str]:
     try:
         return str(json.loads(content)["version"])
@@ -52,6 +55,7 @@ TIERS = [
     Tier("content", "packages/wyrd-content/package.json", read_package_json_version, write_package_json_version, _content),
     Tier("resolver", "packages/wyrd-resolver/package.json", read_package_json_version, write_package_json_version, _resolver),
     Tier("duel-sim", "apps/duel-sim/package.json", read_package_json_version, write_package_json_version, _duel_sim),
+    Tier("web", "apps/web/package.json", read_package_json_version, write_package_json_version, _web),
 ]
 
 def bump_patch(v: str) -> str:
