@@ -7,6 +7,10 @@ import {
     adviseSpell,
     chooseBotReaction,
     chooseBotSpell,
+    choosePersonality,
+    choosePlan,
+    type Personality,
+    type Plan,
     createRng,
     enumerateLegalSpells,
     glyphFits,
@@ -239,16 +243,26 @@ const log = createLog();
 let matchSeedLabel = "";
 let rng: Rng = createRng(0);
 let lastBotSpell: string[] | undefined;
+/** Every spell the opponent has cast this match; the bot avoids its recent ones. */
+let recentBotSpells: string[][] = [];
+/** Who the bot is this match and what it is after this round (options doc §I). */
+let personality: Personality;
+let roundPlan: Plan | undefined;
 let plan: RoundPlan;
 
 function newMatchSeed(): void {
     matchSeedLabel = seedParam ?? String(Math.floor(Math.random() * 1_000_000));
     rng = createRng(seedFromString(matchSeedLabel));
+    // A separate stream for the personality keeps the main one - and so the
+    // telegraphs of old seeds - exactly where they were.
+    personality = choosePersonality(createRng(seedFromString(matchSeedLabel + ":bot")));
     lastBotSpell = undefined;
+    recentBotSpells = [];
+    roundPlan = undefined;
 }
 
-function botView(): { state: DuelState; botId: "opponent"; lastBotSpell: string[] | undefined } {
-    return { state, botId: "opponent", lastBotSpell };
+function botView(): { state: DuelState; botId: "opponent"; lastBotSpell: string[] | undefined; recentBotSpells: string[][]; personality: Personality; plan: Plan | undefined } {
+    return { state, botId: "opponent", lastBotSpell, recentBotSpells, personality, plan: roundPlan };
 }
 
 /** How many extra telegraph glyphs `id` leaks: one for exposed (0 Focus), one for faltering (low Resolve). */
@@ -299,18 +313,19 @@ function planRound(): RoundPlan {
             reaction: spell =>
                 fixed === "bot" ? chooseBotReaction(spell, botView(), rng) : fixed === "none" ? undefined : fixed,
             reactionModel: fixed === "bot" ? spell => reactionProbabilities(spell, botView()) : fixedReactionModel(fixed),
-            reactionPolicy: fixed === "bot" ? "heuristic bot table" : fixed === "none" ? "no reaction (teaching round)" : `always ${fixed.toUpperCase()}`,
+            reactionPolicy: fixed === "bot" ? `heuristic bot table · ${personality.title}` : fixed === "none" ? "no reaction (teaching round)" : `always ${fixed.toUpperCase()}`,
             reveal: []
         };
     }
+    roundPlan = choosePlan(botView(), rng);
     const spell = chooseBotSpell(spellPool, botView(), rng);
-    log.info(`round ${state.round} planned: heuristic bot`, { opponentSpell: spell.join(" ") });
+    log.info(`round ${state.round} planned: heuristic bot`, { personality: personality.id, plan: roundPlan, opponentSpell: spell.join(" ") });
     return {
         opponentSpell: spell,
         telegraph: projectTelegraph(spell, "high", rng, { extraReveals: leak("opponent") }),
         reaction: playerCast => chooseBotReaction(playerCast, botView(), rng),
         reactionModel: playerCast => reactionProbabilities(playerCast, botView()),
-        reactionPolicy: "heuristic bot table",
+        reactionPolicy: `heuristic bot table · ${personality.title} · plan: ${roundPlan}`,
         reveal: []
     };
 }
@@ -558,7 +573,7 @@ function renderScoreboard(): void {
     telegraph.textContent = formatTelegraph(visibleTelegraph());
     scenarioNote.textContent = (plan.scenario
         ? "Scenario " + state.round + "/" + scenarios.length + " · " + plan.scenario.title + " · seed " + matchSeedLabel
-        : "Heuristic opponent · seed " + matchSeedLabel + " · some glyphs are hidden; infer the threat before reacting.") + rulesNote;
+        : `Opponent: ${personality.title} · seed ${matchSeedLabel} · some glyphs are hidden; infer the threat before reacting.`) + rulesNote;
 
     matchStatus.textContent = outcome.over
         ? outcome.winner === "player"
@@ -604,6 +619,7 @@ function renderAdmin(): void {
         ["Scenario", plan.scenario ? `${plan.scenario.id} (telegraph ${plan.scenario.telegraph})` : "heuristic bot (telegraph high)"],
         ["Mode", mode === "solo" ? "solo" : `hot-seat · ${hotseat.phase}`],
         ["Hidden spell", plan.opponentSpell.join(" ") || "(not cast yet)"],
+        ["Opponent", `${personality.title} (${personality.id}) - ${personality.blurb}`],
         ["Opponent reacts", plan.reactionPolicy],
         ["Gate", state.gate],
         ["Wards", wards],
@@ -789,6 +805,7 @@ function resolveRound(): void {
     }
 
     lastBotSpell = opponentSpell;
+    recentBotSpells = [...recentBotSpells, [...opponentSpell]];
 
     // Who won the round and why, on top of the log; the match verdict when
     // the duel ends. Both come from the resolutions themselves.

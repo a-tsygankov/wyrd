@@ -1,6 +1,6 @@
 # Wyrd — making the duel more interesting: options and battle examples
 
-Status: decided 2026-09-26 - all four proposals in §6 accepted. Options A, B, C, D (timer + quick cast) and E (ignite) are implemented as the selectable rulesets Classic / Teeth / Pulse / Resolve (Settings in the app, `packages/wyrd-content/src/rulesets.ts`); the Stats panel shows the per-ruleset numbers §5 asks for. F (the stage, SVG/CSS with WebAudio cues) and G (progressive reveal and Scry) shipped 2026-09-26; the vocabulary grew to 16 glyphs with a contested gate the same day. Still open: E counter-counter and crests, H weather and sudden death, I personalities, J draft. Originally written as options; Everything is written against the rules the POC resolver actually has today, so every example below could be replayed once the option is built.
+Status: decided 2026-09-26 - all four proposals in §6 accepted. Options A, B, C, D (timer + quick cast) and E (ignite) are implemented as the selectable rulesets Classic / Teeth / Pulse / Resolve (Settings in the app, `packages/wyrd-content/src/rulesets.ts`); the Stats panel shows the per-ruleset numbers §5 asks for. F (the stage, SVG/CSS with WebAudio cues) and G (progressive reveal and Scry) shipped 2026-09-26; the vocabulary grew to 16 glyphs with a contested gate the same day. Still open: E counter-counter and crests, H weather and sudden death, I portraits/taunts/ladder (personalities shipped), J draft. Originally written as options; Everything is written against the rules the POC resolver actually has today, so every example below could be replayed once the option is built.
 
 ## 1. What the duel is right now
 
@@ -93,6 +93,8 @@ This does not change a single rule and is the biggest "feel" change available. E
 - **Sudden death** at 2–2: both telegraphs switch to the medium preset, reactions cost double (B), one round decides. Announced with a stage beat (F).
 
 ### I. Opponents with a face (S–M)
+
+Status 2026-09-26: the weights half shipped as five seeded personalities (the Adept, the Aggressor, the Warden, the Trickster, the Gatekeeper; `wyrd-simulation/bot.ts`), plus a per-round plan (strike / shield / gate / trick / probe) and a memory of the last six spells, so the bot no longer loops on its best-scored move; the round note names the opponent. Portraits, taunts and the rival ladder remain open.
 
 - Three bot personalities from the existing scoring table with different weights: **Ember** (aggressive: +threats, never wards), **Warden** (turtle: wards first, NULL at match point), **Trickster** (bluffs: AMPLIFY/ANCHOR bias, REFLECT-happy). Each has a portrait (F) and a one-line taunt after the round drawn from the round explanation ("You read that one." / "ANCHOR. Always ANCHOR.").
 - A **rival ladder**: beat Ember to unlock Warden, etc. Progression by knowledge (you learned to read wards), not by power.

@@ -13,10 +13,113 @@ export type BotView = {
     botId: PlayerId;
     /** The bot's previous spell, never repeated back-to-back. */
     lastBotSpell?: readonly string[] | undefined;
+    /** The bot's spells so far this match, oldest first; the last few are avoided. */
+    recentBotSpells?: readonly (readonly string[])[] | undefined;
+    /** Who the bot is this match (default: balanced). */
+    personality?: Personality | undefined;
+    /** What the bot is trying to do this round (default: no plan). */
+    plan?: Plan | undefined;
 };
 
 export type ReactionChoice = ReactionGlyph | "none";
 export type ReactionScores = Record<ReactionChoice, number>;
+
+/**
+ * Variety (options doc §I). A personality is chosen per match, a plan per
+ * round, both from the match seed, and the bot avoids what it cast in the
+ * last few rounds - so it stops looping on its best-scored spell while a
+ * `?seed=` still replays the same opponent.
+ */
+export type Plan = "strike" | "shield" | "gate" | "trick" | "probe";
+export const PLANS: readonly Plan[] = ["strike", "shield", "gate", "trick", "probe"];
+
+export type Personality = {
+    id: "balanced" | "aggressor" | "warden" | "trickster" | "gatekeeper";
+    title: string;
+    /** One line for the round note and the admin console. */
+    blurb: string;
+    /** Softmax temperature for spells; higher = more surprising. */
+    temperature: number;
+    /** Softmax temperature for reactions. */
+    reactionTemperature: number;
+    /** Relative odds of each round plan. */
+    planWeights: Record<Plan, number>;
+    /** Extra reaction scores. */
+    reactionBias: Partial<Record<ReactionChoice, number>>;
+};
+
+export const PERSONALITIES: readonly Personality[] = [
+    {
+        id: "balanced",
+        title: "the Adept",
+        blurb: "Plays the table straight: scores when it can, wards when it must.",
+        temperature: 1.5,
+        reactionTemperature: 1.2,
+        planWeights: { strike: 3, shield: 1.5, gate: 2, trick: 1.5, probe: 1 },
+        reactionBias: {}
+    },
+    {
+        id: "aggressor",
+        title: "the Aggressor",
+        blurb: "Hits every round, amplified when it can; saves its Focus for its own spell rather than answers.",
+        temperature: 1.4,
+        reactionTemperature: 1.2,
+        planWeights: { strike: 5, shield: 0.5, gate: 1.5, trick: 1, probe: 0.5 },
+        reactionBias: { none: 1.5, null: -1, reflect: -0.5, silence: -1 }
+    },
+    {
+        id: "warden",
+        title: "the Warden",
+        blurb: "Wards first, mends what dents, breaks yours; answers with SILENCE and REFLECT.",
+        temperature: 1.5,
+        reactionTemperature: 1.1,
+        planWeights: { strike: 1.5, shield: 4, gate: 1.5, trick: 0.5, probe: 1 },
+        reactionBias: { none: -1, reflect: 1, silence: 1.5 }
+    },
+    {
+        id: "trickster",
+        title: "the Trickster",
+        blurb: "REVERSEs gates, SPLITs bolts, bluffs with AMPLIFY; its reactions are hard to read.",
+        temperature: 2.2,
+        reactionTemperature: 2.5,
+        planWeights: { strike: 1.5, shield: 1, gate: 1.5, trick: 4, probe: 1.5 },
+        reactionBias: { silence: 0.5 }
+    },
+    {
+        id: "gatekeeper",
+        title: "the Gatekeeper",
+        blurb: "Fights over the GATE: closes, opens, shatters and mends it; NULLs a gate spell that would score.",
+        temperature: 1.5,
+        reactionTemperature: 1.2,
+        planWeights: { strike: 1.5, shield: 1, gate: 5, trick: 1, probe: 0.5 },
+        reactionBias: {}
+    }
+];
+
+const BALANCED = PERSONALITIES[0] as Personality;
+
+export function choosePersonality(rng: Rng): Personality {
+    return rng.weighted(PERSONALITIES, () => 1);
+}
+
+/** The round's plan from the personality's odds, bent by the board: no second ward, no gate play over a shattered gate, defence when the opponent is at match point. */
+export function choosePlan(view: BotView, rng: Rng): Plan {
+    const personality = view.personality ?? BALANCED;
+    const me = view.state.players[view.botId];
+    const them = view.state.players[opponentOf(view.botId)];
+    const weights: Record<Plan, number> = { ...personality.planWeights };
+    if (me.ward) weights.shield *= 0.3;
+    if ((view.state.gate ?? "open") === "broken") weights.gate *= 0.4;
+    if (them.seals >= SEALS_TO_WIN - 1) {
+        weights.strike *= 1.5;
+        weights.shield *= 1.3;
+    }
+    // Do not run the same plan three rounds running: the recent spells tell.
+    const recent = view.recentBotSpells ?? [];
+    if (recent.length >= 2 && recent.slice(-2).every(s => s.includes("GATE"))) weights.gate *= 0.4;
+    if (recent.length >= 2 && recent.slice(-2).every(s => s.includes("WARD"))) weights.shield *= 0.2;
+    return rng.weighted(PLANS, plan => weights[plan]);
+}
 
 const SEALS_TO_WIN = 3;
 
@@ -76,17 +179,84 @@ export function scoreSpell(spell: LegalSpell, view: BotView): number {
     // Prefer spending less Focus for the same outcome, slightly - and more
     // so when reactions cost Focus, since a 7-Focus spell leaves no answer.
     score -= spell.focusCost * (view.state.rules?.reactionCosts ? 0.5 : 0.15);
+
+    // --- Variety: who the bot is, what it wants this round, what it just did.
+    const gatePlay = spell.target === "gate";
+    const defensive = (spell.action === "ward" || spell.action === "mend") && spell.target === "self";
+    const tricky = spell.modifiers.includes("reverse") || spell.modifiers.includes("split");
+    switch ((view.personality ?? BALANCED).id) {
+        case "aggressor":
+            if (scoring) score += 2;
+            if (spell.amplified) score += 1;
+            if (spell.modifiers.includes("split")) score += 1;
+            if (spell.action === "ward") score -= 2;
+            if (spell.action === "mend") score -= 1;
+            break;
+        case "warden":
+            if (spell.action === "ward") score += 3;
+            if (spell.action === "mend") score += 1.5;
+            if (spell.action === "break" && spell.target === "enemy") score += 1;
+            if (scoring) score -= 0.5;
+            break;
+        case "trickster":
+            if (spell.modifiers.includes("reverse")) score += 2.5;
+            if (spell.modifiers.includes("split")) score += 1.5;
+            if (spell.modifiers.includes("weaken")) score += 2.5; // the bluff it likes: reads loud, lands soft
+            if (spell.amplified) score += 1;
+            if (spell.anchored) score += 0.5;
+            break;
+        case "gatekeeper":
+            if (gatePlay) score += 3;
+            if (gatePlay && spell.anchored) score += 1;
+            break;
+        case "balanced":
+            break;
+    }
+    switch (view.plan) {
+        case "strike":
+            if (scoring) score += 2;
+            break;
+        case "shield":
+            if (defensive) score += 3;
+            if (spell.action === "break" && spell.target === "enemy") score += 1;
+            break;
+        case "gate":
+            if (gatePlay) score += 3;
+            break;
+        case "trick":
+            if (tricky) score += 2.5;
+            if (spell.amplified || spell.anchored || spell.modifiers.includes("weaken")) score += 1.5;
+            break;
+        case "probe":
+            score += (4 - spell.focusCost) * 0.8; // cheap and quick, keep the Focus
+            if (spell.action === "seek" && !spell.essence) score += 1;
+            break;
+        case undefined:
+            break;
+    }
+    // Recency: the last three casts are excluded in chooseBotSpell; the three
+    // before that, and the same action-target shape as the last cast, cost.
+    const recent = view.recentBotSpells ?? (view.lastBotSpell ? [view.lastBotSpell] : []);
+    const key = spell.tokens.join(" ");
+    if (recent.slice(-6, -3).some(s => s.join(" ") === key)) score -= 2.5;
+    const last = recent[recent.length - 1];
+    if (last) {
+        const shape = classifySpell(last);
+        if (shape && shape.action === spell.action && shape.target === spell.target) score -= 1.5;
+    }
     return score;
 }
 
-/** Pick a spell from the pool: weighted by score, never the previous one. */
+/** Pick a spell from the pool: weighted by score, never one of the last three. */
 export function chooseBotSpell(pool: readonly LegalSpell[], view: BotView, rng: Rng): string[] {
-    const last = view.lastBotSpell?.join(" ");
-    const candidates = pool.filter(s => s.tokens.join(" ") !== last);
+    const recent = view.recentBotSpells ?? (view.lastBotSpell ? [view.lastBotSpell] : []);
+    const banned = new Set(recent.slice(-3).map(s => s.join(" ")));
+    const candidates = pool.filter(s => !banned.has(s.tokens.join(" ")));
     const source = candidates.length > 0 ? candidates : pool;
     // Softmax-ish: exponentiate so good spells dominate but the tail still
     // shows up - a bot that always casts the top spell teaches nothing.
-    const scored = source.map(s => ({ s, w: Math.exp(scoreSpell(s, view) / 1.5) }));
+    const temperature = (view.personality ?? BALANCED).temperature;
+    const scored = source.map(s => ({ s, w: Math.exp(scoreSpell(s, view) / temperature) }));
     return rng.weighted(scored, x => x.w).s.tokens;
 }
 
@@ -120,11 +290,15 @@ export function scoreReactions(playerSpell: readonly string[], view: BotView): R
         scores.null = matchPoint ? 6 : 0.5;
     }
     if (alreadyWarded) scores.none = 4; // the ward already answers it
+    // Who the bot is: the aggressor keeps its Focus, the warden answers, the
+    // gatekeeper will not let a scoring gate spell through.
+    const personality = view.personality ?? BALANCED;
+    for (const [choice, bias] of Object.entries(personality.reactionBias) as Array<[ReactionChoice, number]>) scores[choice] += bias;
+    if (personality.id === "gatekeeper" && gateScores) scores.null = Math.max(scores.null, 3);
     return scores;
 }
 
 export const REACTION_CHOICES: readonly ReactionChoice[] = ["none", "null", "reflect", "silence"];
-const REACTION_TEMPERATURE = 1.2;
 
 /** The bot's reaction distribution: softmax over the scoring table. Shared by the chooser and the advisor. */
 export function reactionProbabilities(playerSpell: readonly string[], view: BotView): Record<ReactionChoice, number> {
@@ -134,7 +308,8 @@ export function reactionProbabilities(playerSpell: readonly string[], view: BotV
     const focus = view.state.players[view.botId].focus;
     const affordable = (c: ReactionChoice): boolean =>
         c === "none" || !view.state.rules?.reactionCosts || REACTION_COSTS[c] <= focus;
-    const weights = REACTION_CHOICES.map(c => (affordable(c) ? Math.exp(scores[c] / REACTION_TEMPERATURE) : 0));
+    const temperature = (view.personality ?? BALANCED).reactionTemperature;
+    const weights = REACTION_CHOICES.map(c => (affordable(c) ? Math.exp(scores[c] / temperature) : 0));
     const total = weights.reduce((a, b) => a + b, 0);
     const out = { none: 0, null: 0, reflect: 0, silence: 0 };
     REACTION_CHOICES.forEach((c, i) => {
