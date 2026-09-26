@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseSpell } from "../dist/packages/wyrd-grammar/src/parser.js";
+import { parseSpell, parseSpellWithRegistry } from "../dist/packages/wyrd-grammar/src/parser.js";
 import { glyphs } from "../dist/packages/wyrd-content/src/glyphs.js";
 
 function ast(tokens) {
@@ -76,20 +76,121 @@ test("GATE -> CLOSE -> ANCHOR", () => {
     });
 });
 
+test("SEEK can omit optional essence", () => {
+    assert.deepEqual(ast(["SEEK", "ENEMY"]), {
+        kind: "operator",
+        glyphId: "seek",
+        outputType: "InstantEffect",
+        arguments: {
+            target: { kind: "value", glyphId: "enemy", outputType: "EntityRef" }
+        }
+    });
+});
+
+test("candidate scoring prefers a complete typed parse over optional omission", () => {
+    const result = parseSpell(["FIRE", "SEEK", "AREA"]);
+    assert.equal(result.status, "valid");
+    assert.equal(result.ast?.kind, "operator");
+    assert.deepEqual(result.ast?.kind === "operator" ? Object.keys(result.ast.arguments).sort() : [], ["essence", "target"]);
+});
+
 test("unknown glyph is rejected", () => {
     const result = parseSpell(["FIRE", "FLUBBER", "ENEMY"]);
     assert.equal(result.status, "invalid");
     assert.equal(result.diagnostics[0]?.code, "UNKNOWN_GLYPH");
 });
 
-test("incomplete typed sequence is rejected", () => {
-    const result = parseSpell(["FIRE", "ENEMY"]);
+test("missing required typed input reports MISSING_INPUT", () => {
+    const result = parseSpell(["FIRE", "SEEK"]);
+    assert.equal(result.status, "invalid");
+    assert.equal(result.diagnostics[0]?.code, "MISSING_INPUT");
+    assert.equal(result.diagnostics[0]?.glyphId, "seek");
+});
+
+test("orphan values prevent a complete parse", () => {
+    const result = parseSpell(["FIRE", "WATER", "SEEK", "ENEMY"]);
+    assert.equal(result.status, "invalid");
+});
+
+test("multiple base actions are rejected explicitly", () => {
+    const result = parseSpell(["ENEMY", "PUSH", "PULL"]);
+    assert.equal(result.status, "invalid");
+    assert.match(result.diagnostics[0]?.message ?? "", /one base action/i);
+});
+
+test("infix grammar is rejected until conditional parsing lands", () => {
+    const result = parseSpell(["IF"]);
+    assert.equal(result.status, "invalid");
+    assert.match(result.diagnostics[0]?.message ?? "", /not implemented/i);
+});
+
+test("synthetic equal-score candidates return AMBIGUOUS", () => {
+    const registry = new Map([
+        ["SELF", {
+            id: "self", displayName: "SELF", family: "target", produces: ["EntityRef"],
+            baseFocusCost: 0, precedence: 10, attachment: "value", tags: ["target"], canonStatus: "game-original"
+        }],
+        ["ENEMY", {
+            id: "enemy", displayName: "ENEMY", family: "target", produces: ["EntityRef"],
+            baseFocusCost: 0, precedence: 10, attachment: "value", tags: ["target"], canonStatus: "game-original"
+        }],
+        ["LINK", {
+            id: "link", displayName: "LINK", family: "action", produces: ["PersistentEffect"],
+            inputs: [
+                { name: "left", accepts: ["EntityRef"] },
+                { name: "right", accepts: ["EntityRef"] }
+            ],
+            baseFocusCost: 2, precedence: 100, attachment: "operator", tags: ["link"], canonStatus: "game-original"
+        }]
+    ]);
+
+    const result = parseSpellWithRegistry(["SELF", "LINK", "ENEMY"], registry);
+    assert.equal(result.status, "ambiguous");
+    assert.equal(result.diagnostics[0]?.code, "AMBIGUOUS");
+});
+
+test("synthetic unequal distances choose the higher-scoring candidate deterministically", () => {
+    const registry = new Map([
+        ["SELF", {
+            id: "self", displayName: "SELF", family: "target", produces: ["EntityRef"],
+            baseFocusCost: 0, precedence: 10, attachment: "value", tags: ["target"], canonStatus: "game-original"
+        }],
+        ["ENEMY", {
+            id: "enemy", displayName: "ENEMY", family: "target", produces: ["EntityRef"],
+            baseFocusCost: 0, precedence: 10, attachment: "value", tags: ["target"], canonStatus: "game-original"
+        }],
+        ["LINK", {
+            id: "link", displayName: "LINK", family: "action", produces: ["PersistentEffect"],
+            inputs: [
+                { name: "primary", accepts: ["EntityRef"] },
+                { name: "secondary", accepts: ["EntityRef"] }
+            ],
+            baseFocusCost: 2, precedence: 100, attachment: "operator", tags: ["link"], canonStatus: "game-original"
+        }],
+        ["FIRE", {
+            id: "fire", displayName: "FIRE", family: "essence", produces: ["Essence"],
+            baseFocusCost: 0, precedence: 10, attachment: "value", tags: ["essence"], canonStatus: "game-original"
+        }]
+    ]);
+
+    const result = parseSpellWithRegistry(["SELF", "FIRE", "LINK", "ENEMY"], registry);
     assert.equal(result.status, "invalid");
 });
 
 test("parse result is deterministic", () => {
     const tokens = ["FIRE", "SEEK", "ENEMY", "AMPLIFY"];
     assert.deepEqual(parseSpell(tokens), parseSpell(tokens));
+});
+
+test("focus cost remains data driven", () => {
+    const result = parseSpell(["FIRE", "SEEK", "ENEMY", "AMPLIFY"]);
+    assert.equal(result.focusCost, 4);
+});
+
+test("complexity grows with operators and modifiers", () => {
+    const base = parseSpell(["FIRE", "SEEK", "ENEMY"]);
+    const modified = parseSpell(["FIRE", "SEEK", "ENEMY", "AMPLIFY"]);
+    assert.ok(modified.complexity > base.complexity);
 });
 
 test("v0 registry contains exactly 30 glyphs", () => {
