@@ -7,6 +7,10 @@ import {
     chooseBotSpell,
     createRng,
     enumerateLegalSpells,
+    explainMatch,
+    explainReaction,
+    explainRound,
+    explainSpell,
     fixedReactionModel,
     formatTelegraph,
     projectTelegraph,
@@ -14,6 +18,7 @@ import {
     seedFromString,
     type ReactionModel,
     type Rng,
+    type RoundHistory,
     type TelegraphSlot
 } from "../../../packages/wyrd-simulation/src/index.js";
 import { installHint } from "./install.js";
@@ -33,6 +38,7 @@ import {
     resolveEncounter,
     type DuelState,
     type ReactionGlyph,
+    type ResolutionResult,
     type ResolutionStep
 } from "../../../packages/wyrd-resolver/src/index.js";
 
@@ -92,6 +98,8 @@ const oppLabel = byId<HTMLElement>("opp-label");
 const telegraphLabel = byId<HTMLElement>("telegraph-label");
 const reactionLabel = byId<HTMLElement>("reaction-label");
 const composerCard = document.querySelector<HTMLElement>(".composer")!;
+const spellExplain = byId<HTMLUListElement>("spell-explain");
+const reactionExplain = byId<HTMLElement>("reaction-explain");
 const reactionCard = document.querySelector<HTMLElement>(".reaction")!;
 
 // Solo: the scenario deck, then the heuristic bot. Hot-seat: Player 2 on the
@@ -100,6 +108,14 @@ type Mode = "solo" | "hotseat";
 let mode: Mode = new URLSearchParams(location.search).get("mode") === "hotseat" ? "hotseat" : "solo";
 let hotseat: HotseatRound = startRound();
 let p1Telegraph: TelegraphSlot[] = [];
+/** Round-by-round reasons, for the match verdict. */
+let history: RoundHistory[] = [];
+
+/** Who "you" and "the opponent" are in explanations, per mode and phase. */
+function names(): { you: string; them: string } {
+    if (mode === "solo") return { you: "you", them: "the opponent" };
+    return hotseat.phase === "p2-compose" ? { you: "Player 2", them: "Player 1" } : { you: "Player 1", them: "Player 2" };
+}
 
 let state: DuelState = createInitialDuelState();
 let playerSpell: string[] = [];
@@ -281,6 +297,8 @@ function renderReactionButtons(): void {
         element.classList.toggle("selected", selected);
         element.disabled = roundResolved;
     }
+    const slots = mode === "hotseat" && hotseat.phase === "p2-react" ? p1Telegraph : plan.telegraph;
+    reactionExplain.textContent = roundResolved || slots.length === 0 ? "" : explainReaction(selectedReaction, slots);
 }
 
 function renderValidation(): void {
@@ -306,6 +324,27 @@ function renderValidation(): void {
     }
 
     resolveRoundButton.disabled = !valid || roundResolved;
+
+    const composing = !roundResolved && (mode === "solo" || hotseat.phase === "p2-compose" || hotseat.phase === "p1-turn");
+    const explanation = composing
+        ? explainSpell(playerSpell, state, names(), mode === "hotseat" && hotseat.phase === "p2-compose" ? "opponent" : "player")
+        : { glyphs: [], summary: [] };
+    spellExplain.replaceChildren(
+        ...explanation.glyphs.map(glyph => {
+            const li = document.createElement("li");
+            const name = document.createElement("span");
+            name.className = "glyph-name";
+            name.textContent = glyph.token + " ";
+            li.append(name, glyph.text);
+            return li;
+        }),
+        ...explanation.summary.map(line => {
+            const li = document.createElement("li");
+            li.className = "summary";
+            li.textContent = line;
+            return li;
+        })
+    );
 }
 
 function renderScoreboard(): void {
@@ -550,9 +589,10 @@ function resolveRound(): void {
     );
 
     let botReaction: ReactionGlyph | undefined;
+    let outgoing: ResolutionResult | undefined;
     if (state.players.opponent.seals < 3 && state.players.player.seals < 3) {
         botReaction = plan.reaction(playerSpell);
-        const outgoing = resolveEncounter(state, {
+        outgoing = resolveEncounter(state, {
             casterId: "player",
             defenderId: "opponent",
             spellTokens: playerSpell,
@@ -568,6 +608,30 @@ function resolveRound(): void {
     }
 
     lastBotSpell = opponentSpell;
+
+    // Who won the round and why, on top of the log; the match verdict when
+    // the duel ends. Both come from the resolutions themselves.
+    const who = names();
+    const round = explainRound(
+        { result: incoming, spell: opponentSpell, reaction: selectedReaction },
+        outgoing ? { result: outgoing, spell: playerSpell, reaction: botReaction } : undefined,
+        who
+    );
+    history.push({ round: state.round, reasons: round.reasons });
+    const verdictItems = [round.verdict, ...round.reasons].map((text, index) => {
+        const li = document.createElement("li");
+        li.className = index === 0 ? "verdict" : "reason";
+        li.textContent = text;
+        return li;
+    });
+    combatLog.prepend(...verdictItems);
+    if (state.players.player.seals >= 3 || state.players.opponent.seals >= 3) {
+        const li = document.createElement("li");
+        li.className = "verdict";
+        li.textContent = explainMatch(state, history, who);
+        combatLog.prepend(li);
+    }
+
     if (plan.scenario) {
         appendLesson(plan.scenario);
     }
@@ -656,6 +720,7 @@ function resetMatch(): void {
         void telemetry.flush();
     }
     state = createInitialDuelState();
+    history = [];
     playerSpell = [];
     selectedReaction = undefined;
     roundResolved = false;

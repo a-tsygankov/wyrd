@@ -289,3 +289,26 @@ h2 {
 
 .handoff-card h2 { margin: 8px 0 6px; font-size: 1.4rem; }
 .handoff-card .cast-button { margin-top: 16px; }
+
+.explain-list {
+    margin: 10px 0 0;
+    padding-left: 18px;
+    font-size: 0.8rem;
+    line-height: 1.4;
+    color: #bdb3d3;
+}
+
+.explain-list li + li { margin-top: 4px; }
+.explain-list .glyph-name { color: #f4f0ff; font-weight: 800; }
+.explain-list .summary { list-style: none; margin-left: -18px; padding: 6px 0 0; color: #d8d1e1; }
+
+.explain {
+    margin: 10px 0 0;
+    font-size: 0.8rem;
+    line-height: 1.4;
+    color: #bdb3d3;
+}
+
+.combat-log .verdict { color: #f4f0ff; font-weight: 800; }
+.combat-log .reason { color: #d8d1e1; }
+.combat-log .reason + li:not(.reason) { margin-top: 10px; }

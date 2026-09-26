@@ -96,6 +96,9 @@ Original content: 6–10 curated situations (direct threat, AMPLIFY bluff, REFLE
 
 **[v2] Telemetry — done.** `POST /api/telemetry` stores round / rematch / match_end events (telegraph shown, spells, both reactions, seals gained, time-to-commit) in `telemetry_events` (`0001_telemetry.sql`); anonymous session UUID in local storage; fire-and-forget with keepalive, `?telemetry=off` disables it. `GET /api/telemetry/summary` gives the playtest review view: per scenario, reaction distribution, player seal rate and median time-to-commit, plus rematch and session counts.
 
+### POC-5b — explanations — **done**
+Players can explain why a counter worked or failed without a facilitator: each glyph added to the strip explains what it does and to whom; the strip's summary is a resolver dry-run ("If the opponent does not react: … → seal to you", "Open to REFLECT …", "SILENCE would strip …"); the chosen reaction is explained against what the telegraph shows; every resolved round opens with a verdict and reasons, and the match ends with the winner, score and winning seals.
+
 ### POC-6 — short iterate/deploy loops
 Unchanged: change one rule/cost, deploy (CI does it), replay the same scenarios, compare. The tier versions in the footer tell testers which build they are on.
 
