@@ -21,6 +21,8 @@ test("advice reveals the round-1 threat and recommends REFLECT with a reason", a
     await expect(console_).toBeVisible();
     await expect(page.locator("#admin-state")).toContainText("FIRE SEEK ENEMY");
     await expect(page.locator("#admin-state")).toContainText("direct-threat");
+    // The seeded personality is named from round 1 (options doc §I).
+    await expect(page.locator("#admin-state")).toContainText(/the (Adept|Aggressor|Warden|Trickster|Gatekeeper)/);
     const best = page.locator("#admin-reactions li").first();
     await expect(best).toContainText("REFLECT");
     await expect(best).toContainText("seal");
