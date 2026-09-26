@@ -35,6 +35,10 @@ Icons: `node apps/web/scripts/generate-icons.mjs` regenerates `apps/web/icons/` 
 
 The pre-commit hook needs a working `python`/`python3`/`py`; without one it skips the bump and CI's version check catches it.
 
+## Admin mode
+
+Triple-tap the title block ("WYRD • DUEL POC / Read the spell…") or open the site with `?admin=1`. The console shows the hidden opponent spell, the reaction policy, wards, versions and session id; the best reaction to the incoming spell and the best spells to cast now, ranked by the resolver itself with its own step texts as the explanation (`packages/wyrd-simulation/src/advisor.ts`); and the client log (`apps/web/src/log.ts`). Debug tooling for playtests: it spoils the round.
+
 ## Telemetry
 
 The client posts anonymous round/rematch/match-end events to `POST /api/telemetry` (no account, IP or user agent; a random session UUID in local storage). `GET /api/telemetry/summary` aggregates them per scenario for playtest review. Add `?telemetry=off` to the URL to opt out.

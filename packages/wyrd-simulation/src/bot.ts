@@ -95,9 +95,23 @@ export function scoreReactions(playerSpell: readonly string[], view: BotView): R
     return scores;
 }
 
-export function chooseBotReaction(playerSpell: readonly string[], view: BotView, rng: Rng): ReactionGlyph | undefined {
+export const REACTION_CHOICES: readonly ReactionChoice[] = ["none", "null", "reflect", "silence"];
+const REACTION_TEMPERATURE = 1.2;
+
+/** The bot's reaction distribution: softmax over the scoring table. Shared by the chooser and the advisor. */
+export function reactionProbabilities(playerSpell: readonly string[], view: BotView): Record<ReactionChoice, number> {
     const scores = scoreReactions(playerSpell, view);
-    const choices: ReactionChoice[] = ["none", "null", "reflect", "silence"];
-    const picked = rng.weighted(choices, c => Math.exp(scores[c] / 1.2));
+    const weights = REACTION_CHOICES.map(c => Math.exp(scores[c] / REACTION_TEMPERATURE));
+    const total = weights.reduce((a, b) => a + b, 0);
+    const out = { none: 0, null: 0, reflect: 0, silence: 0 };
+    REACTION_CHOICES.forEach((c, i) => {
+        out[c] = (weights[i] as number) / total;
+    });
+    return out;
+}
+
+export function chooseBotReaction(playerSpell: readonly string[], view: BotView, rng: Rng): ReactionGlyph | undefined {
+    const probabilities = reactionProbabilities(playerSpell, view);
+    const picked = rng.weighted(REACTION_CHOICES, c => probabilities[c]);
     return picked === "none" ? undefined : picked;
 }

@@ -238,3 +238,32 @@ h2 {
     color: #bdb3d3;
     font-size: 0.82rem;
 }
+
+.admin { border-color: rgba(255, 196, 87, 0.45); }
+
+.admin-state {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 4px 12px;
+    margin: 10px 0 14px;
+    font-size: 0.8rem;
+    color: #d8d1e1;
+}
+
+.admin-state dt { color: #ffc457; font-weight: 700; }
+.admin-state dd { margin: 0; word-break: break-word; }
+
+.admin-list {
+    margin: 6px 0 14px;
+    padding-left: 20px;
+    font-size: 0.82rem;
+    line-height: 1.4;
+    color: #d8d1e1;
+}
+
+.admin-list li + li { margin-top: 5px; }
+.admin-list .best { color: #ffc457; font-weight: 700; }
+.admin-list .why { display: block; color: #bdb3d3; font-size: 0.76rem; }
+.admin-log { max-height: 220px; overflow: auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.72rem; }
+.admin-log .warn { color: #ffc457; }
+.admin-log .error { color: #ff7a7a; }

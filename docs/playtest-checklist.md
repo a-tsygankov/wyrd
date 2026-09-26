@@ -4,6 +4,8 @@ Everything below needs a human with the actual devices. What CI already proves i
 
 Site: **https://wyrd-web.pages.dev** · versions in the footer (`web vX · worker vY · schema Z`) · replay a match with `?seed=<anything>` · opt out of telemetry with `?telemetry=off` · review results at **https://wyrd-web.pages.dev/api/telemetry/summary**.
 
+For the facilitator only: triple-tap the title (or `?admin=1`) opens the admin console with the hidden opponent spell, the best reaction/spell with the resolver's reasoning, and the client log. Never show it to a tester before their answer; it is for explaining a round afterwards and for reading the log when something misbehaves.
+
 Record results in the tables at the bottom and copy the outcome line into `handoff.md`.
 
 ---

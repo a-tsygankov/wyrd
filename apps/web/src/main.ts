@@ -1,17 +1,23 @@
 import { scenarios, type Scenario, type ScenarioOutcome } from "../../../packages/wyrd-content/src/scenarios.js";
 import { parseSpell } from "../../../packages/wyrd-grammar/src/parser.js";
 import {
+    adviseReaction,
+    adviseSpell,
     chooseBotReaction,
     chooseBotSpell,
     createRng,
     enumerateLegalSpells,
+    fixedReactionModel,
     formatTelegraph,
     projectTelegraph,
+    reactionProbabilities,
     seedFromString,
+    type ReactionModel,
     type Rng,
     type TelegraphSlot
 } from "../../../packages/wyrd-simulation/src/index.js";
 import { installHint } from "./install.js";
+import { createLog } from "./log.js";
 import { buildRoundEvent, createTelemetry, getSessionId } from "./telemetry.js";
 import {
     createInitialDuelState,
@@ -86,7 +92,13 @@ type RoundPlan = {
     opponentSpell: string[];
     telegraph: TelegraphSlot[];
     reaction: (spell: string[]) => ReactionGlyph | undefined;
+    /** What the admin advisor assumes about the opponent's reaction. */
+    reactionModel: ReactionModel;
+    /** Human-readable reaction policy for the admin console. */
+    reactionPolicy: string;
 };
+
+const log = createLog();
 
 let matchSeedLabel = "";
 let rng: Rng = createRng(0);
@@ -115,19 +127,29 @@ function planRound(): RoundPlan {
             state.players.opponent.ward = { ownerId: "opponent", ...scenario.setup.opponentWard };
         }
         const fixed = scenario.opponentReaction;
+        log.info(`round ${state.round} planned: scenario ${scenario.id}`, {
+            telegraph: scenario.telegraph,
+            opponentSpell: scenario.opponentSpell.join(" "),
+            opponentReaction: fixed
+        });
         return {
             scenario,
             opponentSpell: scenario.opponentSpell,
             telegraph: projectTelegraph(scenario.opponentSpell, scenario.telegraph, rng),
             reaction: spell =>
-                fixed === "bot" ? chooseBotReaction(spell, botView(), rng) : fixed === "none" ? undefined : fixed
+                fixed === "bot" ? chooseBotReaction(spell, botView(), rng) : fixed === "none" ? undefined : fixed,
+            reactionModel: fixed === "bot" ? spell => reactionProbabilities(spell, botView()) : fixedReactionModel(fixed),
+            reactionPolicy: fixed === "bot" ? "heuristic bot table" : fixed === "none" ? "no reaction (teaching round)" : `always ${fixed.toUpperCase()}`
         };
     }
     const spell = chooseBotSpell(spellPool, botView(), rng);
+    log.info(`round ${state.round} planned: heuristic bot`, { opponentSpell: spell.join(" ") });
     return {
         opponentSpell: spell,
         telegraph: projectTelegraph(spell, "high", rng),
-        reaction: playerCast => chooseBotReaction(playerCast, botView(), rng)
+        reaction: playerCast => chooseBotReaction(playerCast, botView(), rng),
+        reactionModel: playerCast => reactionProbabilities(playerCast, botView()),
+        reactionPolicy: "heuristic bot table"
     };
 }
 
@@ -267,11 +289,120 @@ function renderScoreboard(): void {
     matchStatus.textContent = winner;
 }
 
+// Admin console: everything the player must not see (the hidden spell, the
+// bot's odds) plus best-move advice from the resolver itself and the client
+// log. Debug tooling for playtests; toggled by a triple-tap on the title.
+let adminOpen = new URLSearchParams(location.search).get("admin") === "1";
+const adminConsole = byId<HTMLElement>("admin-console");
+const adminState = byId<HTMLDListElement>("admin-state");
+const adminReactions = byId<HTMLOListElement>("admin-reactions");
+const adminSpells = byId<HTMLOListElement>("admin-spells");
+const adminLog = byId<HTMLOListElement>("admin-log");
+
+const OUTCOME_SHORT: Record<string, string> = {
+    "player-seal": "seal to you",
+    "opponent-seal": "seal to opponent",
+    blocked: "blocked by ward",
+    canceled: "canceled",
+    "no-seal": "no seal"
+};
+
+function renderAdmin(): void {
+    adminConsole.classList.toggle("hidden", !adminOpen);
+    if (!adminOpen) return;
+
+    const wards = (["player", "opponent"] as const)
+        .map(id => {
+            const ward = state.players[id].ward;
+            return ward ? `${id}: ${ward.essence ?? "untyped"}` : `${id}: none`;
+        })
+        .join(" · ");
+    const facts: Array<[string, string]> = [
+        ["Seed", matchSeedLabel],
+        ["Round", `${state.round} · ${roundResolved ? "resolved" : "awaiting your cast"}`],
+        ["Scenario", plan.scenario ? `${plan.scenario.id} (telegraph ${plan.scenario.telegraph})` : "heuristic bot (telegraph high)"],
+        ["Hidden spell", plan.opponentSpell.join(" ")],
+        ["Opponent reacts", plan.reactionPolicy],
+        ["Wards", wards],
+        ["Versions", document.getElementById("version-line")?.textContent ?? ""],
+        ["Session", sessionId]
+    ];
+    adminState.replaceChildren(
+        ...facts.flatMap(([term, detail]) => {
+            const dt = document.createElement("dt");
+            dt.textContent = term;
+            const dd = document.createElement("dd");
+            dd.textContent = detail;
+            return [dt, dd];
+        })
+    );
+
+    const reactions = adviseReaction(state, plan.opponentSpell);
+    adminReactions.replaceChildren(
+        ...reactions.map((advice, index) => {
+            const li = document.createElement("li");
+            if (index === 0) li.className = "best";
+            const name = advice.reaction === "none" ? "No reaction" : advice.reaction.toUpperCase();
+            li.textContent = `${name} → ${OUTCOME_SHORT[advice.outcome] ?? advice.outcome} (${advice.value > 0 ? "+" : ""}${advice.value})`;
+            const why = document.createElement("span");
+            why.className = "why";
+            why.textContent = advice.explanation.replace(/^[^:]+:\s*/, "");
+            li.append(why);
+            return li;
+        })
+    );
+
+    const spells = adviseSpell(state, spellPool, plan.reactionModel, { top: 3 });
+    adminSpells.replaceChildren(
+        ...spells.map((advice, index) => {
+            const li = document.createElement("li");
+            if (index === 0) li.className = "best";
+            li.textContent = `${advice.tokens.join(" ")} · EV ${advice.expectedValue > 0 ? "+" : ""}${advice.expectedValue} · Focus ${advice.focusCost}`;
+            const why = document.createElement("span");
+            why.className = "why";
+            why.textContent = advice.explanation;
+            li.append(why);
+            return li;
+        })
+    );
+
+    const entries = [...log.entries()].slice(-40).reverse();
+    adminLog.replaceChildren(
+        ...entries.map(entry => {
+            const li = document.createElement("li");
+            li.className = entry.level;
+            const time = new Date(entry.ts).toISOString().slice(11, 19);
+            li.textContent = `${time} ${entry.message}${entry.data !== undefined ? " " + JSON.stringify(entry.data) : ""}`;
+            return li;
+        })
+    );
+}
+
+let titleTaps: number[] = [];
+byId<HTMLElement>("title-block").addEventListener("click", () => {
+    const now = performance.now();
+    titleTaps = [...titleTaps.filter(t => now - t < 900), now];
+    if (titleTaps.length >= 3) {
+        titleTaps = [];
+        adminOpen = !adminOpen;
+        log.info(adminOpen ? "admin console opened" : "admin console closed");
+        renderAdmin();
+    }
+});
+byId<HTMLButtonElement>("admin-close").addEventListener("click", () => {
+    adminOpen = false;
+    renderAdmin();
+});
+log.subscribe(() => {
+    if (adminOpen) renderAdmin();
+});
+
 function render(): void {
     renderScoreboard();
     renderGlyphTray();
     renderReactionButtons();
     renderValidation();
+    renderAdmin();
 
     const matchOver =
         state.players.player.seals >= 3 ||
@@ -349,6 +480,12 @@ function resolveRound(): void {
         appendLesson(plan.scenario);
     }
     roundResolved = true;
+    log.info(`round ${state.round} resolved`, {
+        you: playerSpell.join(" ") + (selectedReaction ? ` (reacted ${selectedReaction})` : ""),
+        opponent: opponentSpell.join(" ") + (botReaction ? ` (reacted ${botReaction})` : ""),
+        seals: `${state.players.player.seals}-${state.players.opponent.seals}`,
+        commitMs: Math.round(committedAt - roundStartedAt)
+    });
 
     telemetry.record(
         buildRoundEvent({
@@ -464,8 +601,13 @@ resetButton.addEventListener("click", resetMatch);
 
 if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-        void navigator.serviceWorker.register("./sw.js");
+        navigator.serviceWorker
+            .register("./sw.js")
+            .then(registration => log.info("service worker registered", { scope: registration.scope }))
+            .catch(error => log.warn("service worker registration failed", String(error)));
     });
+} else {
+    log.warn("service workers unsupported: no offline shell");
 }
 
 // Install coaching (policy in install.ts, tested in node). The banner is
@@ -501,6 +643,7 @@ function renderInstallBanner(): void {
 
     banner.classList.toggle("hidden", hint === null);
     installButton.classList.toggle("hidden", hint !== "prompt");
+    if (hint !== null) log.info(`install hint shown: ${hint}`);
     if (hint === "ios") {
         text.textContent = "Add Wyrd to your Home Screen: tap Share, then “Add to Home Screen”.";
     } else if (hint === "prompt") {
@@ -551,8 +694,9 @@ if (versionLine) {
         .then(versions => {
             versionLine.textContent =
                 `${versionLine.textContent} · worker v${versions.worker.version} · schema ${versions.schema.version ?? "none"}`;
+            log.info("worker reachable", versions);
         })
-        .catch(() => undefined);
+        .catch(error => log.warn("worker unreachable (offline or not deployed)", String(error)));
 }
 
 render();
