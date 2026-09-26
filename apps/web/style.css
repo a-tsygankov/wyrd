@@ -128,6 +128,22 @@ h2 {
 body[data-phase] .card.phase-target { box-shadow: 0 0 0 2px rgba(173, 99, 255, 0.55), 0 8px 24px rgba(116, 78, 255, 0.18); }
 @media (max-height: 640px) { .stage.card { position: static; } .card { scroll-margin-top: 12px; } }
 
+/* The commit ritual overlay (ritual.ts), over the stage or the arena. */
+.commit-ritual { position: absolute; left: 0; right: 0; bottom: 0; top: 36px; z-index: 3; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 10px; background: rgba(13, 7, 22, 0.86); border-radius: 12px; padding: 12px; }
+.ritual-headline { margin: 0; font-size: 0.78rem; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; color: #f2c46b; }
+.ritual-row { display: flex; gap: 14px; width: 100%; justify-content: center; }
+.ritual-card { position: relative; width: 42%; min-height: 64px; border-radius: 10px; background: #1c1230; border: 1px solid rgba(195, 174, 255, 0.18); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 8px; transform: translateY(24px); opacity: 0; transition: transform 0.45s ease-out, opacity 0.45s ease-out, box-shadow 0.3s; }
+.ritual-card.sealed { transform: translateY(0); opacity: 1; }
+.ritual-name { font-size: 0.7rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #a99cc7; }
+.ritual-seal { width: 30px; height: 30px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #d94b5f, #7a1626); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5); transition: transform 0.35s ease-in, opacity 0.35s ease-in; }
+.ritual-card.cracked .ritual-seal { transform: scale(1.5) rotate(20deg); opacity: 0; }
+.ritual-spell { position: absolute; bottom: 10px; font-size: 0.74rem; font-weight: 800; color: #f4f0ff; letter-spacing: 0.04em; opacity: 0; transition: opacity 0.4s; }
+.ritual-card.revealed .ritual-spell { opacity: 1; }
+.ritual-card.first { box-shadow: 0 0 0 2px #f2c46b, 0 0 18px rgba(242, 196, 107, 0.45); }
+.ritual-first { margin: 0; font-size: 0.78rem; color: #d8caff; text-align: center; opacity: 0; transition: opacity 0.4s; }
+.commit-ritual[data-step="reveal"] .ritual-first { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .ritual-card, .ritual-seal, .ritual-spell, .ritual-first { transition: none; } }
+
 /* The Three.js arena: same footprint as the SVG stage. */
 .arena { position: relative; width: 100%; aspect-ratio: 360 / 170; border-radius: 12px; overflow: hidden; background: radial-gradient(ellipse at 50% 80%, #2a2140 0%, #140d22 70%); cursor: pointer; }
 .arena canvas { display: block; width: 100% !important; height: 100% !important; }
