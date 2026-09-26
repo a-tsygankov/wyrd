@@ -24,6 +24,7 @@
             <div class="topbar-actions">
                 <button id="settings-toggle" class="ghost-button" type="button" title="Rules, timers, telemetry">Settings</button>
                 <button id="stats-toggle" class="ghost-button" type="button" title="Your games and everyone's">Stats</button>
+                <button id="help-toggle" class="ghost-button" type="button" title="Every glyph, reaction, term and button explained">Help</button>
                 <button id="mode-toggle" class="ghost-button" type="button" title="Switch between solo and two players on this phone">Hot-seat</button>
                 <button id="reset-match" class="ghost-button" type="button">Reset</button>
             </div>
@@ -252,6 +253,17 @@
         </section>
 
         <!-- Stats: this device (local) and everyone (worker summary). -->
+        <!-- Help: the glossary from packages/wyrd-content/src/glossary.ts, rule-aware. -->
+        <section id="help" class="card hidden" aria-label="Help">
+            <div class="section-heading">
+                <div><span class="label">Help</span><h2>How Wyrd works</h2></div>
+                <button id="help-close" class="ghost-button" type="button">Close</button>
+            </div>
+            <p id="help-rules" class="muted"></p>
+            <nav id="help-nav" class="help-nav" aria-label="Help sections"></nav>
+            <div id="help-body"></div>
+        </section>
+
         <section id="stats" class="card hidden" aria-label="Statistics">
             <div class="section-heading">
                 <span class="label">Stats</span>

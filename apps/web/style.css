@@ -481,6 +481,25 @@ h2 {
 #stage-gate.broken circle { opacity: 0.15; }
 #stage-gate.closed circle { fill: #ffc457; opacity: 0.9; }
 
+/* Help: grouped glossary with a family colour chip per glyph. */
+.help-nav { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 4px; }
+.help-nav a { color: #d8caff; text-decoration: none; font-size: 0.78rem; font-weight: 700; padding: 5px 10px; border-radius: 999px; background: rgba(100, 73, 171, 0.24); }
+.help-nav a:focus-visible { outline: 2px solid #ffc457; }
+.help-group { margin-top: 14px; }
+.help-group h3 { margin: 0 0 4px; font-size: 1rem; }
+.help-group .intro { margin: 0 0 8px; color: #9a92a8; font-size: 0.86rem; }
+.help-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.help-list li { display: grid; grid-template-columns: auto 1fr; gap: 8px 10px; align-items: baseline; font-size: 0.86rem; color: #cfc7e0; }
+.help-list dt, .help-term { font-weight: 800; color: #f4f0ff; font-size: 0.84rem; letter-spacing: 0.03em; }
+.help-list .chip { display: inline-block; min-width: 56px; padding: 3px 7px; border-radius: 8px; text-align: center; background: #21182f; border: 1px solid rgba(195, 174, 255, 0.16); }
+.help-list .chip[data-kind="essence"] { background: #2b1728; }
+.help-list .chip[data-kind="action"] { background: #17243a; }
+.help-list .chip[data-kind="target"], .help-list .chip[data-kind="boundary"] { background: #20251b; }
+.help-list .chip[data-kind="modifier"] { background: #2a2115; }
+.help-list .chip[data-kind="reaction"] { background: #2a1a2e; }
+.help-list li.pending { opacity: 0.6; }
+.help-list li.pending .chip::after { content: " · soon"; font-weight: 600; color: #ffba76; }
+
 .scry { margin-top: 10px; border-color: rgba(255, 196, 87, 0.5); color: #ffc457; }
 .scry:disabled { opacity: 0.45; }
 #telegraph .revealed { color: #ffc457; }
