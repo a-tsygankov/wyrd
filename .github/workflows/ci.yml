@@ -22,6 +22,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm test
+      - name: Build web POC
+        run: pnpm build:web
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'

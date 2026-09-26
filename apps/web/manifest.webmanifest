@@ -1,0 +1,9 @@
+{
+  "name": "Wyrd Duel POC",
+  "short_name": "Wyrd Duel",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#0c0912",
+  "theme_color": "#15111f",
+  "description": "Playable proof of concept for composable Wyrd spell duels."
+}

@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#15111f">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>Wyrd Duel POC</title>
+    <link rel="manifest" href="./manifest.webmanifest">
+    <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+    <main id="app" class="app-shell">
+        <header class="topbar">
+            <div>
+                <div class="eyebrow">WYRD • DUEL POC</div>
+                <h1>Read the spell. Shape the counter.</h1>
+            </div>
+            <button id="reset-match" class="ghost-button" type="button">Reset</button>
+        </header>
+
+        <section class="scoreboard card">
+            <div>
+                <span class="label">You</span>
+                <strong id="player-seals">0</strong>
+                <span class="muted">seals</span>
+            </div>
+            <div class="round">
+                <span class="label">Round</span>
+                <strong id="round-number">1</strong>
+            </div>
+            <div class="right">
+                <span class="label">Opponent</span>
+                <strong id="opponent-seals">0</strong>
+                <span class="muted">seals</span>
+            </div>
+        </section>
+
+        <section class="opponent card">
+            <div class="section-heading">
+                <div>
+                    <span class="label">Opponent telegraph</span>
+                    <h2 id="telegraph">—</h2>
+                </div>
+                <span id="match-status" class="status-pill">Your move</span>
+            </div>
+            <p class="muted">Some glyphs are hidden. Infer the threat before choosing a reaction.</p>
+        </section>
+
+        <section class="composer card">
+            <div class="section-heading">
+                <div>
+                    <span class="label">Your spell</span>
+                    <h2 id="spell-preview">Choose glyphs</h2>
+                </div>
+                <div class="focus"><span id="focus-cost">0</span> / 7 Focus</div>
+            </div>
+            <div id="spell-diagnostic" class="diagnostic">Build a 2–4 glyph spell.</div>
+            <div id="glyph-tray" class="glyph-tray" aria-label="Glyph tray"></div>
+            <div class="composer-actions">
+                <button id="undo-glyph" class="ghost-button" type="button">Undo</button>
+                <button id="clear-spell" class="ghost-button" type="button">Clear</button>
+            </div>
+        </section>
+
+        <section class="reaction card">
+            <span class="label">Reaction to opponent</span>
+            <div id="reaction-tray" class="reaction-tray">
+                <button data-reaction="" class="reaction-button selected" type="button">No reaction</button>
+                <button data-reaction="reflect" class="reaction-button" type="button">REFLECT</button>
+                <button data-reaction="silence" class="reaction-button" type="button">SILENCE</button>
+                <button data-reaction="null" class="reaction-button" type="button">NULL</button>
+            </div>
+            <button id="resolve-round" class="cast-button" type="button" disabled>CAST ROUND</button>
+        </section>
+
+        <section class="log card">
+            <div class="section-heading">
+                <span class="label">Resolution</span>
+                <button id="next-round" class="ghost-button hidden" type="button">Next round</button>
+            </div>
+            <ol id="combat-log" class="combat-log">
+                <li>Opponent spell is waiting.</li>
+            </ol>
+        </section>
+    </main>
+
+    <script type="module" src="./apps/web/src/main.js"></script>
+</body>
+</html>

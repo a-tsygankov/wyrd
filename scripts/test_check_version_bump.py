@@ -14,7 +14,7 @@ class Gate(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory(); self.repo=Path(self.tmp.name)
         git(self.repo,"init","-b","main"); git(self.repo,"config","user.email","t@example.com"); git(self.repo,"config","user.name","t")
-        self.versions=["packages/wyrd-grammar/package.json","packages/wyrd-content/package.json","packages/wyrd-resolver/package.json","apps/duel-sim/package.json"]
+        self.versions=["packages/wyrd-grammar/package.json","packages/wyrd-content/package.json","packages/wyrd-resolver/package.json","apps/duel-sim/package.json","apps/web/package.json"]
         for rel in self.versions: write(self.repo,rel,pkg("0.0.1"))
         write(self.repo,"packages/wyrd-grammar/src/parser.ts","export {}\n"); git(self.repo,"add","-A"); git(self.repo,"commit","-m","base"); git(self.repo,"checkout","-b","feat")
     def tearDown(self): self.tmp.cleanup()
