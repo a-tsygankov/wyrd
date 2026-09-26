@@ -22,28 +22,35 @@ class Rules(unittest.TestCase):
         self.assertTrue(all(t.matches(p) for t in vr.TIERS))
         p="packages/wyrd-content/src/glyphs.ts"
         self.assertFalse(self.tier("grammar").matches(p))
-        self.assertTrue(all(self.tier(n).matches(p) for n in ["content","resolver","duel-sim"]))
+        self.assertTrue(all(self.tier(n).matches(p) for n in ["content","resolver","duel-sim","web"]))
         p="apps/duel-sim/src/index.ts"
         self.assertFalse(self.tier("resolver").matches(p)); self.assertTrue(self.tier("duel-sim").matches(p))
+        p="apps/web/src/main.ts"
+        self.assertFalse(self.tier("duel-sim").matches(p)); self.assertTrue(self.tier("web").matches(p))
     def test_patch(self): self.assertEqual(vr.bump_patch("0.0.9"),"0.0.10")
 
 class Bumper(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory(); self.repo=Path(self.tmp.name)
         git(self.repo,"init","-b","main"); git(self.repo,"config","user.email","t@example.com"); git(self.repo,"config","user.name","t")
-        self.versions=["packages/wyrd-grammar/package.json","packages/wyrd-content/package.json","packages/wyrd-resolver/package.json","apps/duel-sim/package.json"]
+        self.versions=["packages/wyrd-grammar/package.json","packages/wyrd-content/package.json","packages/wyrd-resolver/package.json","apps/duel-sim/package.json","apps/web/package.json"]
         for rel in self.versions: write(self.repo,rel,pkg("0.0.1"))
-        for rel in ["packages/wyrd-grammar/src/parser.ts","packages/wyrd-content/src/glyphs.ts","packages/wyrd-resolver/src/index.ts","apps/duel-sim/src/index.ts"]: write(self.repo,rel,"export {}\n")
+        for rel in ["packages/wyrd-grammar/src/parser.ts","packages/wyrd-content/src/glyphs.ts","packages/wyrd-resolver/src/index.ts","apps/duel-sim/src/index.ts","apps/web/src/main.ts"]: write(self.repo,rel,"export {}\n")
         git(self.repo,"add","-A"); git(self.repo,"commit","-m","base")
     def tearDown(self): self.tmp.cleanup()
     def version(self,rel): return json.loads(git(self.repo,"show",f":{rel}"))["version"]
     def test_grammar_change_bumps_all_downstream(self):
         write(self.repo,"packages/wyrd-grammar/src/parser.ts","export const x=1\n"); git(self.repo,"add","packages/wyrd-grammar/src/parser.ts")
-        self.assertEqual(bv.run(self.repo),["grammar","content","resolver","duel-sim"])
+        self.assertEqual(bv.run(self.repo),["grammar","content","resolver","duel-sim","web"])
         for rel in self.versions: self.assertEqual(self.version(rel),"0.0.2")
     def test_duel_change_only_bumps_duel(self):
         write(self.repo,"apps/duel-sim/src/index.ts","export const x=1\n"); git(self.repo,"add","apps/duel-sim/src/index.ts")
         self.assertEqual(bv.run(self.repo),["duel-sim"])
         self.assertEqual(self.version("apps/duel-sim/package.json"),"0.0.2")
+
+    def test_web_change_only_bumps_web(self):
+        write(self.repo,"apps/web/src/main.ts","export const x=1\n"); git(self.repo,"add","apps/web/src/main.ts")
+        self.assertEqual(bv.run(self.repo),["web"])
+        self.assertEqual(self.version("apps/web/package.json"),"0.0.2")
 
 if __name__=="__main__": unittest.main()
