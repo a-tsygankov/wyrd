@@ -1,4 +1,5 @@
 import { parseSpell } from "../../../packages/wyrd-grammar/src/parser.js";
+import { installHint } from "./install.js";
 import {
     createInitialDuelState,
     resolveEncounter,
@@ -305,6 +306,77 @@ if ("serviceWorker" in navigator) {
         void navigator.serviceWorker.register("./sw.js");
     });
 }
+
+// Install coaching (policy in install.ts, tested in node). The banner is
+// decoration for the product commitment "installable on iPhone and
+// Android"; gameplay never depends on it.
+type BeforeInstallPromptEvent = Event & { prompt(): Promise<void> };
+const INSTALL_DISMISSED_KEY = "wyrd.install.dismissed";
+let deferredInstallPrompt: BeforeInstallPromptEvent | undefined;
+
+function readDismissed(): boolean {
+    try {
+        return localStorage.getItem(INSTALL_DISMISSED_KEY) === "1";
+    } catch {
+        return false;
+    }
+}
+
+function renderInstallBanner(): void {
+    const banner = document.getElementById("install-banner");
+    const text = document.getElementById("install-text");
+    const installButton = document.getElementById("install-now");
+    if (!banner || !text || !installButton) return;
+
+    const standalone =
+        window.matchMedia("(display-mode: standalone)").matches ||
+        (navigator as Navigator & { standalone?: boolean }).standalone === true;
+    const hint = installHint({
+        userAgent: navigator.userAgent,
+        standalone,
+        dismissed: readDismissed(),
+        canPrompt: deferredInstallPrompt !== undefined
+    });
+
+    banner.classList.toggle("hidden", hint === null);
+    installButton.classList.toggle("hidden", hint !== "prompt");
+    if (hint === "ios") {
+        text.textContent = "Add Wyrd to your Home Screen: tap Share, then “Add to Home Screen”.";
+    } else if (hint === "prompt") {
+        text.textContent = "Install Wyrd for full-screen play.";
+    }
+}
+
+window.addEventListener("beforeinstallprompt", event => {
+    // Keep the browser's own mini-infobar out of the way; the banner's
+    // Install button replays the prompt on tap.
+    event.preventDefault();
+    deferredInstallPrompt = event as BeforeInstallPromptEvent;
+    renderInstallBanner();
+});
+
+window.addEventListener("appinstalled", () => {
+    deferredInstallPrompt = undefined;
+    renderInstallBanner();
+});
+
+document.getElementById("install-now")?.addEventListener("click", () => {
+    const prompt = deferredInstallPrompt;
+    deferredInstallPrompt = undefined;
+    renderInstallBanner();
+    void prompt?.prompt();
+});
+
+document.getElementById("install-dismiss")?.addEventListener("click", () => {
+    try {
+        localStorage.setItem(INSTALL_DISMISSED_KEY, "1");
+    } catch {
+        // Private mode without storage: the banner simply returns next visit.
+    }
+    renderInstallBanner();
+});
+
+renderInstallBanner();
 
 // Tier versions in the footer. The web version is inlined at build time
 // (scripts/build_web.mjs); worker + schema come from the worker through

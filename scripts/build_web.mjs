@@ -10,14 +10,16 @@ const webVersion = JSON.parse(readFileSync("apps/web/package.json", "utf8")).ver
 rmSync(out, { recursive: true, force: true });
 mkdirSync(`${out}/apps/web/src`, { recursive: true });
 
-// The web tier version is inlined at build time so the footer can show
-// it before (or without) the worker answering /api/version.
-const html = readFileSync("apps/web/index.html", "utf8").replaceAll("__WEB_VERSION__", webVersion);
-writeFileSync(`${out}/index.html`, html);
+// The web tier version is stamped into the footer (so testers can name the
+// build they are on) and into the service worker's cache name (so each
+// deploy invalidates the previous shell). test/build_web.test.mjs guards both.
+const stamp = file => readFileSync(file, "utf8").replaceAll("__WEB_VERSION__", webVersion);
+writeFileSync(`${out}/index.html`, stamp("apps/web/index.html"));
+writeFileSync(`${out}/sw.js`, stamp("apps/web/sw.js"));
 cpSync("apps/web/style.css", `${out}/style.css`);
 cpSync("apps/web/manifest.webmanifest", `${out}/manifest.webmanifest`);
-cpSync("apps/web/sw.js", `${out}/sw.js`);
 cpSync("dist/apps/web/src/main.js", `${out}/apps/web/src/main.js`);
+cpSync("dist/apps/web/src/install.js", `${out}/apps/web/src/install.js`);
 
 mkdirSync(`${out}/packages`, { recursive: true });
 for (const pkg of ["wyrd-grammar", "wyrd-content", "wyrd-resolver"]) {

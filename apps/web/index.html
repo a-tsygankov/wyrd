@@ -84,6 +84,16 @@
             </ol>
         </section>
 
+        <!-- Install coaching. Hidden until main.ts decides which hint applies
+             (iOS Safari has no prompt API; Android/desktop Chromium offer one). -->
+        <aside id="install-banner" class="install-banner hidden" role="status">
+            <span id="install-text"></span>
+            <div class="install-actions">
+                <button id="install-now" class="install-button hidden" type="button">Install</button>
+                <button id="install-dismiss" class="ghost-button" type="button" aria-label="Dismiss">Not now</button>
+            </div>
+        </aside>
+
         <!-- __WEB_VERSION__ is replaced by scripts/build_web.mjs. -->
         <footer id="version-line" class="versions muted">web v__WEB_VERSION__</footer>
     </main>

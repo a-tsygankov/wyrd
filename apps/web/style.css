@@ -197,3 +197,31 @@ h2 {
     font-size: 0.72rem;
     letter-spacing: 0.04em;
 }
+
+.install-banner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin: 12px 0 0;
+    padding: 12px 14px;
+    border: 1px solid rgba(169, 148, 232, 0.35);
+    border-radius: 14px;
+    background: rgba(129, 87, 255, 0.12);
+    color: #d8d1e1;
+    font-size: 0.88rem;
+    line-height: 1.4;
+}
+
+.install-actions { display: flex; gap: 8px; }
+
+.install-button {
+    min-height: 40px;
+    padding: 0 16px;
+    border: 0;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #744eff, #ad63ff);
+    color: white;
+    font-weight: 800;
+}

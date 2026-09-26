@@ -38,3 +38,8 @@ Thumbs.db
 # setup-secrets.ps1 is committed with placeholders; a filled-in copy
 # must never be. Keep local copies under this name:
 scripts/setup-secrets.local.ps1
+
+# Playwright
+test-results/
+playwright-report/
+playwright/.cache/
