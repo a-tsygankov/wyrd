@@ -47,6 +47,9 @@ importers:
       '@types/node':
         specifier: ^22.0.0
         version: 22.20.4
+      sharp:
+        specifier: ^0.35.0
+        version: 0.35.4(@types/node@22.20.4)
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -59,6 +62,8 @@ importers:
   packages/wyrd-grammar: {}
 
   packages/wyrd-resolver: {}
+
+  packages/wyrd-simulation: {}
 
 packages:
 

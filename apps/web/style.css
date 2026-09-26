@@ -184,7 +184,9 @@ h2 {
 
 .combat-log li + li { margin-top: 7px; }
 
-.hidden { display: none; }
+/* !important: utility must beat later single-class rules such as .install-banner
+   { display: flex } - without it the banner was always visible (e2e install.spec). */
+.hidden { display: none !important; }
 
 @media (min-width: 620px) {
     .glyph-tray { grid-template-columns: repeat(5, minmax(0, 1fr)); }

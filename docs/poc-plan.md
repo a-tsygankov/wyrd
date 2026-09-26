@@ -79,7 +79,7 @@ Deviation from v1: React/Vite was deferred (architecture doc §2). Adopt React o
 ### POC-4 — deploy — **done**
 Cloudflare Pages `wyrd-web` (HTTPS, stable URL, auto-deploy from `main`, per-branch previews), Worker `wyrd-api`, D1 `wyrd-db`, GitHub Actions `deploy.yml`, tier version bumps enforced. Secrets set; first CI deploy green.
 
-### POC-4b — PWA verification on real phones — **[v2 new, next]**
+### POC-4b — PWA verification on real phones — **[v2 new] code done; human pass pending — use `docs/playtest-checklist.md`**
 1. iPhone: Safari → Share → Add to Home Screen; app opens standalone, safe areas respected, offline reload works, a full match completes.
 2. Android: Chrome install prompt appears; same checks.
 3. Add an iOS install coach mark (no install prompt API on iOS) and Android `beforeinstallprompt` handling.
@@ -119,7 +119,7 @@ apps/      web (PWA — primary deliverable)   api (Worker + D1)   duel-sim (deb
 
 ## Immediate coding order **[v2]**
 
-1. ~~POC-4b items 3–5~~ done; items 1, 2, 6 need a human with phones.
+1. ~~POC-4b items 3–5~~ done, plus icons/manifest/installability tests; items 1, 2, 6 need a human with phones → `docs/playtest-checklist.md`.
 2. ~~Playwright smoke~~ done.
 3. ~~Heuristic bot~~ done.
 4. ~~Scenario deck + telegraph presets~~ done.

@@ -19,6 +19,17 @@ test("build_web stamps the web version into index.html and sw.js", () => {
     assert.ok(!sw.includes("__WEB_VERSION__"), "placeholder left in sw.js");
 });
 
+test("build_web ships the PWA icon set the manifest points at", () => {
+    const manifest = JSON.parse(readFileSync("apps/web/dist/manifest.webmanifest", "utf8"));
+    assert.ok(manifest.icons.length >= 3, "manifest needs 192, 512 and maskable icons");
+    for (const icon of manifest.icons) {
+        const path = "apps/web/dist/" + icon.src.replace(/^\.\//, "");
+        const bytes = readFileSync(path);
+        assert.equal(bytes.readUInt32BE(16), Number(icon.sizes.split("x")[0]), `${icon.src} width`);
+    }
+    assert.ok(readFileSync("apps/web/dist/icons/apple-touch-icon.png").length > 0);
+});
+
 test("the service worker never caches /api/ responses", () => {
     const sw = readFileSync("apps/web/sw.js", "utf8");
     assert.match(sw, /\/api\//, "sw.js has no /api/ bypass");
