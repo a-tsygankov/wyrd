@@ -125,10 +125,36 @@
                 <span class="label">Settings</span>
                 <button id="settings-close" class="ghost-button" type="button">Close</button>
             </div>
-            <div class="label">Rules</div>
-            <div id="settings-rules" class="settings-rules"></div>
-            <label class="settings-switch"><input id="settings-timers" type="checkbox"> Timers (Pulse and Resolve: 8-second reaction window, 5-second quick cast; never in the teaching deck)</label>
-            <label class="settings-switch"><input id="settings-telemetry" type="checkbox"> Send anonymous playtest telemetry</label>
+
+            <fieldset class="settings-group">
+                <legend class="label">Rules</legend>
+                <p class="muted settings-hint">Each ruleset adds to the one before it. Changing rules starts a new match.</p>
+                <div id="settings-rules" class="settings-rules" role="radiogroup" aria-label="Ruleset"></div>
+            </fieldset>
+
+            <fieldset class="settings-group">
+                <legend class="label">Tempo</legend>
+                <label class="settings-switch">
+                    <input id="settings-timers" type="checkbox">
+                    <span><strong>Timers</strong><span id="settings-timers-note" class="settings-summary">8-second reaction window and 5-second quick cast. Never in the teaching deck.</span></span>
+                </label>
+            </fieldset>
+
+            <fieldset class="settings-group">
+                <legend class="label">Privacy</legend>
+                <label class="settings-switch">
+                    <input id="settings-telemetry" type="checkbox">
+                    <span><strong>Anonymous playtest telemetry</strong><span class="settings-summary">Rounds, reactions and outcomes, tagged with the ruleset. No account, IP or device details. Stats → Everyone is built from this.</span></span>
+                </label>
+            </fieldset>
+
+            <fieldset class="settings-group">
+                <legend class="label">Help</legend>
+                <label class="settings-switch">
+                    <input id="settings-help" type="checkbox">
+                    <span><strong>Glyph help open by default</strong><span class="settings-summary">Show what each glyph does as you add it, instead of behind the tap-to-expand row.</span></span>
+                </label>
+            </fieldset>
         </section>
 
         <!-- Stats: this device (local) and everyone (worker summary). -->

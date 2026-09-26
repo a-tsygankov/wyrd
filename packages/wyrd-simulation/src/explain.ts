@@ -1,6 +1,16 @@
 import { glyphHelp } from "../../wyrd-content/src/glyphHelp.js";
+import type { Scenario } from "../../wyrd-content/src/scenarios.js";
 import { parseSpell } from "../../wyrd-grammar/src/parser.js";
-import type { DuelState, ReactionGlyph, ResolutionResult } from "../../wyrd-resolver/src/index.js";
+import {
+    CLASSIC_RULES,
+    FALTERING_AT,
+    REACTION_COSTS,
+    type DuelState,
+    type PlayerId,
+    type ReactionGlyph,
+    type ResolutionResult,
+    type RuleOptions
+} from "../../wyrd-resolver/src/index.js";
 import { resolveEncounter } from "../../wyrd-resolver/src/index.js";
 import { classifyOutcome, type Outcome } from "./advisor.js";
 import type { TelegraphSlot } from "./telegraph.js";
@@ -8,7 +18,8 @@ import type { TelegraphSlot } from "./telegraph.js";
 /**
  * Player-facing explanations (POC-5: "players can explain why a counter
  * worked or failed"). Like the advisor, this asks the resolver rather than
- * restating the rules, so what it says is what will happen.
+ * restating the rules, so what it says is what will happen - under whatever
+ * ruleset the state carries (Classic, Teeth, Pulse, Resolve).
  */
 export type Names = { you: string; them: string };
 
@@ -21,6 +32,49 @@ export type SpellExplanation = {
 const MIN_GLYPHS = 2;
 const MAX_GLYPHS = 4;
 const MAX_FOCUS = 7;
+
+function cap(text: string): string {
+    return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function price(reaction: ReactionGlyph, rules: RuleOptions): string {
+    return rules.reactionCosts ? ` (${REACTION_COSTS[reaction]} Focus)` : "";
+}
+
+/**
+ * Glyph help for the ruleset in force: the base text from content plus the
+ * lines a rule adds. Data first, rules second, so a wrong sentence is a
+ * content fix and a rule's consequence is stated once here.
+ */
+export function glyphHelpText(token: string, rules: RuleOptions = CLASSIC_RULES): string {
+    const base = glyphHelp[token]?.text ?? "Unknown glyph.";
+    const extra: string[] = [];
+    switch (token) {
+        case "WARD":
+            if (rules.wardIntegrity > 0) extra.push(`Integrity ${rules.wardIntegrity}: every blocked hit dents it by its magnitude; at 0 it shatters.`);
+            if (rules.resolve > 0) extra.push(`Faltering casters (Resolve ${FALTERING_AT} or less) raise brittle wards of integrity 1.`);
+            break;
+        case "AMPLIFY":
+            if (rules.wardIntegrity > 0) extra.push("Magnitude 2 dents a ward twice as hard - one amplified hit shatters a fresh ward.");
+            if (rules.resolve > 0) extra.push("Under Resolve, an amplified SEEK deals 2.");
+            break;
+        case "SEEK":
+            if (rules.resolve > 0) extra.push("Under Resolve it also deals its magnitude to the target's Resolve.");
+            if (rules.ignite) extra.push("Cast the same essence again next round to ignite it for +1 magnitude.");
+            break;
+        case "BIND":
+            if (rules.resolve > 0) extra.push("A BOUND mage pays 2 extra Focus for their next spell.");
+            break;
+        case "FIRE":
+        case "SHADOW":
+            if (rules.ignite) extra.push("Ignite: the same essence two casts running adds +1 magnitude.");
+            break;
+        case "ANCHOR":
+            if (rules.reactionCosts) extra.push("Makes REFLECT (2 Focus) a wasted reaction for the opponent.");
+            break;
+    }
+    return extra.length ? `${base} ${extra.join(" ")}` : base;
+}
 
 function outcomeText(outcome: Outcome, names: Names): string {
     switch (outcome) {
@@ -37,10 +91,6 @@ function outcomeText(outcome: Outcome, names: Names): string {
     }
 }
 
-function cap(text: string): string {
-    return text.charAt(0).toUpperCase() + text.slice(1);
-}
-
 /**
  * `casterId` is who is composing: "player" (solo, hot-seat Player 1) or
  * "opponent" (hot-seat Player 2 building a spell against Player 1's wards).
@@ -51,7 +101,8 @@ export function explainSpell(
     names: Names,
     casterId: "player" | "opponent" = "player"
 ): SpellExplanation {
-    const glyphs = tokens.map(token => ({ token, text: glyphHelp[token]?.text ?? "Unknown glyph." }));
+    const rules = state.rules ?? CLASSIC_RULES;
+    const glyphs = tokens.map(token => ({ token, text: glyphHelpText(token, rules) }));
     const summary: string[] = [];
     if (tokens.length === 0) return { glyphs, summary: ["Tap glyphs to build a 2–4 glyph spell."] };
 
@@ -69,7 +120,7 @@ export function explainSpell(
         return { glyphs, summary };
     }
 
-    const defenderId = casterId === "player" ? "opponent" : "player";
+    const defenderId: PlayerId = casterId === "player" ? "opponent" : "player";
     const cast = (reaction?: ReactionGlyph): ResolutionResult =>
         resolveEncounter(state, {
             casterId,
@@ -84,12 +135,22 @@ export function explainSpell(
     }
     const effectStep = plain.steps.find(s => s.stage === "effect" || s.stage === "boundary");
     const uncontested = classifyOutcome(plain, casterId);
+    const magnitudeNotes = plain.steps.filter(s => s.code === "IGNITE_APPLIED").map(s => s.text);
     summary.push(cap(`if ${names.them} does not react: ${effectStep?.text ?? ""} → ${outcomeText(uncontested, names)}.`));
+    for (const note of magnitudeNotes) summary.push(note);
+    if (rules.reactionCosts) {
+        const tax = plain.steps.find(s => s.code === "BOUND_TAX");
+        const focusLeft = plain.state.players[casterId].focus;
+        summary.push(`Costs ${parsed.focusCost} Focus${tax ? " plus the BIND tax" : ""}; ${focusLeft} left for a reaction${focusLeft === 0 ? " - and 0 exposes a glyph of your next telegraph" : ""}.`);
+    }
+    const damage = plain.steps.find(s => s.code === "RESOLVE_DAMAGE");
+    if (damage) summary.push(damage.text);
 
     if (uncontested === "blocked") {
         const ward = state.players[defenderId].ward;
+        const dent = plain.steps.find(s => s.code === "WARD_BROKEN" || s.code === "WARD_DENTED");
         summary.push(
-            cap(`${names.them}'s ${ward?.essence ? ward.essence.toUpperCase() + "-filtered" : "untyped"} ward blocks this. Change the essence, or aim at the GATE.`)
+            cap(`${names.them}'s ${ward?.essence ? ward.essence.toUpperCase() + "-filtered" : "untyped"} ward blocks this.${dent ? " " + dent.text : ""} Change the essence, or aim at the GATE.`)
         );
         return { glyphs, summary };
     }
@@ -99,21 +160,21 @@ export function explainSpell(
     const anchored = plain.effect?.anchored ?? false;
     const amplified = (plain.effect?.magnitude ?? 1) > 1;
     if (reflected === "opponent-seal") {
-        summary.push(cap(`open to REFLECT: ${names.them} could send it back and take the seal instead. ANCHOR would fix the route.`));
+        summary.push(cap(`open to REFLECT${price("reflect", rules)}: ${names.them} could send it back and take the seal instead. ANCHOR would fix the route.`));
     } else if (anchored && plain.effect?.target === "enemy") {
-        summary.push("ANCHOR fixes the route: REFLECT fails against this spell.");
+        summary.push(`ANCHOR fixes the route: REFLECT${price("reflect", rules)} fails against this spell.`);
     } else if (plain.effect?.action === "close") {
-        summary.push("Aimed at the GATE: REFLECT and wards cannot touch it; only NULL stops it.");
+        summary.push(`Aimed at the GATE: REFLECT and wards cannot touch it; only NULL${price("null", rules)} stops it.`);
     }
     if (amplified || anchored) {
         const stripped = silenced.steps.some(s => s.code === "SILENCE_STRIPPED_MODIFIERS");
         summary.push(
             stripped
-                ? `SILENCE would strip ${[amplified ? "AMPLIFY" : "", anchored ? "ANCHOR" : ""].filter(Boolean).join(" and ")}, but the base spell still lands.`
+                ? `SILENCE${price("silence", rules)} would strip ${[amplified ? "AMPLIFY" : "", anchored ? "ANCHOR" : ""].filter(Boolean).join(" and ")}, but the base spell still lands${rules.wardIntegrity > 0 && amplified ? " (and dents a ward by 1 instead of 2)" : ""}.`
                 : "SILENCE finds nothing to strip here."
         );
     }
-    if (uncontested !== "no-seal") summary.push("NULL always cancels it outright.");
+    if (uncontested !== "no-seal") summary.push(`NULL${price("null", rules)} always cancels it outright.`);
     return { glyphs, summary };
 }
 
@@ -129,27 +190,39 @@ function shown(slots: readonly TelegraphSlot[]): { tokens: Set<string>; families
     return { tokens, families, hidden };
 }
 
-/** What the chosen reaction would do against the spell as far as the telegraph reveals it. */
-export function explainReaction(reaction: ReactionGlyph | undefined, telegraph: readonly TelegraphSlot[]): string {
+/** What the chosen reaction would do against the spell as far as the telegraph reveals it, under the rules. */
+export function explainReaction(
+    reaction: ReactionGlyph | undefined,
+    telegraph: readonly TelegraphSlot[],
+    rules: RuleOptions = CLASSIC_RULES,
+    focusLeft?: number
+): string {
     const seen = shown(telegraph);
     const action = ["SEEK", "BIND", "WARD", "CLOSE"].find(a => seen.tokens.has(a));
     const spellName = action ?? "their spell";
     const hiddenNote = seen.hidden > 0 ? ` ${seen.hidden} glyph${seen.hidden > 1 ? "s are" : " is"} hidden.` : "";
+    const costNote = (r: ReactionGlyph): string => {
+        if (!rules.reactionCosts) return "";
+        const p = REACTION_COSTS[r];
+        const short = focusLeft !== undefined && focusLeft < p ? ` You have ${focusLeft}: it would fail and the spell lands as if unanswered.` : "";
+        return ` Costs ${p} of your Focus, leaving less for your own spell.${short}`;
+    };
 
     if (!reaction) {
-        return `No reaction: let ${spellName} resolve as cast. Your wards still apply.${hiddenNote}`;
+        return `No reaction: let ${spellName} resolve as cast. Your wards still apply${rules.reactionCosts ? ", and all 7 Focus go to your spell" : ""}.${hiddenNote}`;
     }
     if (reaction === "null") {
-        return `NULL cancels ${spellName} outright, whatever the hidden glyphs are. The hard counter - it also teaches you nothing about the spell.${hiddenNote}`;
+        return `NULL cancels ${spellName} outright, whatever the hidden glyphs are. The hard counter - it also teaches you nothing about the spell.${costNote("null")}${hiddenNote}`;
     }
     if (reaction === "reflect") {
         if (action === "CLOSE" || action === "WARD") {
-            return `REFLECT against ${action}: nothing to reverse - ${action} has no hostile route, so REFLECT is wasted here.`;
+            return `REFLECT against ${action}: nothing to reverse - ${action} has no hostile route, so REFLECT is wasted here.${costNote("reflect")}`;
         }
-        return `REFLECT: if ${spellName}'s hidden target is ENEMY and it carries no ANCHOR, it returns to its caster and you gain the seal. Against SELF, GATE or an ANCHORed route it does nothing.${hiddenNote}`;
+        return `REFLECT: if ${spellName}'s hidden target is ENEMY and it carries no ANCHOR, it returns to its caster and you gain the seal${rules.resolve > 0 ? " (and any Resolve damage)" : ""}. Against SELF, GATE or an ANCHORed route it does nothing.${costNote("reflect")}${hiddenNote}`;
     }
     // silence
-    return `SILENCE strips AMPLIFY and ANCHOR from ${spellName} but the base spell still lands - use it to reopen an ANCHORed route for a later round, not to stop a seal.${hiddenNote}`;
+    const integrityNote = rules.wardIntegrity > 0 ? " With wards that shatter, stripping AMPLIFY also spares your ward one dent." : "";
+    return `SILENCE strips AMPLIFY and ANCHOR from ${spellName} but the base spell still lands - use it to reopen an ANCHORed route for a later round, not to stop a seal.${integrityNote}${costNote("silence")}${hiddenNote}`;
 }
 
 export type Contribution = {
@@ -167,6 +240,8 @@ export type RoundExplanation = {
 
 function reactionNote(result: ResolutionResult, reaction: ReactionGlyph | undefined, reactor: string): string | undefined {
     if (!reaction) return undefined;
+    const unaffordable = result.steps.find(s => s.code === "REACTION_UNAFFORDABLE");
+    if (unaffordable) return `${reactor}'s ${reaction.toUpperCase()} could not be paid: ${unaffordable.text}`;
     const step =
         result.steps.find(s => s.stage === "routing" || s.stage === "suppression" || s.stage === "cancel" || s.stage === "anchor") ??
         undefined;
@@ -179,7 +254,9 @@ function reactionNote(result: ResolutionResult, reaction: ReactionGlyph | undefi
 /**
  * Who won the round and why. `incoming` is the opponent's spell resolved
  * against the player's reaction; `outgoing` the player's spell against the
- * opponent's reaction (absent when the match ended mid-round).
+ * opponent's reaction (absent when the match ended mid-round). Rule
+ * effects that changed the board - a dented or shattered ward, Resolve
+ * damage, an unpaid reaction - get their own line.
  */
 export function explainRound(incoming: Contribution, outgoing: Contribution | undefined, names: Names): RoundExplanation {
     const reasons: string[] = [];
@@ -189,22 +266,26 @@ export function explainRound(incoming: Contribution, outgoing: Contribution | un
     const describe = (c: Contribution, caster: string, defender: string, casterIsYou: boolean): void => {
         const spell = c.spell.join(" ");
         const outcome = classifyOutcome(c.result, casterIsYou ? "player" : "opponent");
-        const effect = c.result.steps.find(s => s.stage === "effect")?.text;
+        const effect = c.result.steps.find(s => s.stage === "effect" && s.code !== "RESOLVE_DAMAGE")?.text;
+        const damage = c.result.steps.find(s => s.code === "RESOLVE_DAMAGE")?.text;
         if (outcome === "player-seal") {
             if (casterIsYou) yours++;
             else theirs++;
-            reasons.push(cap(`${caster} gained a seal: ${spell} ${effect ? "- " + effect : "landed."}`));
+            reasons.push(cap(`${caster} gained a seal: ${spell} ${effect ? "- " + effect : "landed."}${damage ? " " + damage : ""}`));
         } else if (outcome === "opponent-seal") {
             if (casterIsYou) theirs++;
             else yours++;
-            reasons.push(cap(`${defender} gained a seal: ${c.reaction?.toUpperCase() ?? "the reaction"} returned ${spell} to its caster.`));
+            reasons.push(cap(`${defender} gained a seal: ${c.reaction?.toUpperCase() ?? "the reaction"} returned ${spell} to its caster.${damage ? " " + damage : ""}`));
         } else if (outcome === "blocked") {
-            reasons.push(cap(`${caster}'s ${spell} was blocked by ${defender}'s ward.`));
+            const ward = c.result.steps.find(s => s.code === "WARD_BROKEN" || s.code === "WARD_DENTED")?.text;
+            reasons.push(cap(`${caster}'s ${spell} was blocked by ${defender}'s ward.${ward ? " " + ward : ""}`));
         } else if (outcome === "canceled") {
             reasons.push(cap(`${caster}'s ${spell} was canceled by ${defender}'s NULL.`));
         } else {
             reasons.push(cap(`${caster}'s ${spell} scored nothing${effect ? " - " + effect : "."}`));
         }
+        const ignite = c.result.steps.find(s => s.code === "IGNITE_APPLIED" || s.code === "QUICK_CAST");
+        if (ignite && outcome !== "canceled") reasons.push(cap(`${caster}: ${ignite.text}`));
         const note = reactionNote(c.result, c.reaction, defender);
         if (note && outcome !== "opponent-seal" && outcome !== "canceled") reasons.push(cap(note));
     };
@@ -237,4 +318,31 @@ export function explainMatch(state: DuelState, history: readonly RoundHistory[],
         .slice(0, 5);
     const verb = winner === names.you && names.you.toLowerCase() === "you" ? "win" : "wins";
     return cap(`${winner} ${verb} the duel ${score}.${seals.length ? " Winning seals - " + seals.join(" · ") : ""}`);
+}
+
+export type LessonLine = { label: string; outcome: Outcome; text: string };
+
+/**
+ * A scenario's documented responses, resolved against the round's opening
+ * state under the rules in force - so the lesson never claims something the
+ * current ruleset would not do (a Teeth ward may shatter, Resolve may drop).
+ */
+export function lessonOutcomes(scenario: Scenario, roundStart: DuelState, names: Names): LessonLine[] {
+    return scenario.responses.map(response => {
+        const result =
+            response.reaction !== undefined
+                ? resolveEncounter(roundStart, {
+                      casterId: "opponent",
+                      defenderId: "player",
+                      spellTokens: [...scenario.opponentSpell],
+                      ...(response.reaction ? { reaction: response.reaction } : {})
+                  })
+                : resolveEncounter(roundStart, { casterId: "player", defenderId: "opponent", spellTokens: [...(response.spell ?? [])] });
+        const outcome = classifyOutcome(result, "player");
+        const extras = result.steps
+            .filter(s => s.code === "WARD_BROKEN" || s.code === "WARD_DENTED" || s.code === "RESOLVE_DAMAGE" || s.code === "REACTION_UNAFFORDABLE")
+            .map(s => s.text);
+        const label = response.spell ? `Cast ${response.spell.join(" ")}` : response.label;
+        return { label, outcome, text: `${label} → ${outcomeText(outcome, names)}${extras.length ? " · " + extras.join(" ") : ""}` };
+    });
 }
