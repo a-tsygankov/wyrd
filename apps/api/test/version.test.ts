@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import pkg from "../package.json";
 import type { VersionResponse } from "../src/routes/version.ts";
 import { getSchemaVersion } from "../src/version.ts";
-import { applyAllMigrations } from "./helpers/migrate.ts";
+import { MIGRATIONS, applyAllMigrations } from "./helpers/migrate.ts";
 
 describe("GET /api/version", () => {
     beforeAll(applyAllMigrations);
@@ -14,7 +14,8 @@ describe("GET /api/version", () => {
         const body = (await res.json()) as VersionResponse;
         expect(body.worker).toEqual({ version: pkg.version, env: "development" });
         // The newest applied migration is the schema version.
-        expect(body.schema.version).toBe("0000_init.sql");
+        expect(MIGRATIONS.length).toBeGreaterThan(0);
+        expect(body.schema.version).toBe(MIGRATIONS[MIGRATIONS.length - 1]!.name);
     });
 });
 

@@ -48,7 +48,24 @@ test("a full match through the scenario deck is won by reading the telegraph", a
     };
 
     // Round 1 (direct threat): no reaction, the opponent's SEEK lands; ours does too.
+    // Resolving a round fires one anonymous telemetry batch; only that it is
+    // sent is asserted - the worker's answer must never matter to the player.
+    const telemetryRequest = page.waitForRequest(request => request.url().includes("/api/telemetry") && request.method() === "POST");
     await cast(["FIRE", "SEEK", "ENEMY"]);
+    const body = (await telemetryRequest).postDataJSON() as { events: Array<Record<string, unknown>> };
+    expect(body.events).toHaveLength(1);
+    expect(body.events[0]).toMatchObject({
+        event: "round",
+        matchSeed: "smoke",
+        round: 1,
+        scenarioId: "direct-threat",
+        telegraph: "FIRE → SEEK → ?",
+        playerSpell: ["FIRE", "SEEK", "ENEMY"],
+        playerReaction: null,
+        playerGained: 1,
+        opponentGained: 1
+    });
+    expect(typeof body.events[0]!["timeToCommitMs"]).toBe("number");
     await expect(page.locator("#player-seals")).toHaveText("1");
     await expect(page.locator("#opponent-seals")).toHaveText("1");
     await page.locator("#next-round").click();

@@ -12,7 +12,8 @@ M0 grammar + playable browser duel POC. Cloudflare deployment pipeline (worker +
 |---|---|---|
 | Worker | `wyrd-api` → https://wyrd-api.atsyg-feedme.workers.dev | deployed by `.github/workflows/deploy.yml` on push to main |
 | Pages | `wyrd-web` → https://wyrd-web.pages.dev | per-branch previews `<branch>.wyrd-web.pages.dev`; `/api/*` proxied to the worker |
-| D1 | `wyrd-db` (`68b495d9-ab5a-4a84-b996-702dc4c2de0e`) | migrations via `wrangler d1 migrations apply`; `0000_init.sql` applied |
+| D1 | `wyrd-db` (`68b495d9-ab5a-4a84-b996-702dc4c2de0e`) | migrations via `wrangler d1 migrations apply`; `0000_init.sql`, `0001_telemetry.sql` |
+| Playtest review | https://wyrd-web.pages.dev/api/telemetry/summary | per-scenario reactions, seal rate, median time-to-commit; rematches and sessions |
 | GitHub secrets | `CLOUDFLARE_API_KEY`, `CLOUDFLARE_ACCOUNT_ID` | set 2026-09-26 with `scripts/setup-secrets.local.ps1 -GitHub` (same token as gigsy/feedme2) |
 | Worker secrets | none | — |
 
@@ -26,6 +27,7 @@ M0 grammar + playable browser duel POC. Cloudflare deployment pipeline (worker +
 - `wrangler pages project create` (wrangler ≥ 4.14x) delegates to Pages-on-Workers and reads the nearest `wrangler.toml`; run it from `apps/web` with `--force` (the `-Provision` script does). `wrangler pages deploy` from `apps/web` still targets the classic project.
 
 ## Log
+- 2026-09-26 — POC-5 telemetry: `telemetry_events` table (`0001_telemetry.sql`), `POST /api/telemetry` (validated batches, atomic D1 batch insert) and `GET /api/telemetry/summary`; client records each resolved round, rematch and match end, fire-and-forget, `?telemetry=off` to opt out. Everything needed for phone playtests is now in place.
 - 2026-09-26 — POC-3/POC-5: `packages/wyrd-simulation` (seeded rng, legal-spell pool, heuristic bot, telegraph presets high/medium) and the 8-scenario deck in `wyrd-content`; the client plays the deck then the bot, shows lessons, `?seed=` replays a match. New `simulation` version tier. Resolver fix for SELF-targeted scoring.
 - 2026-09-26 — POC-4b code: iOS Add-to-Home-Screen coach mark + Android install prompt (`apps/web/src/install.ts`), service-worker cache versioned by the web tier and bypassing `/api/*`, Playwright smoke (WebKit iPhone 15 + Chromium Pixel 7) replacing the curl check on PR previews.
 - 2026-09-26 — browser/PWA-only directive; architecture doc v2 (Unity path removed, Cloudflare + Durable Objects, PWA platform constraints) and POC plan v2 written to `docs/` and uploaded to Drive as *_v2.md.

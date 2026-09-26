@@ -12,6 +12,7 @@ import {
     type TelegraphSlot
 } from "../../../packages/wyrd-simulation/src/index.js";
 import { installHint } from "./install.js";
+import { buildRoundEvent, createTelemetry, getSessionId } from "./telemetry.js";
 import {
     createInitialDuelState,
     resolveEncounter,
@@ -132,6 +133,37 @@ function planRound(): RoundPlan {
 
 newMatchSeed();
 plan = planRound();
+
+// Playtest telemetry (plan POC-5): anonymous, fire-and-forget, off with
+// `?telemetry=off`. The web version is read from the footer, which
+// build_web.mjs stamps before the worker's versions are appended.
+const WEB_VERSION = (document.getElementById("version-line")?.textContent ?? "web vdev").replace(/^web v/, "");
+const telemetry = createTelemetry({
+    endpoint: "./api/telemetry",
+    enabled: new URLSearchParams(location.search).get("telemetry") !== "off"
+});
+const memoryStorage = new Map<string, string>();
+const sessionId = getSessionId({
+    getItem: key => {
+        try {
+            return localStorage.getItem(key) ?? memoryStorage.get(key) ?? null;
+        } catch {
+            return memoryStorage.get(key) ?? null;
+        }
+    },
+    setItem: (key, value) => {
+        memoryStorage.set(key, value);
+        try {
+            localStorage.setItem(key, value);
+        } catch {
+            // Private mode: the in-memory copy carries the page load.
+        }
+    }
+});
+let roundStartedAt = performance.now();
+document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") void telemetry.flush();
+});
 
 function formatSpell(tokens: string[]): string {
     return tokens.length > 0 ? tokens.join(" → ") : "Choose glyphs";
@@ -277,6 +309,8 @@ function resolveRound(): void {
     }
 
     combatLog.replaceChildren();
+    const committedAt = performance.now();
+    const sealsBefore = { player: state.players.player.seals, opponent: state.players.opponent.seals };
 
     const opponentSpell = plan.opponentSpell;
     const incoming = resolveEncounter(state, {
@@ -292,8 +326,9 @@ function resolveRound(): void {
         incoming.steps
     );
 
+    let botReaction: ReactionGlyph | undefined;
     if (state.players.opponent.seals < 3 && state.players.player.seals < 3) {
-        const botReaction = plan.reaction(playerSpell);
+        botReaction = plan.reaction(playerSpell);
         const outgoing = resolveEncounter(state, {
             casterId: "player",
             defenderId: "opponent",
@@ -314,6 +349,40 @@ function resolveRound(): void {
         appendLesson(plan.scenario);
     }
     roundResolved = true;
+
+    telemetry.record(
+        buildRoundEvent({
+            sessionId,
+            matchSeed: matchSeedLabel,
+            webVersion: WEB_VERSION,
+            round: state.round,
+            scenarioId: plan.scenario?.id,
+            telegraphPreset: plan.scenario?.telegraph ?? "high",
+            telegraph: formatTelegraph(plan.telegraph),
+            opponentSpell,
+            playerSpell,
+            playerReaction: selectedReaction,
+            opponentReaction: botReaction,
+            playerSealsBefore: sealsBefore.player,
+            opponentSealsBefore: sealsBefore.opponent,
+            playerSeals: state.players.player.seals,
+            opponentSeals: state.players.opponent.seals,
+            roundStartedAt,
+            committedAt
+        })
+    );
+    if (state.players.player.seals >= 3 || state.players.opponent.seals >= 3) {
+        telemetry.record({
+            event: "match_end",
+            sessionId,
+            matchSeed: matchSeedLabel,
+            webVersion: WEB_VERSION,
+            round: state.round,
+            playerSeals: state.players.player.seals,
+            opponentSeals: state.players.opponent.seals
+        });
+    }
+    void telemetry.flush();
     render();
 }
 
@@ -334,11 +403,26 @@ function startNextRound(): void {
     selectedReaction = undefined;
     roundResolved = false;
     plan = planRound();
+    roundStartedAt = performance.now();
     combatLog.innerHTML = "<li>Opponent spell is waiting.</li>";
     render();
 }
 
 function resetMatch(): void {
+    // A reset after at least one resolved round is a rematch signal - the
+    // plan's cheapest proxy for "did they want to play again".
+    if (roundResolved || state.round > 1) {
+        telemetry.record({
+            event: "rematch",
+            sessionId,
+            matchSeed: matchSeedLabel,
+            webVersion: WEB_VERSION,
+            round: state.round,
+            playerSeals: state.players.player.seals,
+            opponentSeals: state.players.opponent.seals
+        });
+        void telemetry.flush();
+    }
     state = createInitialDuelState();
     playerSpell = [];
     selectedReaction = undefined;
@@ -346,6 +430,7 @@ function resetMatch(): void {
     // A seeded URL replays the same match; otherwise every reset is a new one.
     newMatchSeed();
     plan = planRound();
+    roundStartedAt = performance.now();
     combatLog.innerHTML = "<li>Opponent spell is waiting.</li>";
     render();
 }
