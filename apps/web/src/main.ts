@@ -40,6 +40,7 @@ import { loadSettings, saveSettings, type Settings } from "./settings.js";
 import { loadStats, recordMatchEnd, recordRematch, recordRound, saveStats, summarize, type Stats } from "./stats.js";
 import { QUICK_CAST_MS, REACTION_WINDOW_MS, timerState } from "./timers.js";
 import { buildTimeline, createStage, type StageState } from "./stage.js";
+import { hiddenCount, revealSchedule, revealedSlots, scrySlot, type Reveal } from "./reveal.js";
 import { createSound, cueFor } from "./sound.js";
 import {
     REACTION_COSTS,
@@ -48,6 +49,7 @@ import {
     createInitialDuelState,
     resolveEncounter,
     spellFocusCost,
+    spendFocus,
     type DuelState,
     type PlayerId,
     type ReactionGlyph,
@@ -144,6 +146,7 @@ const glyphHelpDetails = byId<HTMLDetailsElement>("glyph-help");
 const glyphHelpToggle = byId<HTMLElement>("glyph-help-toggle");
 const glyphHelpList = byId<HTMLUListElement>("glyph-help-list");
 const reactionExplain = byId<HTMLElement>("reaction-explain");
+const scryButton = byId<HTMLButtonElement>("scry");
 const reactionCard = document.querySelector<HTMLElement>(".reaction")!;
 
 // Solo: the scenario deck, then the heuristic bot. Hot-seat: Player 2 on the
@@ -223,7 +226,12 @@ type RoundPlan = {
     reactionModel: ReactionModel;
     /** Human-readable reaction policy for the admin console. */
     reactionPolicy: string;
+    /** Progressive reveal of the hidden slots across the reaction window (timers only). */
+    reveal: Reveal[];
 };
+let p1Reveal: Reveal[] = [];
+/** Scries bought this round, for telemetry. */
+let scries = 0;
 
 const log = createLog();
 
@@ -260,7 +268,8 @@ function planRound(): RoundPlan {
             telegraph: [],
             reaction: () => hotseat.p2Reaction,
             reactionModel: () => ({ none: 0.25, null: 0.25, reflect: 0.25, silence: 0.25 }),
-            reactionPolicy: "Player 2 decides"
+            reactionPolicy: "Player 2 decides",
+            reveal: []
         };
     }
     const scenario = scenarios[state.round - 1];
@@ -289,7 +298,8 @@ function planRound(): RoundPlan {
             reaction: spell =>
                 fixed === "bot" ? chooseBotReaction(spell, botView(), rng) : fixed === "none" ? undefined : fixed,
             reactionModel: fixed === "bot" ? spell => reactionProbabilities(spell, botView()) : fixedReactionModel(fixed),
-            reactionPolicy: fixed === "bot" ? "heuristic bot table" : fixed === "none" ? "no reaction (teaching round)" : `always ${fixed.toUpperCase()}`
+            reactionPolicy: fixed === "bot" ? "heuristic bot table" : fixed === "none" ? "no reaction (teaching round)" : `always ${fixed.toUpperCase()}`,
+            reveal: []
         };
     }
     const spell = chooseBotSpell(spellPool, botView(), rng);
@@ -299,12 +309,14 @@ function planRound(): RoundPlan {
         telegraph: projectTelegraph(spell, "high", rng, { extraReveals: leak("opponent") }),
         reaction: playerCast => chooseBotReaction(playerCast, botView(), rng),
         reactionModel: playerCast => reactionProbabilities(playerCast, botView()),
-        reactionPolicy: "heuristic bot table"
+        reactionPolicy: "heuristic bot table",
+        reveal: []
     };
 }
 
 newMatchSeed();
 plan = planRound();
+plan.reveal = revealSchedule(plan.telegraph, rng, REACTION_WINDOW_MS);
 
 // Playtest telemetry (plan POC-5): anonymous, fire-and-forget, off with
 // `?telemetry=off`. The web version is read from the footer, which
@@ -386,6 +398,37 @@ function renderGlyphTray(): void {
     }
 }
 
+/** The telegraph the current reactor sees right now, progressive flips included. */
+function visibleTelegraph(): TelegraphSlot[] {
+    const p2Reacting = mode === "hotseat" && hotseat.phase === "p2-react";
+    const base = p2Reacting ? p1Telegraph : plan.telegraph;
+    const tokens = p2Reacting ? hotseat.p1Spell ?? [] : plan.opponentSpell;
+    const schedule = p2Reacting ? p1Reveal : plan.reveal;
+    if (!timersActive() || roundResolved) return base;
+    return revealedSlots(base, tokens, schedule, performance.now() - roundStartedAt);
+}
+
+/** Who reacts right now and how much Focus they have for Scry. */
+function reactor(): { id: PlayerId; focus: number } {
+    const id: PlayerId = mode === "hotseat" && hotseat.phase === "p2-react" ? "opponent" : "player";
+    const focus =
+        id === "opponent"
+            ? state.players.opponent.focus - spellFocusCost(state, "opponent", parseSpell(plan.opponentSpell).focusCost)
+            : state.players.player.focus;
+    return { id, focus };
+}
+
+function renderScry(): void {
+    const canReact = !roundResolved && (mode === "solo" || hotseat.phase === "p1-turn" || hotseat.phase === "p2-react");
+    const hidden = hiddenCount(visibleTelegraph());
+    const show = canReact && state.rules.reactionCosts && plan.opponentSpell.length > 0 && hidden > 0 && !reactionLocked;
+    scryButton.classList.toggle("hidden", !show);
+    if (!show) return;
+    const { focus } = reactor();
+    scryButton.disabled = focus < 1;
+    scryButton.textContent = focus < 1 ? "Scry · no Focus left" : `Scry · 1 Focus (${hidden} hidden)`;
+}
+
 function renderReactionButtons(): void {
     for (const element of reactionTray.querySelectorAll<HTMLButtonElement>(".reaction-button")) {
         const value = element.dataset.reaction as ReactionGlyph | "" | undefined;
@@ -396,15 +439,11 @@ function renderReactionButtons(): void {
         const cost = value && state.rules.reactionCosts ? REACTION_COSTS[value] : 0;
         element.textContent = cost > 0 ? `${label} · ${cost}` : label;
     }
-    const slots = mode === "hotseat" && hotseat.phase === "p2-react" ? p1Telegraph : plan.telegraph;
-    const reactor: PlayerId = mode === "hotseat" && hotseat.phase === "p2-react" ? "opponent" : "player";
-    const focusLeft = state.rules.reactionCosts
-        ? reactor === "opponent"
-            ? state.players.opponent.focus - spellFocusCost(state, "opponent", parseSpell(plan.opponentSpell).focusCost)
-            : state.players.player.focus
-        : undefined;
+    const slots = visibleTelegraph();
+    const focusLeft = state.rules.reactionCosts ? reactor().focus : undefined;
     reactionExplain.textContent =
         roundResolved || slots.length === 0 ? "" : explainReaction(selectedReaction, slots, state.rules, focusLeft);
+    renderScry();
 }
 
 /** Whose Focus pays for the spell being composed. */
@@ -502,11 +541,7 @@ function renderScoreboard(): void {
     if (mode === "hotseat") {
         const shown = presentation(hotseat.phase);
         telegraph.textContent =
-            shown.telegraphOf === "p2"
-                ? formatTelegraph(plan.telegraph)
-                : shown.telegraphOf === "p1"
-                    ? formatTelegraph(p1Telegraph)
-                    : "—";
+            shown.telegraphOf === "p2" || shown.telegraphOf === "p1" ? formatTelegraph(visibleTelegraph()) : "—";
         scenarioNote.textContent = "Hot-seat · two players on this phone · seed " + matchSeedLabel + rulesNote;
         matchStatus.textContent = outcome.over
             ? `${outcome.winner === "player" ? "Player 1" : "Player 2"} wins the duel${outcome.reason === "resolve" ? " on Resolve" : ""}`
@@ -514,7 +549,7 @@ function renderScoreboard(): void {
         return;
     }
 
-    telegraph.textContent = formatTelegraph(plan.telegraph);
+    telegraph.textContent = formatTelegraph(visibleTelegraph());
     scenarioNote.textContent = (plan.scenario
         ? "Scenario " + state.round + "/" + scenarios.length + " · " + plan.scenario.title + " · seed " + matchSeedLabel
         : "Heuristic opponent · seed " + matchSeedLabel + " · some glyphs are hidden; infer the threat before reacting.") + rulesNote;
@@ -821,7 +856,8 @@ function resolveRound(): void {
             roundStartedAt,
             committedAt,
             mode,
-            rules: ruleset.id
+            rules: ruleset.id,
+            scries
         })
     );
     if (outcome.over) {
@@ -875,6 +911,8 @@ function startNextRound(): void {
     roundResolved = false;
     reactionLocked = false;
     plan = planRound();
+    plan.reveal = revealSchedule(plan.telegraph, rng, REACTION_WINDOW_MS);
+    scries = 0;
     roundStartedAt = performance.now();
     combatLog.innerHTML = "<li>Opponent spell is waiting.</li>";
     render();
@@ -910,6 +948,8 @@ function resetMatch(): void {
     // A seeded URL replays the same match; otherwise every reset is a new one.
     newMatchSeed();
     plan = planRound();
+    plan.reveal = revealSchedule(plan.telegraph, rng, REACTION_WINDOW_MS);
+    scries = 0;
     roundStartedAt = performance.now();
     combatLog.innerHTML = "<li>Opponent spell is waiting.</li>";
     render();
@@ -957,6 +997,7 @@ function onPrimaryAction(): void {
                 opponentSpell: [...playerSpell],
                 telegraph: projectTelegraph(playerSpell, "high", rng, { extraReveals: leak("opponent") })
             };
+            plan.reveal = revealSchedule(plan.telegraph, rng, REACTION_WINDOW_MS);
             log.info(`round ${state.round}: player 2 locked in`, { glyphs: playerSpell.length });
             playerSpell = [];
             selectedReaction = undefined;
@@ -967,6 +1008,7 @@ function onPrimaryAction(): void {
             playerQuickCast = timerState(performance.now() - roundStartedAt, timersActive()).quickCast;
             hotseat = commitP1(hotseat, playerSpell, selectedReaction);
             p1Telegraph = projectTelegraph(playerSpell, "high", rng, { extraReveals: leak("player") });
+            p1Reveal = revealSchedule(p1Telegraph, rng, REACTION_WINDOW_MS);
             log.info(`round ${state.round}: player 1 committed`, { glyphs: playerSpell.length, reaction: selectedReaction ?? "none" });
             playerSpell = [];
             selectedReaction = undefined;
@@ -987,6 +1029,23 @@ function onPrimaryAction(): void {
     }
     render();
 }
+
+scryButton.addEventListener("click", () => {
+    if (!state.rules.reactionCosts || roundResolved || reactionLocked) return;
+    const who = reactor();
+    if (who.focus < 1) return;
+    const p2Reacting = mode === "hotseat" && hotseat.phase === "p2-react";
+    const base = p2Reacting ? p1Telegraph : plan.telegraph;
+    const tokens = p2Reacting ? hotseat.p1Spell ?? [] : plan.opponentSpell;
+    const flipped = scrySlot(base, tokens, rng);
+    if (!flipped) return;
+    if (p2Reacting) p1Telegraph = flipped.slots;
+    else plan.telegraph = flipped.slots;
+    state = spendFocus(state, who.id, 1);
+    scries += 1;
+    log.info(`round ${state.round}: ${who.id} scried glyph ${flipped.index + 1}`, { focusLeft: who.focus - 1 });
+    render();
+});
 
 resolveRoundButton.addEventListener("click", onPrimaryAction);
 handoffReady.addEventListener("click", () => {
@@ -1021,6 +1080,14 @@ function renderTimer(): void {
         renderReactionButtons();
     }
     const showsReactions = mode === "solo" || hotseat.phase === "p1-turn" || hotseat.phase === "p2-react";
+    if (showsReactions) {
+        const seen = formatTelegraph(visibleTelegraph());
+        if (telegraph.textContent !== seen) {
+            telegraph.textContent = seen;
+            reactionExplain.textContent = explainReaction(selectedReaction, visibleTelegraph(), state.rules, state.rules.reactionCosts ? reactor().focus : undefined);
+            renderScry();
+        }
+    }
     timerText.textContent = showsReactions
         ? t.reactionLocked
             ? "Reaction locked in"

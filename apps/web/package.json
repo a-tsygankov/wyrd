@@ -1,7 +1,7 @@
 {
     "name": "@wyrd/web",
     "private": true,
-    "version": "0.0.14",
+    "version": "0.0.15",
     "type": "module",
     "scripts": {
         "typecheck": "tsc -p tsconfig.functions.json && tsc -p tsconfig.e2e.json",
