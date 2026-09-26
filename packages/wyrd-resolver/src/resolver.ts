@@ -51,12 +51,15 @@ function flatten(node: SpellNode): FlattenedSpell {
         node.arguments.target as SpellNode | undefined ??
         node.arguments.boundary as SpellNode | undefined;
 
+    const target = valueGlyphId(targetNode) as ResolvedEffect["target"] | undefined;
+    const essence =
+        valueGlyphId(node.arguments.essence as SpellNode | undefined) ??
+        valueGlyphId(node.arguments.filter as SpellNode | undefined);
+
     return {
         action: action as ResolvedEffect["action"],
-        target: valueGlyphId(targetNode) as ResolvedEffect["target"] | undefined,
-        essence:
-            valueGlyphId(node.arguments.essence as SpellNode | undefined) ??
-            valueGlyphId(node.arguments.filter as SpellNode | undefined),
+        ...(target ? { target } : {}),
+        ...(essence ? { essence } : {}),
         modifiers: []
     };
 }
