@@ -10,9 +10,14 @@
         "typecheck": "tsc -p tsconfig.json --noEmit",
         "test": "tsc -p tsconfig.json && node --test test/*.test.mjs",
         "check": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.json && node --test test/*.test.mjs",
-        "version:test": "python3 -m unittest discover -s scripts -v"
+        "version:test": "python3 -m unittest discover -s scripts -v",
+        "build:web": "tsc -p tsconfig.json && node scripts/build_web.mjs"
     },
-    "devDependencies": { "typescript": "^5.9.3" },
+    "devDependencies": {
+        "typescript": "^5.9.3"
+    },
     "packageManager": "pnpm@9.12.0",
-    "engines": { "node": ">=20" }
+    "engines": {
+        "node": ">=20"
+    }
 }
