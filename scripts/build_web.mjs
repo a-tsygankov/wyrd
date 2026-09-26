@@ -18,6 +18,7 @@ writeFileSync(`${out}/index.html`, stamp("apps/web/index.html"));
 writeFileSync(`${out}/sw.js`, stamp("apps/web/sw.js"));
 cpSync("apps/web/style.css", `${out}/style.css`);
 cpSync("apps/web/manifest.webmanifest", `${out}/manifest.webmanifest`);
+cpSync("apps/web/icons", `${out}/icons`, { recursive: true });
 cpSync("dist/apps/web/src/main.js", `${out}/apps/web/src/main.js`);
 cpSync("dist/apps/web/src/install.js", `${out}/apps/web/src/install.js`);
 cpSync("dist/apps/web/src/telemetry.js", `${out}/apps/web/src/telemetry.js`);

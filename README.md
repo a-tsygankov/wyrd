@@ -31,6 +31,8 @@ E2E_BASE_URL=http://127.0.0.1:8788 pnpm --filter @wyrd/web test:e2e   # Playwrig
 
 `pnpm --filter @wyrd/web exec playwright install webkit chromium` once, for the browsers. Without `E2E_BASE_URL` the suite runs read-only against production.
 
+Icons: `node apps/web/scripts/generate-icons.mjs` regenerates `apps/web/icons/` (committed). Phone playtest: `docs/playtest-checklist.md`.
+
 The pre-commit hook needs a working `python`/`python3`/`py`; without one it skips the bump and CI's version check catches it.
 
 ## Telemetry

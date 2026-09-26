@@ -10,7 +10,7 @@ const CACHE = "wyrd-web-v__WEB_VERSION__";
 // cannot be used for a navigation (redirect mode "manual") - Chromium
 // fails the reload with net::ERR_FAILED. Seen in the offline smoke test.
 const SHELL_URL = "./";
-const SHELL = [SHELL_URL, "./style.css", "./manifest.webmanifest"];
+const SHELL = [SHELL_URL, "./style.css", "./manifest.webmanifest", "./icons/icon-192.png"];
 
 self.addEventListener("install", event => {
     event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)));
