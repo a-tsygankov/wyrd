@@ -14,6 +14,8 @@ export type Beat =
     | { kind: "cast"; side: Side; essence?: string; spell: string }
     | { kind: "fly"; from: Side; to: Side; essence?: string; magnitude: number; action: "seek" | "bind" | "break" | "mend" }
     | { kind: "reflect"; side: Side }
+    | { kind: "split"; side: Side }
+    | { kind: "reverse"; side: Side; from: string; to: string }
     | { kind: "silence"; side: Side }
     | { kind: "null"; side: Side }
     | { kind: "ward-block"; side: Side; broken: boolean; integrity?: number }
@@ -42,6 +44,8 @@ export const BEAT_MS: Record<Beat["kind"], number> = {
     cast: 320,
     fly: 520,
     reflect: 220,
+    split: 320,
+    reverse: 360,
     silence: 260,
     null: 380,
     "ward-block": 360,
@@ -74,6 +78,17 @@ function stepCodes(result: ResolutionResult): Set<string> {
     return new Set(result.steps.map(s => s.code));
 }
 
+/** The steps of one SPLIT branch (or every step, for an unsplit spell). */
+function branchSteps(result: ResolutionResult, index: number): ResolutionResult["steps"] {
+    const tagged = result.steps.filter(s => s.branch !== undefined);
+    return tagged.length === 0 ? result.steps : tagged.filter(s => s.branch === index);
+}
+
+function sealBeats(result: ResolutionResult, casterId: Side, defenderId: Side): Beat[] {
+    const awarded = result.sealsAwarded ?? (result.sealAwardedTo ? { [result.sealAwardedTo]: 1 } : {});
+    return [casterId, defenderId].filter(id => (awarded[id] ?? 0) > 0).map(id => ({ kind: "seal", side: id }) as Beat);
+}
+
 function integrityFrom(text: string | undefined): number | undefined {
     const m = text?.match(/integrity (\d+)/);
     return m ? Number(m[1]) : undefined;
@@ -90,6 +105,13 @@ export function contributionBeats(c: Contribution): Beat[] {
         beats.push({ kind: "fizzle", side: c.casterId, reason: failed?.text ?? "The spell failed." });
         return beats;
     }
+
+    const reverse = c.result.steps.find(s => s.code === "REVERSE_APPLIED" || s.code === "REVERSE_MAGNITUDE");
+    if (reverse) {
+        const m = reverse.text.match(/changed (\w+) into (\w+)|turned (\w+) into (\w+)/);
+        beats.push({ kind: "reverse", side: c.casterId, from: m?.[1] ?? m?.[3] ?? "", to: m?.[2] ?? m?.[4] ?? "" });
+    }
+    if (codes.has("SPLIT_APPLIED")) beats.push({ kind: "split", side: c.casterId });
 
     if (codes.has("NULL_CANCELED")) {
         // Anything aimed at a mage at least leaves the hand before NULL takes it.
@@ -127,7 +149,7 @@ export function contributionBeats(c: Contribution): Beat[] {
             beats.push({ kind: "fizzle", side: c.casterId, reason: failed?.text ?? c.result.steps.find(s => s.result === "info" && s.stage === "effect")?.text ?? "Nothing happened." });
             return beats;
         }
-        if (c.result.sealAwardedTo) beats.push({ kind: "seal", side: c.result.sealAwardedTo });
+        beats.push(...sealBeats(c.result, c.casterId, c.defenderId));
         return beats;
     }
 
@@ -147,55 +169,62 @@ export function contributionBeats(c: Contribution): Beat[] {
     }
 
     // SEEK / BIND / BREAK on a mage: the bolt. It launches with the
-    // magnitude the caster gave it and may be dimmed by SILENCE.
+    // magnitude the caster gave it and may be dimmed by SILENCE. A SPLIT
+    // spell flies once per branch; a REFLECTed branch comes back.
     const launchedMagnitude =
-        (codes.has("AMPLIFY_APPLIED") ? 2 : 1) + (codes.has("IGNITE_APPLIED") ? 1 : 0) + (codes.has("QUICK_CAST") ? 1 : 0);
-    const towards: Side = effect.target === "self" && !effect.reflected ? c.casterId : c.defenderId;
-    beats.push({
+        (codes.has("AMPLIFY_APPLIED") ? 2 : 1) - (codes.has("WEAKEN_APPLIED") ? 1 : 0) + (codes.has("IGNITE_APPLIED") ? 1 : 0) + (codes.has("QUICK_CAST") ? 1 : 0);
+    const action = effect.action as "seek" | "bind" | "break" | "mend";
+    const branches = c.result.branches ?? [effect];
+    const flight = (from: Side, to: Side, magnitude: number): Beat => ({
         kind: "fly",
-        from: c.casterId,
-        to: towards,
+        from,
+        to,
         ...(effect.essence ? { essence: effect.essence } : {}),
-        magnitude: launchedMagnitude,
-        action: effect.action as "seek" | "bind" | "break" | "mend"
+        magnitude,
+        action
     });
 
-    if (codes.has("SILENCE_STRIPPED_MODIFIERS")) beats.push({ kind: "silence", side: c.defenderId });
-    let landsOn: Side = towards;
-    if (codes.has("REFLECT_APPLIED")) {
-        beats.push({ kind: "reflect", side: c.defenderId });
-        landsOn = c.casterId;
-        beats.push({
-            kind: "fly",
-            from: c.defenderId,
-            to: c.casterId,
-            ...(effect.essence ? { essence: effect.essence } : {}),
-            magnitude: effect.magnitude,
-            action: effect.action as "seek" | "bind" | "break" | "mend"
-        });
-    }
+    branches.forEach((branch, index) => {
+        const steps = branchSteps(c.result, index);
+        const branchCodes = new Set(steps.map(s => s.code));
+        const towards: Side = branch.target === "self" && !branch.reflected ? c.casterId : c.defenderId;
+        let landsOn: Side = towards;
+        if (index === 0) {
+            beats.push(flight(c.casterId, towards, Math.max(0, launchedMagnitude)));
+            if (codes.has("SILENCE_STRIPPED_MODIFIERS")) beats.push({ kind: "silence", side: c.defenderId });
+            if (branch.reflected) {
+                beats.push({ kind: "reflect", side: c.defenderId });
+                landsOn = c.casterId;
+                beats.push(flight(c.defenderId, c.casterId, branch.magnitude));
+            }
+        } else if (branch.reflected) {
+            beats.push({ kind: "reflect", side: c.defenderId });
+            landsOn = c.casterId;
+            beats.push(flight(c.defenderId, c.casterId, branch.magnitude));
+        } else {
+            beats.push(flight(c.casterId, towards, branch.magnitude));
+        }
 
-    if (effect.action === "break") {
-        if (codes.has("WARD_BROKEN")) beats.push({ kind: "ward-break", side: landsOn });
-        else beats.push({ kind: "fizzle", side: landsOn, reason: "No ward to break." });
-        return beats;
-    }
-
-    if (codes.has("WARD_BLOCKED")) {
-        const broken = codes.has("WARD_BROKEN");
-        const integrity = integrityFrom(c.result.steps.find(s => s.code === "WARD_DENTED")?.text);
-        beats.push({ kind: "ward-block", side: landsOn, broken, ...(integrity !== undefined ? { integrity } : {}) });
-        return beats;
-    }
-
-    if (effect.action === "bind") {
-        beats.push({ kind: "bind", side: landsOn });
-    } else {
-        const damageText = c.result.steps.find(s => s.code === "RESOLVE_DAMAGE")?.text;
-        const damage = damageText?.match(/drops by (\d+)/)?.[1];
-        beats.push({ kind: "hit", side: landsOn, magnitude: effect.magnitude, ...(damage ? { damage: Number(damage) } : {}) });
-    }
-    if (c.result.sealAwardedTo) beats.push({ kind: "seal", side: c.result.sealAwardedTo });
+        if (branch.action === "break") {
+            if (branchCodes.has("WARD_BROKEN")) beats.push({ kind: "ward-break", side: landsOn });
+            else beats.push({ kind: "fizzle", side: landsOn, reason: "No ward to break." });
+            return;
+        }
+        if (branchCodes.has("WARD_BLOCKED")) {
+            const broken = branchCodes.has("WARD_BROKEN");
+            const integrity = integrityFrom(steps.find(s => s.code === "WARD_DENTED")?.text);
+            beats.push({ kind: "ward-block", side: landsOn, broken, ...(integrity !== undefined ? { integrity } : {}) });
+            return;
+        }
+        if (branch.action === "bind") {
+            beats.push({ kind: "bind", side: landsOn });
+        } else {
+            const damageText = steps.find(s => s.code === "RESOLVE_DAMAGE")?.text;
+            const damage = damageText?.match(/drops by (\d+)/)?.[1];
+            beats.push({ kind: "hit", side: landsOn, magnitude: branch.magnitude, ...(damage ? { damage: Number(damage) } : {}) });
+        }
+    });
+    beats.push(...sealBeats(c.result, c.casterId, c.defenderId));
     return beats;
 }
 
@@ -343,6 +372,16 @@ export function createStage(root: SVGSVGElement, hooks: StageHooks = {}, motion:
                 say("REFLECT");
                 await animate(bolt, [{ transform: bolt.style.transform || "none" }, { transform: `${bolt.style.transform || ""} scale(1.6)` }], BEAT_MS.reflect / 2);
                 await animate(bolt, [{ opacity: 1 }, { opacity: 0.4 }, { opacity: 1 }], BEAT_MS.reflect / 2);
+                return;
+            }
+            case "split": {
+                say("SPLIT ×2");
+                await animate(mage[beat.side], [{ filter: "brightness(1)" }, { filter: "brightness(1.9)" }, { filter: "brightness(1)" }], BEAT_MS.split);
+                return;
+            }
+            case "reverse": {
+                say(beat.to ? `REVERSE → ${beat.to}` : "REVERSE");
+                await animate(mage[beat.side], [{ transform: "rotate(0)" }, { transform: "rotate(-8deg)" }, { transform: "rotate(6deg)" }, { transform: "rotate(0)" }], BEAT_MS.reverse);
                 return;
             }
             case "silence": {

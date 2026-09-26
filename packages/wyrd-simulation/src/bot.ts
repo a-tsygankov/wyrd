@@ -69,6 +69,10 @@ export function scoreSpell(spell: LegalSpell, view: BotView): number {
     if (spell.target === "self" && spell.action !== "ward" && spell.action !== "mend") score -= 5; // hits the caster, scores nothing
     if (spell.amplified) score += 1.2; // reads as a threat in the telegraph
     if (spell.anchored && spell.target === "enemy") score += 1.5; // insures the route against REFLECT
+    // SPLIT doubles the hits and keeps a seal even against REFLECT; WEAKEN
+    // buys nothing but a bluff. REVERSE is already folded into spell.action.
+    if (spell.modifiers.includes("split")) score += 1.5 + (spell.target === "enemy" && !spell.anchored ? 1 : 0);
+    if (spell.modifiers.includes("weaken")) score -= 1.5;
     // Prefer spending less Focus for the same outcome, slightly - and more
     // so when reactions cost Focus, since a 7-Focus spell leaves no answer.
     score -= spell.focusCost * (view.state.rules?.reactionCosts ? 0.5 : 0.15);
@@ -106,7 +110,9 @@ export function scoreReactions(playerSpell: readonly string[], view: BotView): R
 
     if (hostile && !spell.anchored && !alreadyWarded) scores.reflect = 5; // turn their seal into mine
     if (hostile && spell.anchored) scores.reflect = -3; // ANCHOR makes it a wasted reaction
-    if (spell.amplified || spell.anchored) scores.silence = 2 + (spell.anchored && hostile ? 1 : 0);
+    if (hostile && spell.modifiers.includes("split") && scores.reflect > 0) scores.reflect = 2; // one branch still lands on me
+    if (spell.modifiers.length > 0) scores.silence = 2 + (spell.anchored && hostile ? 1 : 0);
+    if (spell.modifiers.includes("reverse")) scores.silence += 1.5; // undo the trick: the telegraphed action is the one that lands
     if (scoresAgainstMe && !alreadyWarded) {
         // NULL always works but teaches the player nothing and (in later
         // rules) will cost Focus; reserve it for when losing the round

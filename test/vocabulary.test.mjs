@@ -14,8 +14,8 @@ function cast(state, casterId, tokens, reaction) {
 }
 const codes = r => r.steps.map(s => s.code);
 
-test("the POC tray grows to 16 glyphs across the documented families", () => {
-    assert.deepEqual(POC_TRAY, ["FIRE", "WATER", "SHADOW", "LIFE", "SELF", "ENEMY", "GATE", "SEEK", "BIND", "WARD", "BREAK", "MEND", "OPEN", "CLOSE", "AMPLIFY", "ANCHOR"]);
+test("the POC tray grows to 19 glyphs across the documented families", () => {
+    assert.deepEqual(POC_TRAY, ["FIRE", "WATER", "SHADOW", "LIFE", "SELF", "ENEMY", "GATE", "SEEK", "BIND", "WARD", "BREAK", "MEND", "OPEN", "CLOSE", "AMPLIFY", "WEAKEN", "SPLIT", "REVERSE", "ANCHOR"]);
     for (const token of POC_TRAY) assert.ok(glyphHelpText(token).length > 20, `${token} needs help text`);
 });
 

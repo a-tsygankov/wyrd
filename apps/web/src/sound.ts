@@ -32,7 +32,10 @@ export function cueFor(beat: Pick<Beat, "kind"> & { broken?: boolean }): CueName
         case "fly":
             return null;
         case "reflect":
+        case "reverse":
             return "reflect";
+        case "split":
+            return "cast";
         case "silence":
             return "silence";
         case "null":

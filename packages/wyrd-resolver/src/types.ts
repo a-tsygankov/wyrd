@@ -83,6 +83,7 @@ export type ResolutionStage =
     | "cancel"
     | "anchor"
     | "routing"
+    | "transform"
     | "magnitude"
     | "suppression"
     | "boundary"
@@ -94,6 +95,8 @@ export type ResolutionStep = {
     result: "applied" | "blocked" | "canceled" | "failed" | "info";
     code: string;
     text: string;
+    /** Which SPLIT branch produced this step (0-based); absent for unsplit spells and shared stages. */
+    branch?: number;
 };
 
 export type ResolutionContext = {
@@ -107,6 +110,10 @@ export type ResolutionContext = {
 
 export type SpellAction = "seek" | "bind" | "ward" | "close" | "open" | "break" | "mend";
 
+/**
+ * One branch of a resolved spell (SPLIT makes two). `action` is what lands
+ * after REVERSE; `magnitude` after AMPLIFY, WEAKEN and the rule bonuses.
+ */
 export type ResolvedEffect = {
     action: SpellAction;
     target?: "self" | "enemy" | "gate";
@@ -120,7 +127,13 @@ export type ResolvedEffect = {
 
 export type ResolutionResult = {
     state: DuelState;
+    /** The primary branch (the first, unreflected one when SPLIT). */
     effect?: ResolvedEffect;
+    /** Every branch, when the spell SPLIT. */
+    branches?: ResolvedEffect[];
     steps: ResolutionStep[];
+    /** The caster's seal when they scored, else the reflector's. */
     sealAwardedTo?: PlayerId;
+    /** Seals per player this encounter (a SPLIT met by REFLECT can score for both). */
+    sealsAwarded?: Partial<Record<PlayerId, number>>;
 };
