@@ -16,7 +16,8 @@
 <body>
     <main id="app" class="app-shell">
         <header class="topbar">
-            <div>
+            <!-- Triple-tap the title block to toggle the admin console. -->
+            <div id="title-block">
                 <div class="eyebrow">WYRD • DUEL POC</div>
                 <h1>Read the spell. Shape the counter.</h1>
             </div>
@@ -86,6 +87,22 @@
             <ol id="combat-log" class="combat-log">
                 <li>Opponent spell is waiting.</li>
             </ol>
+        </section>
+
+        <!-- Admin console: hidden state, best-move advice with explanations
+             and the client log. Toggled by a triple-tap on the title or ?admin=1. -->
+        <section id="admin-console" class="card admin hidden" aria-label="Admin console">
+            <div class="section-heading">
+                <span class="label">Admin console</span>
+                <button id="admin-close" class="ghost-button" type="button">Close</button>
+            </div>
+            <dl id="admin-state" class="admin-state"></dl>
+            <div class="label">Best reaction to the incoming spell</div>
+            <ol id="admin-reactions" class="admin-list"></ol>
+            <div class="label">Best spells to cast now</div>
+            <ol id="admin-spells" class="admin-list"></ol>
+            <div class="label">Log</div>
+            <ol id="admin-log" class="admin-list admin-log"></ol>
         </section>
 
         <!-- Install coaching. Hidden until main.ts decides which hint applies
