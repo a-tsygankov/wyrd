@@ -26,7 +26,34 @@ export function glyphFamily(token: string): GlyphFamily | undefined {
     return familyByToken.get(token);
 }
 
-export function projectTelegraph(tokens: readonly string[], preset: TelegraphPreset, rng: Rng): TelegraphSlot[] {
+export type TelegraphOptions = {
+    /** Extra hidden slots to reveal (an exposed or faltering caster leaks more). */
+    extraReveals?: number;
+};
+
+/** Flip `count` hidden slots to exact glyphs, chosen with the rng so replays match. */
+export function revealMore(slots: TelegraphSlot[], tokens: readonly string[], count: number, rng: Rng): TelegraphSlot[] {
+    const out = [...slots];
+    for (let i = 0; i < count; i++) {
+        const hidden = out.map((s, index) => (s.kind === "glyph" ? -1 : index)).filter(index => index >= 0);
+        if (hidden.length === 0) break;
+        const index = hidden[rng.int(hidden.length)] as number;
+        out[index] = { kind: "glyph", token: tokens[index] as string };
+    }
+    return out;
+}
+
+export function projectTelegraph(
+    tokens: readonly string[],
+    preset: TelegraphPreset,
+    rng: Rng,
+    options: TelegraphOptions = {}
+): TelegraphSlot[] {
+    const base = projectBase(tokens, preset, rng);
+    return options.extraReveals ? revealMore(base, tokens, options.extraReveals, rng) : base;
+}
+
+function projectBase(tokens: readonly string[], preset: TelegraphPreset, rng: Rng): TelegraphSlot[] {
     if (preset === "high") {
         return tokens.map(token => {
             const family = familyByToken.get(token);

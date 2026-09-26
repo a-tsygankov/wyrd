@@ -336,3 +336,51 @@ h2 {
 .glyph-help[open] summary::before { transform: rotate(90deg); }
 .glyph-help .explain-list { margin-top: 8px; }
 .summary-only { padding-left: 0; }
+
+.topbar { flex-wrap: wrap; }
+.topbar-actions { flex-wrap: wrap; justify-content: flex-end; }
+
+.resolve {
+    position: relative;
+    margin-top: 6px;
+    height: 16px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+}
+.resolve-fill { height: 100%; background: linear-gradient(90deg, #ff7a7a, #ffc457); transition: width 0.4s; }
+.resolve-text { position: absolute; inset: 0; font-size: 0.66rem; font-weight: 800; line-height: 16px; text-align: center; color: #f4f0ff; }
+
+.timer { margin-top: 10px; }
+.timer-track { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.timer-fill { height: 100%; width: 100%; background: linear-gradient(90deg, #744eff, #ad63ff); transition: width 0.1s linear; }
+.timer-text { display: block; margin-top: 4px; font-size: 0.74rem; color: #a994e8; font-weight: 700; }
+
+.cast-button.quick { box-shadow: 0 0 0 2px #ffc457, 0 0 18px rgba(255, 196, 87, 0.5); }
+.cast-button.quick::after { content: " ⚡"; }
+
+.settings-rules { display: grid; gap: 8px; margin: 8px 0 14px; }
+.settings-option {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 4px 10px;
+    align-items: center;
+    padding: 10px 12px;
+    border: 1px solid rgba(169, 148, 232, 0.25);
+    border-radius: 12px;
+    cursor: pointer;
+}
+.settings-option.selected { border-color: #ad63ff; background: rgba(129, 87, 255, 0.12); }
+.settings-option strong { color: #f4f0ff; }
+.settings-summary { grid-column: 2; font-size: 0.78rem; line-height: 1.4; color: #bdb3d3; }
+.settings-switch { display: flex; gap: 10px; align-items: flex-start; margin: 10px 0; font-size: 0.84rem; color: #d8d1e1; cursor: pointer; }
+.settings-switch input { margin-top: 3px; }
+
+.stats-scroll { overflow-x: auto; margin: 6px 0 14px; }
+.stats-table { width: 100%; border-collapse: collapse; font-size: 0.76rem; color: #d8d1e1; }
+.stats-table th, .stats-table td { padding: 5px 8px; text-align: left; border-bottom: 1px solid rgba(255, 255, 255, 0.06); white-space: nowrap; }
+.stats-table th { color: #a994e8; font-size: 0.68rem; letter-spacing: 0.08em; text-transform: uppercase; }
+
+.scoreboard > div { flex: 1; min-width: 0; }
+.scoreboard .round { flex: 0 0 auto; }
+.resolve { min-width: 88px; }

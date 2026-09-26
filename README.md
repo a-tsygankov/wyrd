@@ -35,6 +35,12 @@ Design options for the next duel iteration: `docs/duel-engagement-options.md`. I
 
 The pre-commit hook needs a working `python`/`python3`/`py`; without one it skips the bump and CI's version check catches it.
 
+## Rulesets, settings and stats
+
+**Settings** (header) picks one of four rulesets, each building on the last (`packages/wyrd-content/src/rulesets.ts`, rules in `packages/wyrd-resolver`): **Classic** (the original POC), **Teeth** (wards have integrity 2 and shatter; reactions cost Focus - SILENCE 1, REFLECT 2, NULL 3 - from the same 7 you compose with; ending at 0 exposes an extra telegraph glyph; the same essence twice ignites for +1 magnitude), **Pulse** (Teeth plus an 8-second reaction window and a 5-second quick cast worth +1 magnitude) and **Resolve** (Pulse plus 10 hit points: SEEK deals its magnitude, BIND taxes the next spell, faltering at 3 or less; win by 3 seals or by emptying Resolve). Timers and telemetry have switches too; `?rules=`, `?timers=off`, `?telemetry=off` override for one visit. Changing rules resets the match.
+
+**Stats** (header) shows this device's games per ruleset (matches, win rate, seal rate, average time to commit, top reaction, rematches, streak) from local storage, and everyone's numbers from `GET /api/telemetry/summary` (per ruleset and mode, per scenario).
+
 ## Hot-seat
 
 Tap **Hot-seat** in the header (or open `?mode=hotseat`) for two players on one phone: Player 2 composes in secret and locks in, the phone is passed, Player 1 reads the telegraph, reacts and casts, the phone is passed back, Player 2 reacts, both see the resolution. The hand-off overlay hides the board between turns. State machine in `apps/web/src/hotseat.ts`.

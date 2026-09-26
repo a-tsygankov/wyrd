@@ -22,6 +22,8 @@
                 <h1>Read the spell. Shape the counter.</h1>
             </div>
             <div class="topbar-actions">
+                <button id="settings-toggle" class="ghost-button" type="button" title="Rules, timers, telemetry">Settings</button>
+                <button id="stats-toggle" class="ghost-button" type="button" title="Your games and everyone's">Stats</button>
                 <button id="mode-toggle" class="ghost-button" type="button" title="Switch between solo and two players on this phone">Hot-seat</button>
                 <button id="reset-match" class="ghost-button" type="button">Reset</button>
             </div>
@@ -42,6 +44,7 @@
                 <span id="you-label" class="label">You</span>
                 <strong id="player-seals">0</strong>
                 <span class="muted">seals</span>
+                <div id="player-resolve" class="resolve hidden"><div class="resolve-fill"></div><span class="resolve-text"></span></div>
             </div>
             <div class="round">
                 <span class="label">Round</span>
@@ -51,6 +54,7 @@
                 <span id="opp-label" class="label">Opponent</span>
                 <strong id="opponent-seals">0</strong>
                 <span class="muted">seals</span>
+                <div id="opponent-resolve" class="resolve hidden"><div class="resolve-fill"></div><span class="resolve-text"></span></div>
             </div>
         </section>
 
@@ -63,6 +67,11 @@
                 <span id="match-status" class="status-pill">Your move</span>
             </div>
             <p id="scenario-note" class="muted">Some glyphs are hidden. Infer the threat before choosing a reaction.</p>
+            <!-- Pulse / Resolve tempo: reaction window and quick-cast countdown. -->
+            <div id="timer" class="timer hidden" aria-live="off">
+                <div class="timer-track"><div id="timer-fill" class="timer-fill"></div></div>
+                <span id="timer-text" class="timer-text"></span>
+            </div>
         </section>
 
         <section class="composer card">
@@ -71,7 +80,7 @@
                     <span class="label">Your spell</span>
                     <h2 id="spell-preview">Choose glyphs</h2>
                 </div>
-                <div class="focus"><span id="focus-cost">0</span> / 7 Focus</div>
+                <div class="focus"><span id="focus-cost">0</span> / <span id="focus-budget">7</span> Focus</div>
             </div>
             <div id="spell-diagnostic" class="diagnostic">Build a 2–4 glyph spell.</div>
             <!-- Per-glyph help collapses into one tap-to-expand row so the tray
@@ -108,6 +117,31 @@
             <ol id="combat-log" class="combat-log">
                 <li>Opponent spell is waiting.</li>
             </ol>
+        </section>
+
+        <!-- Settings: one of four rulesets, timers, telemetry. -->
+        <section id="settings" class="card hidden" aria-label="Settings">
+            <div class="section-heading">
+                <span class="label">Settings</span>
+                <button id="settings-close" class="ghost-button" type="button">Close</button>
+            </div>
+            <div class="label">Rules</div>
+            <div id="settings-rules" class="settings-rules"></div>
+            <label class="settings-switch"><input id="settings-timers" type="checkbox"> Timers (Pulse and Resolve: 8-second reaction window, 5-second quick cast; never in the teaching deck)</label>
+            <label class="settings-switch"><input id="settings-telemetry" type="checkbox"> Send anonymous playtest telemetry</label>
+        </section>
+
+        <!-- Stats: this device (local) and everyone (worker summary). -->
+        <section id="stats" class="card hidden" aria-label="Statistics">
+            <div class="section-heading">
+                <span class="label">Stats</span>
+                <button id="stats-close" class="ghost-button" type="button">Close</button>
+            </div>
+            <div class="label">This device</div>
+            <p id="stats-streak" class="muted"></p>
+            <div id="stats-local" class="stats-scroll"></div>
+            <div class="label">Everyone</div>
+            <div id="stats-global" class="stats-scroll muted"></div>
         </section>
 
         <!-- Admin console: hidden state, best-move advice with explanations

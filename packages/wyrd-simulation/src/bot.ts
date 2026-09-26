@@ -1,4 +1,4 @@
-import type { DuelState, PlayerId, ReactionGlyph } from "../../wyrd-resolver/src/index.js";
+import { REACTION_COSTS, type DuelState, type PlayerId, type ReactionGlyph } from "../../wyrd-resolver/src/index.js";
 import type { Rng } from "./rng.js";
 import { classifySpell, type LegalSpell } from "./spells.js";
 
@@ -49,8 +49,9 @@ export function scoreSpell(spell: LegalSpell, view: BotView): number {
     if (spell.target === "self" && spell.action !== "ward") score -= 5; // hits the caster, scores nothing
     if (spell.amplified) score += 1.2; // reads as a threat in the telegraph
     if (spell.anchored && spell.target === "enemy") score += 1.5; // insures the route against REFLECT
-    // Prefer spending less Focus for the same outcome, slightly.
-    score -= spell.focusCost * 0.15;
+    // Prefer spending less Focus for the same outcome, slightly - and more
+    // so when reactions cost Focus, since a 7-Focus spell leaves no answer.
+    score -= spell.focusCost * (view.state.rules?.reactionCosts ? 0.5 : 0.15);
     return score;
 }
 
@@ -101,7 +102,12 @@ const REACTION_TEMPERATURE = 1.2;
 /** The bot's reaction distribution: softmax over the scoring table. Shared by the chooser and the advisor. */
 export function reactionProbabilities(playerSpell: readonly string[], view: BotView): Record<ReactionChoice, number> {
     const scores = scoreReactions(playerSpell, view);
-    const weights = REACTION_CHOICES.map(c => Math.exp(scores[c] / REACTION_TEMPERATURE));
+    // Under reaction costs the bot only considers what its remaining Focus
+    // buys (its own spell was paid when it resolved, just before this call).
+    const focus = view.state.players[view.botId].focus;
+    const affordable = (c: ReactionChoice): boolean =>
+        c === "none" || !view.state.rules?.reactionCosts || REACTION_COSTS[c] <= focus;
+    const weights = REACTION_CHOICES.map(c => (affordable(c) ? Math.exp(scores[c] / REACTION_TEMPERATURE) : 0));
     const total = weights.reduce((a, b) => a + b, 0);
     const out = { none: 0, null: 0, reflect: 0, silence: 0 };
     REACTION_CHOICES.forEach((c, i) => {
