@@ -73,6 +73,9 @@ function complexity(ast: SpellNode | undefined, glyphCount: number): number {
         if (node.kind === "modifier") {
             return 1 + visit(node.child);
         }
+        if (node.kind === "conditional") {
+            return 1 + visit(node.condition) + visit(node.effect);
+        }
         return 1 + Object.values(node.arguments).reduce((sum, arg) => {
             if (Array.isArray(arg)) {
                 return sum + arg.reduce((inner, child) => inner + visit(child), 0);
@@ -254,28 +257,16 @@ function postfixOnlyCandidates(definitions: GlyphDefinition[]): Candidate[] {
     }];
 }
 
-function missingInputDiagnostic(definitions: GlyphDefinition[]): ParseDiagnostic {
-    const operator = definitions.find((definition) => definition.attachment === "operator");
-    if (!operator) {
-        return {
-            code: "INVALID",
-            message: "The glyph sequence does not form a complete typed spell."
-        };
-    }
-
-    return {
-        code: "MISSING_INPUT",
-        glyphId: operator.id,
-        message: `${operator.displayName} does not have a complete type-compatible set of inputs.`
-    };
-}
-
-export function parseSpellWithRegistry(tokens: string[], registry: GlyphRegistry): ParseResult {
-    const diagnostics: ParseDiagnostic[] = [];
+function parseFragmentWithRegistry(
+    tokens: string[],
+    registry: GlyphRegistry,
+    allowValueOnly: boolean
+): ParseResult {
+    const normalized = tokens.map(normalizeToken);
     const definitions: GlyphDefinition[] = [];
+    const diagnostics: ParseDiagnostic[] = [];
 
-    for (const rawToken of tokens) {
-        const token = normalizeToken(rawToken);
+    for (const token of normalized) {
         const glyph = registry.get(token);
         if (!glyph) {
             diagnostics.push({
@@ -295,8 +286,79 @@ export function parseSpellWithRegistry(tokens: string[], registry: GlyphRegistry
     if (definitions.length === 0) {
         return invalid(definitions, [{
             code: "INVALID",
-            message: "A spell must contain at least one glyph."
+            message: "A spell fragment must contain at least one glyph."
         }]);
+    }
+
+    const infixIndexes = definitions
+        .map((definition, index) => definition.attachment === "infix" ? index : -1)
+        .filter((index) => index >= 0);
+
+    if (infixIndexes.length > 1) {
+        return invalid(definitions, [{
+            code: "INVALID",
+            message: "Parser v0.3 supports one infix conditional per spell."
+        }]);
+    }
+
+    if (infixIndexes.length === 1) {
+        const infixIndex = infixIndexes[0]!;
+        const infix = definitions[infixIndex]!;
+        if (infixIndex === 0 || infixIndex === definitions.length - 1) {
+            return invalid(definitions, [{
+                code: "MISSING_INPUT",
+                glyphId: infix.id,
+                message: `${infix.displayName} requires both a condition and an effect.`
+            }]);
+        }
+
+        const leftTokens = tokens.slice(0, infixIndex);
+        const rightTokens = tokens.slice(infixIndex + 1);
+        const left = parseFragmentWithRegistry(leftTokens, registry, true);
+        const right = parseFragmentWithRegistry(rightTokens, registry, false);
+
+        if (left.status !== "valid" || !left.ast) {
+            return invalid(definitions, [{
+                code: "MISSING_INPUT",
+                glyphId: infix.id,
+                message: `${infix.displayName} requires a valid Condition on its left.`
+            }]);
+        }
+
+        if (right.status !== "valid" || !right.ast) {
+            return invalid(definitions, [{
+                code: "MISSING_INPUT",
+                glyphId: infix.id,
+                message: `${infix.displayName} requires a valid effect on its right.`
+            }]);
+        }
+
+        const [conditionPort, effectPort] = infix.inputs ?? [];
+        if (!conditionPort || !effectPort ||
+            !matches(left.ast, conditionPort.accepts) ||
+            !matches(right.ast, effectPort.accepts)) {
+            return invalid(definitions, [{
+                code: "MISSING_INPUT",
+                glyphId: infix.id,
+                message: `${infix.displayName} inputs do not match Condition → Effect.`
+            }]);
+        }
+
+        const ast: SpellNode = {
+            kind: "conditional",
+            glyphId: infix.id,
+            outputType: infix.produces[0]!,
+            condition: left.ast,
+            effect: right.ast
+        };
+
+        return {
+            status: "valid",
+            ast,
+            focusCost: focusCost(definitions),
+            complexity: complexity(ast, definitions.length),
+            diagnostics: []
+        };
     }
 
     const unsupported = definitions.filter((definition) =>
@@ -306,8 +368,19 @@ export function parseSpellWithRegistry(tokens: string[], registry: GlyphRegistry
         return invalid(definitions, unsupported.map((definition) => ({
             code: "INVALID",
             glyphId: definition.id,
-            message: `${definition.displayName} uses ${definition.attachment} syntax, which is not implemented in parser v0.2.`
+            message: `${definition.displayName} uses ${definition.attachment} syntax, which is not implemented in parser v0.3.`
         })));
+    }
+
+    if (allowValueOnly && definitions.length === 1 && definitions[0]!.attachment === "value") {
+        const ast = valueNode(definitions[0]!);
+        return {
+            status: "valid",
+            ast,
+            focusCost: focusCost(definitions),
+            complexity: complexity(ast, definitions.length),
+            diagnostics: []
+        };
     }
 
     const operatorIndexes = definitions
@@ -317,7 +390,7 @@ export function parseSpellWithRegistry(tokens: string[], registry: GlyphRegistry
     if (operatorIndexes.length > 1) {
         return invalid(definitions, [{
             code: "INVALID",
-            message: "Parser v0.2 supports one base action per spell; nested actions will be added separately."
+            message: "Parser v0.3 supports one base action per spell fragment; nested actions will be added separately."
         }]);
     }
 
@@ -353,6 +426,26 @@ export function parseSpellWithRegistry(tokens: string[], registry: GlyphRegistry
         complexity: complexity(ast, definitions.length),
         diagnostics: []
     };
+}
+
+function missingInputDiagnostic(definitions: GlyphDefinition[]): ParseDiagnostic {
+    const operator = definitions.find((definition) => definition.attachment === "operator");
+    if (!operator) {
+        return {
+            code: "INVALID",
+            message: "The glyph sequence does not form a complete typed spell."
+        };
+    }
+
+    return {
+        code: "MISSING_INPUT",
+        glyphId: operator.id,
+        message: `${operator.displayName} does not have a complete type-compatible set of inputs.`
+    };
+}
+
+export function parseSpellWithRegistry(tokens: string[], registry: GlyphRegistry): ParseResult {
+    return parseFragmentWithRegistry(tokens, registry, false);
 }
 
 export function parseSpell(tokens: string[]): ParseResult {
