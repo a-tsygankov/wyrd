@@ -18,6 +18,7 @@ M0 grammar + playable browser duel POC. Cloudflare deployment pipeline (worker +
 | Worker secrets | none | — |
 
 ## Open items
+- Duel engagement options (`docs/duel-engagement-options.md`): four packages (Teeth: ward integrity, reaction Focus costs, ignite, weather · Pulse: timers, progressive telegraph, bot personalities · Stage: SVG/CSS stage + WebAudio · Resolve: hit points as a flagged second clock) with battle examples; four decisions listed at the end await the user.
 - Rules decision surfaced by the bot: SELF-targeted SEEK/BIND used to hit the defender and score an unwardable seal; fixed 2026-09-26 so they land on the caster and score nothing. SILENCE never prevents a seal in the POC rules (it only strips modifiers, and magnitude does not affect seals) - keep or give SILENCE teeth? Decide from playtests.
 - **Phone playtest** (`docs/playtest-checklist.md`): Part A install/offline/layout on a real iPhone and Android, Part B the gameplay experiment with 3+ new players. Everything automatable is in CI; this needs hands and phones. Write the outcome line into the log below.
 - Whether the worker should become the authoritative resolver for the browser POC now (it already logs `POST /api/duel/resolve` to `duel_log`) or only with M3 multiplayer.
