@@ -527,3 +527,5 @@ h2 {
 .fab:focus-visible { outline: 2px solid #ffc457; outline-offset: 2px; }
 @keyframes fab-pulse { 50% { box-shadow: 0 6px 28px rgba(173, 99, 255, 0.7), 0 0 0 2px rgba(255, 255, 255, 0.2) inset; } }
 @media (prefers-reduced-motion: reduce) { .fab { animation: none; } }
+/* While the floating button shows, the title wraps clear of it. */
+.fab-shown #title-block { padding-right: 168px; }

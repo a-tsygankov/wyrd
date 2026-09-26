@@ -783,6 +783,7 @@ function render(): void {
     // The floating action mirrors it and, once the duel is decided, offers the rematch.
     const decided = matchOutcome().over;
     nextRoundFab.classList.toggle("hidden", !roundResolved);
+    document.body.classList.toggle("fab-shown", roundResolved);
     nextRoundFab.textContent = decided ? "Rematch ↻" : "Next round →";
     nextRoundFab.setAttribute("aria-label", decided ? "Rematch" : "Next round");
 }
