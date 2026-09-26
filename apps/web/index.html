@@ -70,6 +70,8 @@
             <!-- The Three.js arena (apps/web/src/arena.ts): a second renderer of the
                  same beats, behind the "3D arena" setting; hidden until it mounts. -->
             <div id="arena" class="arena hidden" aria-label="Duel arena"></div>
+            <!-- Layout A: where you are in the round; a tap scrolls to that card. -->
+            <ol id="phase-strip" class="phase-strip" aria-label="Round phases"></ol>
             <svg id="stage" viewBox="0 0 360 170" role="img" aria-labelledby="stage-caption" preserveAspectRatio="xMidYMid meet">
                 <defs>
                     <linearGradient id="stage-floor" x1="0" y1="0" x2="0" y2="1">

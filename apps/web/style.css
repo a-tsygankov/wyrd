@@ -114,6 +114,20 @@ h2 {
 
 #stage-marks ellipse { pointer-events: none; }
 
+/* Layout A: the stage stays pinned while the round's cards scroll beneath it;
+   cards scroll into view below it, the active card is lit. */
+.stage.card { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 6px); z-index: 5; display: flex; flex-direction: column; gap: 8px; }
+.card { scroll-margin-top: calc(env(safe-area-inset-top, 0px) + 236px); }
+.phase-strip { display: flex; gap: 4px; margin: 0; padding: 0; list-style: none; order: -1; }
+.phase-strip li { flex: 1; }
+.phase-strip button { width: 100%; border: 0; border-radius: 8px; padding: 6px 2px; background: rgba(255, 255, 255, 0.05); color: #7f7499; font-size: 0.68rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.phase-strip li.done button { color: #a994e8; }
+.phase-strip li.active button { background: linear-gradient(135deg, #744eff, #ad63ff); color: #f4f0ff; }
+.phase-strip button:focus-visible { outline: 2px solid #ffc457; outline-offset: 1px; }
+.phase-hint { margin: 0; font-size: 0.78rem; color: #a99cc7; min-height: 18px; }
+body[data-phase] .card.phase-target { box-shadow: 0 0 0 2px rgba(173, 99, 255, 0.55), 0 8px 24px rgba(116, 78, 255, 0.18); }
+@media (max-height: 640px) { .stage.card { position: static; } .card { scroll-margin-top: 12px; } }
+
 /* The Three.js arena: same footprint as the SVG stage. */
 .arena { position: relative; width: 100%; aspect-ratio: 360 / 170; border-radius: 12px; overflow: hidden; background: radial-gradient(ellipse at 50% 80%, #2a2140 0%, #140d22 70%); cursor: pointer; }
 .arena canvas { display: block; width: 100% !important; height: 100% !important; }

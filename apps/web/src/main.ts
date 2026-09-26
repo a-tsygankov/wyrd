@@ -47,6 +47,7 @@ import { loadStats, recordMatchEnd, recordRematch, recordRound, saveStats, summa
 import { QUICK_CAST_MS, REACTION_WINDOW_MS, timerState } from "./timers.js";
 import { buildTimeline, createStage, type Contribution, type Stage, type StageHooks, type StageState } from "./stage.js";
 import type { Arena } from "./arena.js";
+import { PHASES, derivePhase, phaseTarget, type RoundPhase } from "./phase.js";
 import { modelFor } from "./arenaMap.js";
 import { hiddenCount, revealSchedule, revealedSlots, scrySlot, type Reveal } from "./reveal.js";
 import { createSound, cueFor, extraCueFor, urgencyCue } from "./sound.js";
@@ -197,6 +198,56 @@ const reducedMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)")
 const sound = createSound(settings.sound);
 const stageRoot = byId<SVGSVGElement & HTMLElement>("stage");
 const arenaRoot = byId<HTMLElement>("arena");
+const phaseStrip = byId<HTMLOListElement>("phase-strip");
+const phaseHint = document.createElement("p");
+phaseHint.id = "phase-hint";
+phaseHint.className = "phase-hint";
+phaseStrip.after(phaseHint);
+let currentPhase: RoundPhase | undefined;
+for (const info of PHASES) {
+    const li = document.createElement("li");
+    li.dataset.phase = info.id;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = info.title;
+    button.title = info.hint;
+    button.addEventListener("click", () => {
+        const target = document.querySelector<HTMLElement>(`.${phaseTarget(info.id)}.card`);
+        target?.scrollIntoView({ block: "start", behavior: "smooth" });
+    });
+    li.append(button);
+    phaseStrip.append(li);
+}
+
+/** Layout A: name the phase, light its card, move the arena's camera. */
+function renderPhase(): void {
+    const phase = derivePhase({
+        mode,
+        hotseatPhase: hotseat.phase,
+        roundResolved,
+        playing: stageRoot.dataset.playing === "1",
+        spellLength: playerSpell.length,
+        castable: !roundResolved && spellIsCastable(),
+        reactionSelected: selectedReaction !== undefined,
+        reactionLocked
+    });
+    if (phase === currentPhase) return;
+    currentPhase = phase;
+    document.body.dataset.phase = phase;
+    const order = PHASES.map(p => p.id);
+    const at = order.indexOf(phase);
+    for (const li of phaseStrip.querySelectorAll<HTMLLIElement>("li")) {
+        const index = order.indexOf(li.dataset.phase as RoundPhase);
+        li.classList.toggle("active", index === at);
+        li.classList.toggle("done", index < at);
+    }
+    phaseHint.textContent = PHASES[at]?.hint ?? "";
+    const targetClass = phaseTarget(phase);
+    for (const card of document.querySelectorAll<HTMLElement>(".card")) {
+        card.classList.toggle("phase-target", card.classList.contains(targetClass) && targetClass !== "stage");
+    }
+    stage.setPhase?.(phase);
+}
 const stageHooks: StageHooks = {
         onBeat: beat => {
             stageRoot.dataset.lastBeat = beat.kind;
@@ -229,6 +280,7 @@ async function mountStage(): Promise<void> {
                 await arena.setModel("opponent", modelFor("opponent", personality.id));
             }
             stage = arena;
+            if (currentPhase) arena.setPhase?.(currentPhase);
             arenaRoot.classList.remove("hidden");
             stageRoot.classList.add("hidden");
             arenaRoot.dataset.renderer = "3d";
@@ -824,6 +876,7 @@ function render(): void {
     renderMode();
     renderTimer();
     renderAdmin();
+    renderPhase();
     if (stageRoot.dataset.playing !== "1") stage.setIdle(stageState());
 
     nextRoundButton.classList.toggle("hidden", !roundResolved || matchOutcome().over);
@@ -1013,6 +1066,7 @@ function resolveRound(): void {
     // is already complete, so a tap can skip it without losing anything.
     void (async () => {
         stageRoot.dataset.playing = "1";
+        renderPhase();
         stage.setIdle({
             wards: { player: roundStart.players.player.ward, opponent: roundStart.players.opponent.ward },
             bound: { player: roundStart.players.player.bound === true, opponent: roundStart.players.opponent.bound === true },
@@ -1027,6 +1081,7 @@ function resolveRound(): void {
         const [lead, follow] = contributions;
         if (lead) await stage.play(buildTimeline(lead, follow), stageState());
         delete stageRoot.dataset.playing;
+        renderPhase();
         stage.setIdle(stageState());
     })();
 }

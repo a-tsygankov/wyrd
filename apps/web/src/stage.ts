@@ -312,6 +312,8 @@ const GATE_X = 180;
 export type Stage = {
     /** Show the board at rest for a state (wards, chains, gate). */
     setIdle(state: StageState): void;
+    /** The round's phase changed (layout A): a renderer may move its camera. */
+    setPhase?(phase: "read" | "react" | "shape" | "cast" | "resolve" | "verdict"): void;
     /** Play beats in order; resolves when done. A second call skips the current run. */
     play(beats: Beat[], state: StageState): Promise<void>;
     /** Forget the floor marks (a new match). */
