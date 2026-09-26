@@ -1,17 +1,27 @@
-import { cpSync, mkdirSync, rmSync } from "node:fs";
+// Assemble the static web client into apps/web/dist from the tsc output
+// in ./dist. Run via `pnpm build:web` (which runs tsc first). The output
+// directory sits next to apps/web/functions so `wrangler pages deploy
+// dist` from apps/web picks up the /api/* proxy function.
+import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 
-rmSync("site", { recursive: true, force: true });
-mkdirSync("site/apps/web/src", { recursive: true });
+const out = "apps/web/dist";
+const webVersion = JSON.parse(readFileSync("apps/web/package.json", "utf8")).version;
 
-cpSync("apps/web/index.html", "site/index.html");
-cpSync("apps/web/style.css", "site/style.css");
-cpSync("apps/web/manifest.webmanifest", "site/manifest.webmanifest");
-cpSync("apps/web/sw.js", "site/sw.js");
-cpSync("dist/apps/web/src/main.js", "site/apps/web/src/main.js");
+rmSync(out, { recursive: true, force: true });
+mkdirSync(`${out}/apps/web/src`, { recursive: true });
 
-mkdirSync("site/packages", { recursive: true });
-cpSync("dist/packages/wyrd-grammar", "site/packages/wyrd-grammar", { recursive: true });
-cpSync("dist/packages/wyrd-content", "site/packages/wyrd-content", { recursive: true });
-cpSync("dist/packages/wyrd-resolver", "site/packages/wyrd-resolver", { recursive: true });
+// The web tier version is inlined at build time so the footer can show
+// it before (or without) the worker answering /api/version.
+const html = readFileSync("apps/web/index.html", "utf8").replaceAll("__WEB_VERSION__", webVersion);
+writeFileSync(`${out}/index.html`, html);
+cpSync("apps/web/style.css", `${out}/style.css`);
+cpSync("apps/web/manifest.webmanifest", `${out}/manifest.webmanifest`);
+cpSync("apps/web/sw.js", `${out}/sw.js`);
+cpSync("dist/apps/web/src/main.js", `${out}/apps/web/src/main.js`);
 
-console.log("Built static POC into ./site");
+mkdirSync(`${out}/packages`, { recursive: true });
+for (const pkg of ["wyrd-grammar", "wyrd-content", "wyrd-resolver"]) {
+    cpSync(`dist/packages/${pkg}`, `${out}/packages/${pkg}`, { recursive: true });
+}
+
+console.log(`Built static web client v${webVersion} into ./${out}`);

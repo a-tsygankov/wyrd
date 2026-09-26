@@ -13,5 +13,8 @@
         "forceConsistentCasingInFileNames": true,
         "skipLibCheck": true
     },
-    "include": ["packages/**/src/**/*.ts", "apps/**/src/**/*.ts"]
+    "include": ["packages/**/src/**/*.ts", "apps/**/src/**/*.ts"],
+    // The worker has its own tsconfig (workers-types, Bundler resolution,
+    // vitest pool types) and is typechecked by `pnpm typecheck:api`.
+    "exclude": ["apps/api/**", "node_modules", "dist"]
 }

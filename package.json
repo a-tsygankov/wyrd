@@ -8,10 +8,18 @@
         "prepare": "git config core.hooksPath .githooks || true",
         "build": "tsc -p tsconfig.json",
         "typecheck": "tsc -p tsconfig.json --noEmit",
+        "typecheck:api": "pnpm --filter @wyrd/api typecheck",
+        "typecheck:web": "pnpm --filter @wyrd/web typecheck",
         "test": "tsc -p tsconfig.json && node --test test/*.test.mjs",
-        "check": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.json && node --test test/*.test.mjs",
+        "test:api": "pnpm --filter @wyrd/api test",
+        "check": "pnpm typecheck && pnpm typecheck:api && pnpm typecheck:web && pnpm test && pnpm test:api && pnpm version:test",
         "version:test": "python3 -m unittest discover -s scripts -v",
-        "build:web": "tsc -p tsconfig.json && node scripts/build_web.mjs"
+        "build:web": "tsc -p tsconfig.json && node scripts/build_web.mjs",
+        "dev:api": "pnpm --filter @wyrd/api dev",
+        "db:migrate:local": "pnpm --filter @wyrd/api db:migrate:local",
+        "db:migrate:remote": "pnpm --filter @wyrd/api db:migrate:remote",
+        "deploy:api": "pnpm --filter @wyrd/api run deploy",
+        "deploy:web": "pnpm build:web && pnpm --filter @wyrd/web run deploy"
     },
     "devDependencies": {
         "typescript": "^5.9.3"

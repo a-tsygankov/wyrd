@@ -1,0 +1,25 @@
+{
+    "name": "@wyrd/api",
+    "private": true,
+    "version": "0.0.1",
+    "type": "module",
+    "scripts": {
+        "dev": "wrangler dev --port 8787",
+        "deploy": "wrangler deploy",
+        "typecheck": "tsc --noEmit",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "db:migrate:local": "wrangler d1 migrations apply wyrd-db --local",
+        "db:migrate:remote": "wrangler d1 migrations apply wyrd-db --remote"
+    },
+    "dependencies": {
+        "hono": "^4.6.0"
+    },
+    "devDependencies": {
+        "@cloudflare/vitest-pool-workers": "^0.5.0",
+        "@cloudflare/workers-types": "^4.20250101.0",
+        "typescript": "^5.9.3",
+        "vitest": "~2.1.0",
+        "wrangler": "^4.0.0"
+    }
+}
