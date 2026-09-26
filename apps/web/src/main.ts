@@ -146,6 +146,7 @@ const reactionTray = byId<HTMLElement>("reaction-tray");
 const combatLog = byId<HTMLOListElement>("combat-log");
 const resolveRoundButton = byId<HTMLButtonElement>("resolve-round");
 const nextRoundButton = byId<HTMLButtonElement>("next-round");
+const nextRoundFab = byId<HTMLButtonElement>("next-round-fab");
 const undoButton = byId<HTMLButtonElement>("undo-glyph");
 const clearButton = byId<HTMLButtonElement>("clear-spell");
 const resetButton = byId<HTMLButtonElement>("reset-match");
@@ -779,6 +780,11 @@ function render(): void {
     if (stageRoot.dataset.playing !== "1") stage.setIdle(stageState());
 
     nextRoundButton.classList.toggle("hidden", !roundResolved || matchOutcome().over);
+    // The floating action mirrors it and, once the duel is decided, offers the rematch.
+    const decided = matchOutcome().over;
+    nextRoundFab.classList.toggle("hidden", !roundResolved);
+    nextRoundFab.textContent = decided ? "Rematch ↻" : "Next round →";
+    nextRoundFab.setAttribute("aria-label", decided ? "Rematch" : "Next round");
 }
 
 function appendSteps(prefix: string, steps: ResolutionStep[]): void {
@@ -1141,6 +1147,10 @@ modeToggle.addEventListener("click", () => {
     resetMatch();
 });
 nextRoundButton.addEventListener("click", startNextRound);
+nextRoundFab.addEventListener("click", () => {
+    if (matchOutcome().over) resetMatch();
+    else startNextRound();
+});
 resetButton.addEventListener("click", resetMatch);
 
 // --- Tempo (Pulse / Resolve): reaction ring and quick-cast badge.
