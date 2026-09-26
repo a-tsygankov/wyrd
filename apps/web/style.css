@@ -540,11 +540,12 @@ body[data-phase] .card.phase-target { box-shadow: 0 0 0 2px rgba(173, 99, 255, 0
 .scry:disabled { opacity: 0.45; }
 #telegraph .revealed { color: #ffc457; }
 
-/* Floating next-round action (top right, above the safe area). */
+/* Floating next-round action: bottom right, in thumb reach and clear of the
+   pinned stage's phase strip (it sat over the strip when it was top right). */
 .fab {
     position: fixed;
-    top: calc(env(safe-area-inset-top, 0px) + 12px);
-    right: 12px;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
+    right: 14px;
     z-index: 40;
     border: 0;
     border-radius: 999px;
@@ -563,5 +564,5 @@ body[data-phase] .card.phase-target { box-shadow: 0 0 0 2px rgba(173, 99, 255, 0
 .fab:focus-visible { outline: 2px solid #ffc457; outline-offset: 2px; }
 @keyframes fab-pulse { 50% { box-shadow: 0 6px 28px rgba(173, 99, 255, 0.7), 0 0 0 2px rgba(255, 255, 255, 0.2) inset; } }
 @media (prefers-reduced-motion: reduce) { .fab { animation: none; } }
-/* While the floating button shows, the title wraps clear of it. */
-.fab-shown #title-block { padding-right: 168px; }
+/* While the floating button shows, the page keeps room under the log for it. */
+.fab-shown main, .fab-shown body { padding-bottom: 72px; }
