@@ -9,7 +9,7 @@ Current implementation focus: **M0 — grammar**, with a playable browser duel P
 | Dir | What | Deploys to |
 |---|---|---|
 | `packages/wyrd-grammar` | semantic types, AST, parser, diagnostics | bundled into web + worker |
-| `packages/wyrd-content` | v0 glyph registry, curated scenario deck | bundled into web + worker |
+| `packages/wyrd-content` | v0 glyph registry, the 16-glyph POC tray, curated scenario deck | bundled into web + worker |
 | `packages/wyrd-resolver` | deterministic resolver (M1) | bundled into web + worker |
 | `packages/wyrd-simulation` | seeded RNG, legal-spell enumeration, heuristic bot, telegraph presets | bundled into web |
 | `apps/duel-sim` | text-only duel simulator boundary (M2) | — |

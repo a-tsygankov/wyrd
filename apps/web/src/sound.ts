@@ -44,7 +44,14 @@ export function cueFor(beat: Pick<Beat, "kind"> & { broken?: boolean }): CueName
         case "bind":
             return "bind";
         case "gate-close":
+        case "gate-open":
             return "gate";
+        case "gate-break":
+        case "ward-break":
+            return "shatter";
+        case "gate-mend":
+        case "mend":
+            return "ward";
         case "hit":
             return "hit";
         case "seal":

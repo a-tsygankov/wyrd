@@ -29,7 +29,27 @@ export const glyphHelp: Record<string, GlyphHelp> = {
     },
     GATE: {
         role: "target",
-        text: "Target for CLOSE: the objective, not a player. Wards and REFLECT cannot touch it; only NULL stops a GATE spell."
+        text: "The objective between the mages, not a player. CLOSE scores while it stands open, OPEN scores while it is closed; BREAK shatters it until someone MENDs it. Wards and REFLECT cannot touch it; only NULL stops a GATE spell."
+    },
+    WATER: {
+        role: "essence",
+        text: "Essence: the spell carries WATER. A WATER-filtered ward on the target stops it; other wards let it through."
+    },
+    LIFE: {
+        role: "essence",
+        text: "Essence: the spell carries LIFE. A LIFE-filtered ward on the target stops it; other wards let it through."
+    },
+    BREAK: {
+        role: "action",
+        text: "Action: BREAK ENEMY shatters the opponent's ward outright - no ward can block it - and scores nothing; the seal comes with your next attack. BREAK GATE shatters the objective so nobody scores from it until it is MENDed. REFLECT sends BREAK back onto your own ward."
+    },
+    MEND: {
+        role: "action",
+        text: "Action: MEND SELF restores your ward to full integrity (and under Resolve heals 2); MEND GATE repairs a shattered gate. Scores nothing."
+    },
+    OPEN: {
+        role: "action",
+        text: "Action: OPEN GATE scores a seal while the gate is closed and reopens it. Wards and REFLECT cannot touch the gate; only NULL stops it."
     },
     SEEK: {
         role: "action",
@@ -45,7 +65,7 @@ export const glyphHelp: Record<string, GlyphHelp> = {
     },
     CLOSE: {
         role: "action",
-        text: "Action: closes the GATE for a seal. Not aimed at a player, so wards and REFLECT do not apply."
+        text: "Action: CLOSE GATE scores a seal while the gate stands open and closes it; on a closed gate it does nothing. Not aimed at a player, so wards and REFLECT do not apply."
     },
     AMPLIFY: {
         role: "modifier",

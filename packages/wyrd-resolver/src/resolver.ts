@@ -4,6 +4,7 @@ import {
     BOUND_TAX,
     CLASSIC_RULES,
     FALTERING_AT,
+    MEND_RESOLVE,
     REACTION_COSTS,
     ROUND_FOCUS,
     type DuelState,
@@ -14,15 +15,18 @@ import {
     type ResolutionResult,
     type ResolutionStep,
     type ResolvedEffect,
-    type RuleOptions
+    type RuleOptions,
+    type SpellAction
 } from "./types.js";
 
 type FlattenedSpell = {
-    action?: ResolvedEffect["action"];
+    action?: SpellAction;
     target?: ResolvedEffect["target"];
     essence?: string;
     modifiers: string[];
 };
+
+const POC_ACTIONS: readonly SpellAction[] = ["seek", "bind", "ward", "close", "open", "break", "mend"];
 
 function cloneState(state: DuelState): DuelState {
     return structuredClone(state);
@@ -50,7 +54,7 @@ function flatten(node: SpellNode): FlattenedSpell {
     }
 
     const action = node.glyphId;
-    if (!["seek", "bind", "ward", "close"].includes(action)) {
+    if (!(POC_ACTIONS as readonly string[]).includes(action)) {
         throw new Error("Unsupported POC action: " + action);
     }
 
@@ -64,7 +68,7 @@ function flatten(node: SpellNode): FlattenedSpell {
         valueGlyphId(node.arguments.filter as SpellNode | undefined);
 
     return {
-        action: action as ResolvedEffect["action"],
+        action: action as SpellAction,
         ...(target ? { target } : {}),
         ...(essence ? { essence } : {}),
         modifiers: []
@@ -168,7 +172,8 @@ export function createInitialDuelState(rules: RuleOptions = CLASSIC_RULES): Duel
             player: newPlayer("player", rules),
             opponent: newPlayer("opponent", rules)
         },
-        rules: { ...rules }
+        rules: { ...rules },
+        gate: "open"
     };
 }
 
@@ -191,6 +196,15 @@ export function spellFocusCost(state: DuelState, casterId: PlayerId, parsedFocus
     return parsedFocusCost + tax;
 }
 
+/** Spend Focus outside a resolution (Scry); never below 0, and it marks exposure like a resolution would. */
+export function spendFocus(state: DuelState, id: PlayerId, amount: number): DuelState {
+    const next = cloneState(state);
+    const player = next.players[id];
+    player.focus = Math.max(0, player.focus - amount);
+    if (next.rules.reactionCosts) player.exposed = player.focus === 0;
+    return next;
+}
+
 function updateFaltering(player: PlayerState, rules: RuleOptions): void {
     if (rules.resolve > 0 && player.resolve !== undefined) player.faltering = player.resolve <= FALTERING_AT;
 }
@@ -202,6 +216,7 @@ export function resolveEncounter(
     const next = cloneState(state);
     const rules: RuleOptions = next.rules ?? CLASSIC_RULES;
     next.rules = rules;
+    next.gate ??= "open";
     const steps: ResolutionStep[] = [];
     const caster = next.players[context.casterId];
     const defender = next.players[context.defenderId];
@@ -326,6 +341,11 @@ export function resolveEncounter(
         return { state: next, ...result };
     };
 
+    const noSeal = (): ResolutionResult => {
+        addStep(steps, "outcome", "info", "NO_SEAL", "No seal was awarded this encounter.");
+        return finish({ effect, steps });
+    };
+
     if (effect.canceled) {
         return finish({ effect, steps });
     }
@@ -341,6 +361,96 @@ export function resolveEncounter(
         : context.casterId;
 
     const targetPlayer = next.players[targetPlayerId];
+
+    // --- The gate: a contested objective. CLOSE scores while open, OPEN while
+    // closed; BREAK shatters it (no seal) and MEND repairs it (no seal).
+    if (effect.target === "gate") {
+        switch (effect.action) {
+            case "close":
+            case "open": {
+                if (next.gate === "broken") {
+                    addStep(steps, "effect", "failed", "GATE_BROKEN", "The GATE lies shattered; MEND it before it can be opened or closed.");
+                    return noSeal();
+                }
+                const wants: DuelState["gate"] = effect.action === "close" ? "closed" : "open";
+                if (next.gate === wants) {
+                    addStep(
+                        steps,
+                        "effect",
+                        "failed",
+                        wants === "closed" ? "GATE_ALREADY_CLOSED" : "GATE_ALREADY_OPEN",
+                        `The GATE is already ${wants}; nothing to ${effect.action}.`
+                    );
+                    return noSeal();
+                }
+                next.gate = wants;
+                addStep(steps, "effect", "applied", wants === "closed" ? "GATE_CLOSED" : "GATE_OPENED", `The GATE was ${wants === "closed" ? "closed" : "opened"}.`);
+                next.players[scoringPlayerId].seals += 1;
+                addStep(steps, "outcome", "applied", "SEAL_AWARDED", scoringPlayerId + " gains 1 seal.");
+                return finish({ effect, steps, sealAwardedTo: scoringPlayerId });
+            }
+            case "break": {
+                if (next.gate === "broken") {
+                    addStep(steps, "effect", "info", "NOTHING_TO_BREAK", "The GATE is already shattered.");
+                    return noSeal();
+                }
+                next.gate = "broken";
+                addStep(steps, "effect", "applied", "GATE_SHATTERED", "BREAK shattered the GATE: no seals from it until it is MENDed.");
+                return noSeal();
+            }
+            case "mend": {
+                if (next.gate !== "broken") {
+                    addStep(steps, "effect", "info", "NOTHING_TO_MEND", "The GATE is whole; nothing to mend.");
+                    return noSeal();
+                }
+                next.gate = "open";
+                addStep(steps, "effect", "applied", "GATE_MENDED", "MEND restored the GATE; it stands open again.");
+                return noSeal();
+            }
+            default:
+                addStep(steps, "effect", "failed", "GATE_NOT_A_TARGET", `${effect.action.toUpperCase()} cannot be aimed at the GATE.`);
+                return noSeal();
+        }
+    }
+
+    if (effect.action === "close" || effect.action === "open") {
+        addStep(
+            steps,
+            "effect",
+            "failed",
+            effect.action === "close" ? "CLOSE_REQUIRES_GATE" : "OPEN_REQUIRES_GATE",
+            `${effect.action.toUpperCase()} requires a GATE in the POC rules.`
+        );
+        return noSeal();
+    }
+
+    // --- BREAK on a mage: the anti-ward. Never blocked by the ward it breaks.
+    if (effect.action === "break") {
+        if (!targetPlayer.ward) {
+            addStep(steps, "effect", "info", "NOTHING_TO_BREAK", `${targetPlayerId} has no ward to break.`);
+            return noSeal();
+        }
+        delete targetPlayer.ward;
+        addStep(steps, "effect", "applied", "WARD_BROKEN", `BREAK shattered ${targetPlayerId}'s WARD; the way is open.`);
+        return noSeal();
+    }
+
+    // --- MEND on a mage: ward integrity back to full, Resolve back by a little.
+    if (effect.action === "mend") {
+        let mended = false;
+        if (targetPlayer.ward && rules.wardIntegrity > 0 && (targetPlayer.ward.integrity ?? rules.wardIntegrity) < rules.wardIntegrity) {
+            targetPlayer.ward.integrity = rules.wardIntegrity;
+            addStep(steps, "effect", "applied", "WARD_MENDED", `MEND restored ${targetPlayerId}'s WARD to integrity ${rules.wardIntegrity}.`);
+            mended = true;
+        }
+        if (rules.resolve > 0 && targetPlayer.resolve !== undefined && targetPlayer.resolve < rules.resolve) {
+            targetPlayer.resolve = Math.min(rules.resolve, targetPlayer.resolve + MEND_RESOLVE);
+            addStep(steps, "effect", "applied", "RESOLVE_MENDED", `${targetPlayerId}'s resolve rises by ${MEND_RESOLVE} to ${targetPlayer.resolve}.`);
+            mended = true;
+        }
+        if (!mended) addStep(steps, "effect", "info", "NOTHING_TO_MEND", `${targetPlayerId} has nothing to mend.`);
+        return noSeal();
+    }
 
     if (effect.action !== "ward") {
         const ward = targetPlayer.ward;
@@ -401,7 +511,7 @@ export function resolveEncounter(
                     ? "A " + effect.essence.toUpperCase() + "-filtered WARD is active."
                     : "A WARD is active.") + (integrity !== undefined ? ` Integrity ${integrity}.` : "")
             );
-            break;
+            return noSeal();
         }
 
         case "bind":
@@ -434,37 +544,13 @@ export function resolveEncounter(
                 );
             }
             break;
-
-        case "close":
-            if (effect.target !== "gate") {
-                addStep(
-                    steps,
-                    "effect",
-                    "failed",
-                    "CLOSE_REQUIRES_GATE",
-                    "CLOSE requires a GATE in the POC rules."
-                );
-                return finish({ effect, steps });
-            }
-            addStep(
-                steps,
-                "effect",
-                "applied",
-                "GATE_CLOSED",
-                "The GATE was closed."
-            );
-            break;
     }
 
-    // Seals reward reaching the other side (or the GATE objective). A spell
-    // that lands on its own caster - SELF-targeted, or REFLECTed back - scores
-    // for whoever it landed against: nobody for SELF, the reflector for REFLECT.
+    // Seals reward reaching the other side. A spell that lands on its own
+    // caster - SELF-targeted, or REFLECTed back - scores for whoever it
+    // landed against: nobody for SELF, the reflector for REFLECT.
     const reachedOpponent = effect.reflected || effect.target === "enemy";
-    const awardsSeal =
-        ((effect.action === "seek" || effect.action === "bind") && reachedOpponent) ||
-        effect.action === "close";
-
-    if (awardsSeal) {
+    if (reachedOpponent) {
         next.players[scoringPlayerId].seals += 1;
         addStep(
             steps,
@@ -476,13 +562,5 @@ export function resolveEncounter(
         return finish({ effect, steps, sealAwardedTo: scoringPlayerId });
     }
 
-    addStep(
-        steps,
-        "outcome",
-        "info",
-        "NO_SEAL",
-        "No seal was awarded this encounter."
-    );
-
-    return finish({ effect, steps });
+    return noSeal();
 }

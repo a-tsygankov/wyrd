@@ -26,7 +26,8 @@ function opponentOf(id: PlayerId): PlayerId {
 
 /** Would the defender's ward stop this spell? Mirrors the resolver's boundary rule. */
 function wardStops(spell: LegalSpell, defender: DuelState["players"][PlayerId]): boolean {
-    if (spell.action === "ward" || spell.target !== "enemy") return false;
+    if (spell.action !== "seek" && spell.action !== "bind") return false;
+    if (spell.target !== "enemy") return false;
     const ward = defender.ward;
     if (!ward) return false;
     return !ward.essence || !spell.essence || ward.essence === spell.essence;
@@ -39,14 +40,33 @@ export function scoreSpell(spell: LegalSpell, view: BotView): number {
 
     const scoring = (spell.action === "seek" || spell.action === "bind") && spell.target === "enemy";
     if (scoring) score += 6;
-    if (spell.action === "close") score += 5; // the GATE objective cannot be reflected or warded
+    // The gate objective cannot be reflected or warded, but it only scores
+    // in the direction it can move; broken, it needs MEND first.
+    if (spell.action === "close" || spell.action === "open") {
+        const gate = view.state.gate ?? "open";
+        const scores = gate === (spell.action === "close" ? "open" : "closed");
+        score += scores ? 5 : -6;
+    }
+    if (spell.action === "break") {
+        if (spell.target === "gate") score += view.state.gate === "broken" ? -6 : them.seals >= 2 ? 3 : 0.5; // deny the objective when they are close
+        else if (spell.target === "enemy") score += them.ward ? 4 : -5; // the anti-ward, pointless without a ward
+        else score -= 6;
+    }
+    if (spell.action === "mend") {
+        if (spell.target === "gate") score += view.state.gate === "broken" ? 3 : -6;
+        else if (spell.target === "self") {
+            const dented = me.ward !== undefined && view.state.rules.wardIntegrity > 0 && (me.ward.integrity ?? view.state.rules.wardIntegrity) < view.state.rules.wardIntegrity;
+            const hurt = view.state.rules.resolve > 0 && (me.resolve ?? view.state.rules.resolve) <= view.state.rules.resolve - 3;
+            score += dented || hurt ? 3.5 : -5;
+        } else score -= 6;
+    }
     if (wardStops(spell, them)) score -= 7; // walking into a ward is the one clear mistake
     if (spell.action === "ward") {
         // A ward is worth having once, mostly when the match is long enough
         // for it to matter; SELF wards only - warding the enemy helps them.
         score += me.ward ? -3 : spell.target === "self" ? 2.5 : -4;
     }
-    if (spell.target === "self" && spell.action !== "ward") score -= 5; // hits the caster, scores nothing
+    if (spell.target === "self" && spell.action !== "ward" && spell.action !== "mend") score -= 5; // hits the caster, scores nothing
     if (spell.amplified) score += 1.2; // reads as a threat in the telegraph
     if (spell.anchored && spell.target === "enemy") score += 1.5; // insures the route against REFLECT
     // Prefer spending less Focus for the same outcome, slightly - and more
@@ -78,8 +98,9 @@ export function scoreReactions(playerSpell: readonly string[], view: BotView): R
 
     const me = view.state.players[view.botId];
     const them = view.state.players[opponentOf(view.botId)];
-    const hostile = spell.target === "enemy" && spell.action !== "ward";
-    const scoresAgainstMe = hostile || spell.action === "close";
+    const hostile = spell.target === "enemy" && (spell.action === "seek" || spell.action === "bind" || spell.action === "break");
+    const gateScores = (spell.action === "close" && view.state.gate === "open") || (spell.action === "open" && view.state.gate === "closed");
+    const scoresAgainstMe = (hostile && spell.action !== "break") || gateScores;
     const alreadyWarded = hostile && wardStops(spell, me);
     const matchPoint = them.seals >= SEALS_TO_WIN - 1;
 

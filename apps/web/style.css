@@ -437,3 +437,8 @@ h2 {
     #stage.shake { animation: none; }
     .stage .mage .arm, .stage .mage .palm { transition: none; }
 }
+
+#stage-gate { transform-box: fill-box; transform-origin: center; }
+#stage-gate.broken rect:first-of-type { stroke-dasharray: 5 4; opacity: 0.45; }
+#stage-gate.broken circle { opacity: 0.15; }
+#stage-gate.closed circle { fill: #ffc457; opacity: 0.9; }

@@ -4,7 +4,8 @@ import { scenarios } from "../dist/packages/wyrd-content/src/scenarios.js";
 import { createInitialDuelState, resolveEncounter } from "../dist/packages/wyrd-resolver/src/index.js";
 import { parseSpell } from "../dist/packages/wyrd-grammar/src/parser.js";
 
-const TRAY = new Set(["FIRE", "SHADOW", "SELF", "ENEMY", "GATE", "SEEK", "BIND", "WARD", "CLOSE", "AMPLIFY", "ANCHOR"]);
+import { POC_TRAY } from "../dist/packages/wyrd-content/src/tray.js";
+const TRAY = new Set(POC_TRAY);
 
 function stateFor(scenario) {
     const state = createInitialDuelState();
@@ -25,7 +26,7 @@ test("the deck covers the POC-5 situations and is well-formed", () => {
     assert.ok(scenarios.length >= 6 && scenarios.length <= 10, `deck has ${scenarios.length} scenarios`);
     const ids = new Set(scenarios.map(s => s.id));
     assert.equal(ids.size, scenarios.length, "duplicate scenario id");
-    for (const want of ["direct-threat", "amplify-bluff", "reflect-opportunity", "anchor-route", "silence-modifier", "null-hard-counter", "ward-interaction"]) {
+    for (const want of ["direct-threat", "amplify-bluff", "reflect-opportunity", "anchor-route", "silence-modifier", "null-hard-counter", "ward-interaction", "shattered-gate"]) {
         assert.ok(ids.has(want), `missing scenario ${want}`);
     }
     for (const s of scenarios) {

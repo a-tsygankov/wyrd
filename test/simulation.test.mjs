@@ -8,7 +8,8 @@ import { parseSpell } from "../dist/packages/wyrd-grammar/src/parser.js";
 import { createInitialDuelState, resolveEncounter } from "../dist/packages/wyrd-resolver/src/index.js";
 
 // The same tray the web client exposes (POC glyph set).
-const TRAY = ["FIRE", "SHADOW", "SELF", "ENEMY", "GATE", "SEEK", "BIND", "WARD", "CLOSE", "AMPLIFY", "ANCHOR"];
+import { POC_TRAY } from "../dist/packages/wyrd-content/src/tray.js";
+const TRAY = [...POC_TRAY];
 
 test("rng is deterministic per seed and uniform-ish in [0,1)", () => {
     const a = createRng(42), b = createRng(42), c = createRng(43);
@@ -34,7 +35,7 @@ test("enumerateLegalSpells yields only spells the parser and resolver accept", (
             casterId: "opponent", defenderId: "player", spellTokens: spell.tokens
         });
         assert.ok(!result.steps.some(s => s.stage === "validation" && s.result === "failed"), spell.tokens.join(" "));
-        assert.ok(["seek", "bind", "ward", "close"].includes(spell.action));
+        assert.ok(["seek", "bind", "ward", "close", "open", "break", "mend"].includes(spell.action));
     }
     // The canonical POC spells are all in the pool.
     const keys = new Set(spells.map(s => s.tokens.join(" ")));

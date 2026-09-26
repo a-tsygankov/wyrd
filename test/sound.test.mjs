@@ -3,7 +3,7 @@ import test from "node:test";
 import { CUES, cueFor } from "../dist/apps/web/src/sound.js";
 
 test("every stage beat maps to a cue or silence, and every cue is a short synth note", () => {
-    const beats = ["cast", "fly", "reflect", "silence", "null", "ward-block", "ward-up", "bind", "gate-close", "hit", "seal", "fizzle"];
+    const beats = ["cast", "fly", "reflect", "silence", "null", "ward-block", "ward-up", "bind", "gate-close", "gate-open", "gate-break", "gate-mend", "ward-break", "mend", "hit", "seal", "fizzle"];
     for (const kind of beats) {
         const cue = cueFor({ kind, broken: true });
         if (cue !== null) {
