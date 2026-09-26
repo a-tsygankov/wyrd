@@ -18,10 +18,21 @@ test("a spell can be cast and scores a seal", async ({ page }) => {
     await expect(page.locator("#telegraph")).toHaveText("FIRE → SEEK → ?");
     await expect(page.locator("#scenario-note")).toContainText("Scenario 1/");
     const tray = page.locator("#glyph-tray");
-    for (const glyph of ["FIRE", "SEEK", "ENEMY"]) {
+    // Each glyph explains itself as it is added; the summary says what the cast will do.
+    await tray.getByRole("button", { name: "FIRE", exact: true }).click();
+    await expect(page.locator("#spell-explain li").first()).toContainText("Essence");
+    await expect(page.locator("#spell-explain .summary")).toContainText(/not yet castable/i);
+    for (const glyph of ["SEEK", "ENEMY"]) {
         await tray.getByRole("button", { name: glyph, exact: true }).click();
     }
     await expect(page.locator("#spell-preview")).toContainText("FIRE → SEEK → ENEMY");
+    await expect(page.locator("#spell-explain .summary").first()).toContainText(/seal to you/i);
+    await expect(page.locator("#spell-explain")).toContainText(/open to REFLECT/i);
+    // The reaction explanation follows the selection.
+    await expect(page.locator("#reaction-explain")).toContainText(/no reaction/i);
+    await page.locator('#reaction-tray [data-reaction="reflect"]').click();
+    await expect(page.locator("#reaction-explain")).toContainText(/REFLECT.*SEEK/);
+    await page.locator('#reaction-tray [data-reaction=""]').click();
     const cast = page.locator("#resolve-round");
     await expect(cast).toBeEnabled();
     await cast.click();
@@ -30,6 +41,9 @@ test("a spell can be cast and scores a seal", async ({ page }) => {
     await expect(page.locator("#player-seals")).toHaveText("1");
     await expect(page.locator("#combat-log li")).not.toHaveCount(1);
     await expect(page.locator("#combat-log .lesson")).toContainText("Lesson");
+    // Round verdict on top of the log: 1-1 in round 1 without a reaction.
+    await expect(page.locator("#combat-log .verdict").first()).toContainText(/even round/i);
+    await expect(page.locator("#combat-log .reason").first()).toContainText(/gained a seal/i);
     await expect(page.locator("#next-round")).toBeVisible();
 });
 
@@ -78,6 +92,8 @@ test("a full match through the scenario deck is won by reading the telegraph", a
     await expect(page.locator("#player-seals")).toHaveText("3");
     await expect(page.locator("#opponent-seals")).toHaveText("1");
     await expect(page.locator("#match-status")).toHaveText("You win the duel");
+    await expect(page.locator("#combat-log .verdict").first()).toContainText(/You win the duel 3–1/);
+    await expect(page.locator("#combat-log .verdict").first()).toContainText(/REFLECT/);
     await expect(page.locator("#next-round")).toBeHidden();
 
     // Reset with the same seed replays the same opening telegraph.
