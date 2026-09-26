@@ -1,0 +1,28 @@
+name = "wyrd-api"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Provisioned once with `scripts/setup-secrets.local.ps1 -Provision`
+# (or by hand: `wrangler d1 create wyrd-db`), then paste the printed
+# database_id below (done 2026-09-26). A placeholder is fine for `wrangler dev`, tests
+# and `--local` migrations (Miniflare never validates it); a remote
+# deploy refuses it.
+
+[[d1_databases]]
+binding = "DB"
+database_name = "wyrd-db"
+database_id = "68b495d9-ab5a-4a84-b996-702dc4c2de0e"
+migrations_dir = "migrations"
+
+[vars]
+# What `wrangler deploy` ships. Local dev overrides via .dev.vars
+# (gitignored - copy .dev.vars.example); tests pin their own value in
+# vitest.config.ts miniflare bindings.
+ENVIRONMENT = "production"
+# Secrets - none yet. When one is needed, add it to $WorkerSecrets in
+# scripts/setup-secrets.ps1 and set it with
+# `scripts/setup-secrets.local.ps1 -Cloudflare`.
+
+[observability]
+enabled = true

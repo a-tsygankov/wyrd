@@ -1,4 +1,27 @@
 #!/usr/bin/env python3
+"""Single source of truth for tier/versioning rules.
+
+Consumed by:
+  bump_versions.py       - pre-commit auto-bump (writes versions)
+  check_version_bump.py  - CI gate (verifies versions)
+
+Tiers and their version sources (all package.json `.version`):
+  grammar   packages/wyrd-grammar/package.json
+  content   packages/wyrd-content/package.json   (+ grammar)
+  resolver  packages/wyrd-resolver/package.json  (+ content, grammar)
+  duel-sim  apps/duel-sim/package.json           (+ resolver chain)
+  web       apps/web/package.json                (+ resolver chain)
+  worker    apps/api/package.json                (+ resolver chain)
+  schema    apps/api/migrations/   the numbered .sql filename IS the
+                                   version - no file to bump, so it has
+                                   no Tier entry; check_version_bump.py
+                                   special-cases it via SCHEMA_DIR.
+
+A change in a package cascades to everything bundled on top of it: the
+web client and the worker both ship the grammar/content/resolver
+sources, so a grammar edit bumps all six package tiers. Doc-only
+changes bump nothing.
+"""
 from __future__ import annotations
 import json, re
 from dataclasses import dataclass, field
@@ -6,6 +29,8 @@ from typing import Callable, Optional
 
 DOC_SUFFIXES = (".md", ".txt")
 DOC_PATHS = ("README.md", "AGENTS.md", "CLAUDE.md", "handoff.md", "docs/")
+
+SCHEMA_DIR = "apps/api/migrations/"
 
 def is_doc_file(path: str) -> bool:
     return path.endswith(DOC_SUFFIXES) or any(path == p or path.startswith(p) for p in DOC_PATHS)
@@ -27,6 +52,11 @@ def _duel_sim(p: str) -> bool:
 
 def _web(p: str) -> bool:
     return _resolver(p) or _source(p, "apps/web/")
+
+def _worker(p: str) -> bool:
+    # Migrations are the schema tier, not the worker: a new numbered
+    # .sql file is its own version bump and the worker code is untouched.
+    return _resolver(p) or (_source(p, "apps/api/") and not p.startswith(SCHEMA_DIR))
 
 def read_package_json_version(content: str) -> Optional[str]:
     try:
@@ -56,6 +86,7 @@ TIERS = [
     Tier("resolver", "packages/wyrd-resolver/package.json", read_package_json_version, write_package_json_version, _resolver),
     Tier("duel-sim", "apps/duel-sim/package.json", read_package_json_version, write_package_json_version, _duel_sim),
     Tier("web", "apps/web/package.json", read_package_json_version, write_package_json_version, _web),
+    Tier("worker", "apps/api/package.json", read_package_json_version, write_package_json_version, _worker),
 ]
 
 def bump_patch(v: str) -> str:

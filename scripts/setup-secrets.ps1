@@ -1,0 +1,188 @@
+#!/usr/bin/env pwsh
+<#
+.SYNOPSIS
+  One-stop secrets bootstrap for wyrd: GitHub Actions secrets (via
+  `gh`) + Cloudflare Worker secrets (via `wrangler`), plus one-time
+  D1 + Pages provisioning. Same model as gigsy and feedme2.
+
+.DESCRIPTION
+  1. COPY this file to scripts/setup-secrets.local.ps1 (gitignored).
+  2. Fill in the placeholder values in the FILL ME IN block below.
+     - Leave 'GENERATE' where present to have the script mint a
+       cryptographically random 32-byte base64 key.
+     - Anything still wrapped in <angle-brackets> is skipped with a
+       warning - optional secrets can stay as placeholders forever.
+  3. Run it:
+       ./scripts/setup-secrets.local.ps1 -Provision   # once: create D1 + Pages project
+       ./scripts/setup-secrets.local.ps1 -All         # GitHub + Worker secrets
+       ./scripts/setup-secrets.local.ps1 -GitHub      # only gh secret set
+       ./scripts/setup-secrets.local.ps1 -Cloudflare  # only wrangler secret put
+       ./scripts/setup-secrets.local.ps1 -All -DryRun # show plan, set nothing
+  4. NEVER commit a filled-in copy. Values are never echoed.
+
+  Prereqs: `gh auth login` done (for -GitHub); `wrangler login` or
+  CLOUDFLARE_API_TOKEN in the environment (for -Cloudflare/-Provision);
+  `pnpm install` done (wrangler runs via `pnpm exec` from apps/api/).
+
+.NOTES
+  Where each value comes from:
+    CLOUDFLARE_API_KEY     dash.cloudflare.com -> My Profile -> API Tokens ->
+                            Create Token -> scopes: Workers Scripts:Edit,
+                            D1:Edit, Cloudflare Pages:Edit (an API *token*,
+                            not the legacy global key). The gigsy/feedme2
+                            token works if it carries those scopes.
+    CLOUDFLARE_ACCOUNT_ID   dashboard sidebar (32-char hex); `wrangler whoami`
+#>
+[CmdletBinding()]
+param(
+    [switch]$GitHub,
+    [switch]$Cloudflare,
+    [switch]$All,
+    [switch]$Provision,
+    [switch]$DryRun,
+    # Owner/name; auto-detected from the git remote when omitted.
+    [string]$Repo = ''
+)
+$ErrorActionPreference = 'Stop'
+Set-Location (Join-Path $PSScriptRoot '..')
+
+# == FILL ME IN ======================================================
+# 'GENERATE'        -> script mints a random 32-byte base64 key.
+# '<placeholder>'   -> skipped with a warning (fine for optional ones).
+
+$GitHubSecrets = [ordered]@{
+    CLOUDFLARE_API_KEY    = '<cloudflare-api-token-workers+d1+pages-edit>'
+    CLOUDFLARE_ACCOUNT_ID = '<cloudflare-account-id-32-hex>'
+}
+
+# The worker has no secrets yet. When one is added (e.g. an auth signing
+# key for multiplayer), declare it here AND list it in the [vars]
+# comment of apps/api/wrangler.toml:
+#   AUTH_SECRET = 'GENERATE'
+$WorkerSecrets = [ordered]@{}
+# == END FILL ME IN ==================================================
+
+if ($All) { $GitHub = $true; $Cloudflare = $true }
+if (-not ($GitHub -or $Cloudflare -or $Provision)) {
+    Write-Host 'Usage: setup-secrets.ps1 [-GitHub] [-Cloudflare] [-All] [-Provision] [-DryRun]'
+    Write-Host 'See the comment header for the full walkthrough.'
+    exit 1
+}
+
+function Test-Placeholder([string]$Value) {
+    return $Value -match '^<.*>$' -or [string]::IsNullOrWhiteSpace($Value)
+}
+
+function New-RandomKey {
+    # GetBytes on an instance, not the static Fill(): Fill() is .NET
+    # Core only, so it throws MethodNotFound under Windows PowerShell
+    # 5.1 (.NET Framework). Create()+GetBytes() exists on both.
+    $bytes = [byte[]]::new(32)
+    $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    try { $rng.GetBytes($bytes) } finally { $rng.Dispose() }
+    return [Convert]::ToBase64String($bytes)
+}
+
+$script:setCount = 0
+$script:skipped = @()
+
+function Resolve-SecretValue([string]$Name, [string]$Value) {
+    if ($Value -ceq 'GENERATE') {
+        Write-Host "  $Name - generating random 32-byte key" -ForegroundColor DarkGray
+        return New-RandomKey
+    }
+    if (Test-Placeholder $Value) {
+        $script:skipped += $Name
+        Write-Warning "$Name still a placeholder - skipped"
+        return $null
+    }
+    if ($Value -imatch '^generate$') {
+        throw "${Name}: use exactly 'GENERATE' (case-sensitive) to mint a key"
+    }
+    if ($Value.Length -lt 16) {
+        throw "${Name}: value is shorter than 16 characters - refusing to set a weak secret"
+    }
+    return $Value
+}
+
+if ($Provision) {
+    Write-Host '-- provision (one-time) --' -ForegroundColor Cyan
+    if ($DryRun) {
+        Write-Host '  [dry-run] wrangler d1 create wyrd-db'
+        Write-Host '  [dry-run] (apps/web) wrangler pages project create wyrd-web --production-branch=main --force'
+    } else {
+        Push-Location apps/api
+        try {
+            pnpm exec wrangler d1 create wyrd-db
+            if ($LASTEXITCODE -ne 0) { throw 'wrangler d1 create wyrd-db failed (already exists? use `wrangler d1 list` for the id)' }
+        } finally { Pop-Location }
+        # From apps/web, not apps/api: wrangler >= 4.14x delegates `pages
+        # project create` to Pages-on-Workers and would read the worker's
+        # wrangler.toml as the project config (seen 2026-09-26: it tried to
+        # create a Worker script named wyrd-web with the api's D1 binding).
+        # --force keeps the classic Pages project that `pages deploy
+        # --project-name` in deploy.yml targets.
+        Push-Location apps/web
+        try {
+            pnpm exec wrangler pages project create wyrd-web --production-branch=main --force
+            if ($LASTEXITCODE -ne 0) { throw 'wrangler pages project create wyrd-web failed (already exists? use `wrangler pages project list` to check)' }
+        } finally { Pop-Location }
+        Write-Host ''
+        Write-Host 'NOW: paste the printed database_id into apps/api/wrangler.toml' -ForegroundColor Yellow
+    }
+}
+
+if ($GitHub) {
+    Write-Host '-- GitHub Actions secrets --' -ForegroundColor Cyan
+    if (-not $Repo) {
+        $originUrl = git remote get-url origin 2>$null
+        if ($originUrl -match 'github\.com[:/](.+?)(?:\.git)?$') { $Repo = $Matches[1] }
+    }
+    if (-not $Repo) { throw 'Could not detect the GitHub repo - pass -Repo owner/name.' }
+    gh auth status *> $null
+    if ($LASTEXITCODE -ne 0) { throw 'gh is not authenticated - run `gh auth login` first.' }
+    Write-Host "  repo: $Repo"
+
+    foreach ($name in $GitHubSecrets.Keys) {
+        $value = Resolve-SecretValue $name $GitHubSecrets[$name]
+        if ($null -eq $value) { continue }
+        if ($DryRun) {
+            Write-Host "  [dry-run] gh secret set $name -R $Repo  (value hidden, $($value.Length) chars)"
+        } else {
+            $value | gh secret set $name -R $Repo
+            if ($LASTEXITCODE -ne 0) { throw "gh secret set $name failed" }
+            Write-Host "  set $name" -ForegroundColor Green
+        }
+        $script:setCount++
+    }
+}
+
+if ($Cloudflare) {
+    Write-Host '-- Cloudflare Worker secrets (wyrd-api) --' -ForegroundColor Cyan
+    if ($WorkerSecrets.Count -eq 0) {
+        Write-Host '  no worker secrets declared yet - nothing to set'
+    }
+    Push-Location apps/api
+    try {
+        foreach ($name in $WorkerSecrets.Keys) {
+            $value = Resolve-SecretValue $name $WorkerSecrets[$name]
+            if ($null -eq $value) { continue }
+            if ($DryRun) {
+                Write-Host "  [dry-run] wrangler secret put $name  (value hidden, $($value.Length) chars)"
+            } else {
+                # wrangler reads the secret from stdin (trailing newline
+                # is trimmed) - the value never hits argv.
+                $value | pnpm exec wrangler secret put $name
+                if ($LASTEXITCODE -ne 0) { throw "wrangler secret put $name failed" }
+                Write-Host "  set $name" -ForegroundColor Green
+            }
+            $script:setCount++
+        }
+    } finally { Pop-Location }
+}
+
+Write-Host ''
+Write-Host "Done. $script:setCount secret(s) $(if ($DryRun) { 'planned' } else { 'set' })." -ForegroundColor Cyan
+if ($script:skipped.Count -gt 0) {
+    Write-Host "Skipped placeholders: $($script:skipped -join ', ')" -ForegroundColor Yellow
+}

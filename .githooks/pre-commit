@@ -1,5 +1,11 @@
 #!/bin/sh
-# Same model as feedme2: auto-bump staged tier versions locally; CI is the backstop.
+# Same model as gigsy/feedme2: auto-bump the package.json version of
+# every tier the staged diff touches (grammar, content, resolver,
+# duel-sim, web, worker - see scripts/version_rules.py). A new
+# migration file is the schema tier's own bump. Installed by
+# `pnpm install` via the root package.json "prepare" script:
+#   git config core.hooksPath .githooks
+# CI's version-check job is the backstop for commits made without hooks.
 PY=""
 for c in python3 python py; do
   if command -v "$c" >/dev/null 2>&1 && "$c" -c "pass" >/dev/null 2>&1; then
@@ -8,7 +14,7 @@ for c in python3 python py; do
   fi
 done
 if [ -z "$PY" ]; then
-  echo "pre-commit: no working python found — skipping auto version bump" >&2
+  echo "pre-commit: no working python found - skipping auto version bump" >&2
   echo "            (CI's version-check will still enforce bumps)" >&2
   exit 0
 fi

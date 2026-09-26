@@ -1,0 +1,209 @@
+name: Deploy
+
+# Same model as gigsy and feedme2: tests every tier a change touches,
+# then on push to main deploys the worker (D1 migrations + `wrangler
+# deploy`) and the web client (Cloudflare Pages). PRs get a per-branch
+# Pages preview plus a smoke check against it. workflow_dispatch is the
+# manual escape hatch: it tests and deploys everything regardless of
+# what changed (first deploy, or a previous deploy that failed midway).
+#
+# Required secrets (scripts/setup-secrets.local.ps1 -GitHub):
+#   CLOUDFLARE_API_KEY     - Cloudflare API *token* with Workers, D1 and
+#                            Pages edit scopes (mapped to CLOUDFLARE_API_TOKEN)
+#   CLOUDFLARE_ACCOUNT_ID  - 32-char hex from the dashboard sidebar
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      api: ${{ steps.filter.outputs.api }}
+      web: ${{ steps.filter.outputs.web }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          # packages/ is bundled into both the worker and the web client
+          # (see scripts/version_rules.py), so it counts for both.
+          filters: |
+            api:
+              - 'apps/api/**'
+              - 'packages/**'
+              - 'pnpm-lock.yaml'
+            web:
+              - 'apps/web/**'
+              - 'packages/**'
+              - 'scripts/build_web.mjs'
+              - 'tsconfig.json'
+              - 'pnpm-lock.yaml'
+
+  # Grammar/content/resolver packages, the node test suite and the
+  # version tooling. Cheap, so it always runs and gates every deploy.
+  core-test:
+    name: Core typecheck + test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # pnpm version comes from packageManager in root package.json;
+      # setting `version:` here would clash with it.
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: 'pnpm' }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - name: Version tooling tests
+        run: python3 -m unittest discover -s scripts -v
+
+  api-test:
+    name: Worker typecheck + test
+    needs: changes
+    if: needs.changes.outputs.api == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: 'pnpm' }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck:api
+      - run: pnpm test:api
+
+  api-deploy:
+    name: Worker deploy
+    needs: [changes, core-test, api-test]
+    # A custom if: replaces the implicit success() gate on needs, so the
+    # test results must be checked explicitly - otherwise a red test job
+    # still deploys.
+    if: |
+      needs.core-test.result == 'success' &&
+      needs.api-test.result == 'success' &&
+      ((github.event_name == 'push' && needs.changes.outputs.api == 'true') ||
+       github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: apps/api } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: 'pnpm' }
+      - run: pnpm install --frozen-lockfile
+        working-directory: .
+      # Wrangler tracks applied migrations in d1_migrations, so this is
+      # idempotent and safe to rerun.
+      - name: Apply D1 migrations
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_KEY }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm db:migrate:remote
+      - name: Deploy Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_KEY }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: apps/api
+          command: deploy
+
+  web-build:
+    name: Web typecheck + build
+    needs: changes
+    if: needs.changes.outputs.web == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: 'pnpm' }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck:web
+      - run: pnpm build:web
+
+  # PRs: deploy this branch to a Pages preview so the smoke check runs
+  # against the code under review. Fork PRs receive no secrets, so this
+  # fails rather than skips; single-maintainer repo, accepted.
+  web-preview-deploy:
+    name: Web preview deploy (PR)
+    needs: [changes, web-build]
+    if: github.event_name == 'pull_request' && needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      preview_url: ${{ steps.deploy.outputs.deployment-url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: 'pnpm' }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build:web
+      - name: Deploy to Pages (branch preview)
+        id: deploy
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_KEY }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: apps/web
+          command: pages deploy dist --project-name=wyrd-web --branch=${{ github.head_ref }} --commit-dirty=true
+
+  # No Playwright suite yet (the POC is a single static page), so the
+  # smoke check is curl: the page must serve, and the /api proxy must
+  # reach the production worker. The proxy check only warns until the
+  # worker's first deploy, otherwise every PR before it would be red.
+  web-smoke-preview:
+    name: Web smoke (preview)
+    needs: web-preview-deploy
+    runs-on: ubuntu-latest
+    env:
+      URL: ${{ needs.web-preview-deploy.outputs.preview_url }}
+    steps:
+      - name: Page serves
+        run: |
+          for _ in $(seq 1 12); do
+            if curl -sf "$URL" | grep -q "Wyrd Duel POC"; then echo "ok: $URL"; exit 0; fi
+            sleep 5
+          done
+          echo "::error::preview at $URL never served the page"; exit 1
+      - name: /api proxy reaches the worker
+        run: |
+          if curl -sf "$URL/api/health" | grep -q '"ok":true'; then
+            echo "ok: $URL/api/health"
+          else
+            echo "::warning::$URL/api/health did not answer - worker not deployed yet, or the proxy origin is wrong"
+          fi
+
+  web-deploy:
+    name: Web deploy
+    needs: [changes, core-test, web-build]
+    if: |
+      needs.core-test.result == 'success' &&
+      needs.web-build.result == 'success' &&
+      ((github.event_name == 'push' && needs.changes.outputs.web == 'true') ||
+       github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: 'pnpm' }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build:web
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_KEY }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: apps/web
+          command: pages deploy dist --project-name=wyrd-web --branch=main

@@ -1,6 +1,15 @@
 {
-  "name": "@wyrd/web",
-  "private": true,
-  "version": "0.0.1",
-  "type": "module"
+    "name": "@wyrd/web",
+    "private": true,
+    "version": "0.0.2",
+    "type": "module",
+    "scripts": {
+        "typecheck": "tsc -p tsconfig.functions.json",
+        "deploy": "wrangler pages deploy dist --project-name=wyrd-web --branch=main"
+    },
+    "devDependencies": {
+        "@cloudflare/workers-types": "^4.20250101.0",
+        "typescript": "^5.9.3",
+        "wrangler": "^4.0.0"
+    }
 }

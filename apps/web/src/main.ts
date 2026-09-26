@@ -306,4 +306,20 @@ if ("serviceWorker" in navigator) {
     });
 }
 
+// Tier versions in the footer. The web version is inlined at build time
+// (scripts/build_web.mjs); worker + schema come from the worker through
+// the Pages /api/* proxy. Offline, or before the worker's first deploy,
+// the web version alone is shown.
+type VersionResponse = { worker: { version: string }; schema: { version: string | null } };
+const versionLine = document.getElementById("version-line");
+if (versionLine) {
+    void fetch("./api/version", { headers: { accept: "application/json" } })
+        .then(response => (response.ok ? (response.json() as Promise<VersionResponse>) : Promise.reject(new Error(String(response.status)))))
+        .then(versions => {
+            versionLine.textContent =
+                `${versionLine.textContent} · worker v${versions.worker.version} · schema ${versions.schema.version ?? "none"}`;
+        })
+        .catch(() => undefined);
+}
+
 render();
