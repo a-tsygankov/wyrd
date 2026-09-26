@@ -99,6 +99,22 @@ const telegraphLabel = byId<HTMLElement>("telegraph-label");
 const reactionLabel = byId<HTMLElement>("reaction-label");
 const composerCard = document.querySelector<HTMLElement>(".composer")!;
 const spellExplain = byId<HTMLUListElement>("spell-explain");
+const glyphHelpDetails = byId<HTMLDetailsElement>("glyph-help");
+const glyphHelpToggle = byId<HTMLElement>("glyph-help-toggle");
+const glyphHelpList = byId<HTMLUListElement>("glyph-help-list");
+const GLYPH_HELP_OPEN_KEY = "wyrd.glyphHelp.open";
+try {
+    glyphHelpDetails.open = localStorage.getItem(GLYPH_HELP_OPEN_KEY) === "1";
+} catch {
+    // Private mode: starts collapsed, which is the default anyway.
+}
+glyphHelpDetails.addEventListener("toggle", () => {
+    try {
+        localStorage.setItem(GLYPH_HELP_OPEN_KEY, glyphHelpDetails.open ? "1" : "0");
+    } catch {
+        // Nothing to persist to; the choice lasts for this page load.
+    }
+});
 const reactionExplain = byId<HTMLElement>("reaction-explain");
 const reactionCard = document.querySelector<HTMLElement>(".reaction")!;
 
@@ -329,7 +345,12 @@ function renderValidation(): void {
     const explanation = composing
         ? explainSpell(playerSpell, state, names(), mode === "hotseat" && hotseat.phase === "p2-compose" ? "opponent" : "player")
         : { glyphs: [], summary: [] };
-    spellExplain.replaceChildren(
+    glyphHelpDetails.classList.toggle("hidden", explanation.glyphs.length === 0);
+    glyphHelpToggle.textContent =
+        explanation.glyphs.length === 1
+            ? `What ${explanation.glyphs[0]!.token} does`
+            : `What ${explanation.glyphs.map(g => g.token).join(", ")} do`;
+    glyphHelpList.replaceChildren(
         ...explanation.glyphs.map(glyph => {
             const li = document.createElement("li");
             const name = document.createElement("span");
@@ -337,7 +358,9 @@ function renderValidation(): void {
             name.textContent = glyph.token + " ";
             li.append(name, glyph.text);
             return li;
-        }),
+        })
+    );
+    spellExplain.replaceChildren(
         ...explanation.summary.map(line => {
             const li = document.createElement("li");
             li.className = "summary";

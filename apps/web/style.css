@@ -312,3 +312,27 @@ h2 {
 .combat-log .verdict { color: #f4f0ff; font-weight: 800; }
 .combat-log .reason { color: #d8d1e1; }
 .combat-log .reason + li:not(.reason) { margin-top: 10px; }
+
+.glyph-help { margin: 10px 0 0; }
+
+.glyph-help summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+    padding: 0 12px;
+    border: 1px solid rgba(169, 148, 232, 0.35);
+    border-radius: 12px;
+    color: #d8d1e1;
+    font-size: 0.82rem;
+    font-weight: 700;
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+}
+
+.glyph-help summary::-webkit-details-marker { display: none; }
+.glyph-help summary::before { content: "▸"; color: #a994e8; transition: transform 0.15s; }
+.glyph-help[open] summary::before { transform: rotate(90deg); }
+.glyph-help .explain-list { margin-top: 8px; }
+.summary-only { padding-left: 0; }
