@@ -174,6 +174,12 @@ export function explainSpell(
         );
     }
 
+    const gateWardBlock = plain.steps.find(s => s.code === "GATE_WARD_BLOCKED");
+    if (gateWardBlock) {
+        summary.push(cap(`${names.them}'s ward on the GATE turns this away. BREAK GATE shatters that ward first (no seal), then the gate is yours to move.`));
+        return { glyphs, summary };
+    }
+
     if (uncontested === "blocked") {
         const ward = state.players[defenderId].ward;
         const dent = plain.steps.find(s => s.code === "WARD_BROKEN" || s.code === "WARD_DENTED");

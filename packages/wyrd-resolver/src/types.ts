@@ -56,12 +56,20 @@ export const CLASSIC_RULES: RuleOptions = {
  */
 export type GateState = "open" | "closed" | "broken";
 
+/**
+ * A ward on the GATE (docs/balance-analysis.md fix 4): the owner's gate
+ * spells pass it, anyone else's are turned away until BREAK GATE shatters
+ * it. Integrity under rules.wardIntegrity, like a mage's ward.
+ */
+export type GateWard = { ownerId: PlayerId; integrity?: number };
+
 export type DuelState = {
     round: number;
     activePlayerId: PlayerId;
     players: Record<PlayerId, PlayerState>;
     rules: RuleOptions;
     gate: GateState;
+    gateWard?: GateWard;
 };
 
 export type ReactionGlyph = "null" | "reflect" | "silence";

@@ -28,6 +28,9 @@ export type Beat =
     | { kind: "gate-open" }
     | { kind: "gate-break" }
     | { kind: "gate-mend" }
+    | { kind: "gate-ward-up"; side: Side; integrity?: number }
+    | { kind: "gate-ward-block"; broken: boolean; integrity?: number }
+    | { kind: "gate-ward-break" }
     | { kind: "hit"; side: Side; magnitude: number; damage?: number; emphasis?: Emphasis }
     | { kind: "seal"; side: Side; emphasis?: Emphasis }
     | { kind: "fizzle"; side: Side; reason: string };
@@ -65,6 +68,9 @@ export const BEAT_MS: Record<Beat["kind"], number> = {
     "gate-open": 480,
     "gate-break": 480,
     "gate-mend": 480,
+    "gate-ward-up": 420,
+    "gate-ward-block": 360,
+    "gate-ward-break": 420,
     hit: 300,
     seal: 480,
     fizzle: 420
@@ -153,7 +159,7 @@ export function contributionBeats(c: Contribution): Beat[] {
         return beats;
     }
 
-    if (effect.action === "ward") {
+    if (effect.action === "ward" && effect.target !== "gate") {
         const owner: Side = effect.target === "enemy" ? c.defenderId : c.casterId;
         beats.push({
             kind: "ward-up",
@@ -165,6 +171,20 @@ export function contributionBeats(c: Contribution): Beat[] {
     }
 
     if (effect.target === "gate") {
+        if (codes.has("GATE_WARDED")) {
+            const integrity = integrityFrom(c.result.steps.find(s => s.code === "GATE_WARDED")?.text);
+            beats.push({ kind: "gate-ward-up", side: c.casterId, ...(integrity !== undefined ? { integrity } : {}) });
+            return beats;
+        }
+        if (codes.has("GATE_WARD_BLOCKED")) {
+            const integrity = integrityFrom(c.result.steps.find(s => s.code === "GATE_WARD_DENTED")?.text);
+            beats.push({ kind: "gate-ward-block", broken: codes.has("GATE_WARD_BROKEN"), ...(integrity !== undefined ? { integrity } : {}) });
+            return beats;
+        }
+        if (codes.has("GATE_WARD_BROKEN")) {
+            beats.push({ kind: "gate-ward-break" });
+            return beats;
+        }
         if (codes.has("GATE_CLOSED")) beats.push({ kind: "gate-close" });
         else if (codes.has("GATE_OPENED")) beats.push({ kind: "gate-open" });
         else if (codes.has("GATE_SHATTERED")) beats.push({ kind: "gate-break" });
@@ -277,6 +297,7 @@ export type StageState = {
     wards: Record<Side, { essence?: string; integrity?: number } | undefined>;
     bound: Record<Side, boolean>;
     gate: GateState;
+    gateWard?: { ownerId: Side; integrity?: number } | undefined;
 };
 
 export type StageHooks = {
@@ -311,6 +332,7 @@ export function createStage(root: SVGSVGElement, hooks: StageHooks = {}, motion:
     const trail = q<SVGLineElement>("#stage-trail");
     const gate = q<SVGGElement>("#stage-gate");
     const gateDoor = q<SVGRectElement>("#stage-gate-door");
+    const gateWard = q<SVGPolygonElement>("#stage-ward-gate");
     const orb = q<SVGCircleElement>("#stage-orb");
     const flash = q<SVGRectElement>("#stage-flash");
     const caption = q<SVGTextElement>("#stage-caption");
@@ -380,6 +402,20 @@ export function createStage(root: SVGSVGElement, hooks: StageHooks = {}, motion:
         el.classList.toggle("cracked", w.integrity === 1);
     }
 
+    function drawGateWard(w: StageState["gateWard"]): void {
+        if (!w) {
+            gateWard.setAttribute("opacity", "0");
+            gateWard.classList.remove("cracked");
+            return;
+        }
+        gateWard.setAttribute("opacity", "1");
+        // The owner's colour: the player's violet or the opponent's ember.
+        const color = w.ownerId === "player" ? "#ad63ff" : "#ff7a3d";
+        gateWard.setAttribute("stroke", color);
+        gateWard.setAttribute("fill", color);
+        gateWard.classList.toggle("cracked", w.integrity === 1);
+    }
+
     function drawGate(state: GateState): void {
         gate.classList.toggle("closed", state === "closed");
         gate.classList.toggle("broken", state === "broken");
@@ -393,6 +429,7 @@ export function createStage(root: SVGSVGElement, hooks: StageHooks = {}, motion:
             mage[side].classList.remove("hit", "casting", "faltering");
         }
         drawGate(state.gate);
+        drawGateWard(state.gateWard);
         bolt.setAttribute("opacity", "0");
         trail.setAttribute("opacity", "0");
         orb.setAttribute("opacity", "0");
@@ -542,6 +579,29 @@ export function createStage(root: SVGSVGElement, hooks: StageHooks = {}, motion:
                 await animate(gate, [{ transform: "rotate(0)" }, { transform: "rotate(-4deg) scale(1.05)" }, { transform: "rotate(3deg)" }, { transform: "rotate(0)" }], BEAT_MS["gate-break"]);
                 drawGate("broken");
                 await shake();
+                return;
+            }
+            case "gate-ward-up": {
+                say("GATE WARDED");
+                drawGateWard({ ownerId: beat.side, ...(beat.integrity !== undefined ? { integrity: beat.integrity } : {}) });
+                await animate(gateWard, [{ opacity: 0, transform: "scale(0.4)" }, { opacity: 1, transform: "scale(1)" }], BEAT_MS["gate-ward-up"]);
+                return;
+            }
+            case "gate-ward-block": {
+                say(beat.broken ? "GATE WARD SHATTERS" : "GATE WARD HOLDS");
+                if (beat.broken) {
+                    await animate(gateWard, [{ opacity: 1, transform: "scale(1)" }, { opacity: 0, transform: "scale(1.5) rotate(12deg)" }], BEAT_MS["gate-ward-block"]);
+                    drawGateWard(undefined);
+                } else {
+                    await animate(gateWard, [{ opacity: 1 }, { opacity: 0.35 }, { opacity: 1 }], BEAT_MS["gate-ward-block"]);
+                    if (state.gateWard) drawGateWard({ ...state.gateWard, ...(beat.integrity !== undefined ? { integrity: beat.integrity } : {}) });
+                }
+                return;
+            }
+            case "gate-ward-break": {
+                say("GATE WARD BROKEN");
+                await animate(gateWard, [{ opacity: 1, transform: "scale(1)" }, { opacity: 0, transform: "scale(1.6) rotate(-14deg)" }], BEAT_MS["gate-ward-break"]);
+                drawGateWard(undefined);
                 return;
             }
             case "gate-mend": {

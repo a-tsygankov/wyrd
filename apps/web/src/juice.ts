@@ -20,7 +20,10 @@ export function traumaFor(beat: Beat): number {
         case "ward-block":
             return beat.broken ? 0.6 : 0.2;
         case "ward-break":
+        case "gate-ward-break":
             return 0.6;
+        case "gate-ward-block":
+            return beat.broken ? 0.6 : 0.2;
         case "gate-break":
             return 0.5;
         case "gate-close":

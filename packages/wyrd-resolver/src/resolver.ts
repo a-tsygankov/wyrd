@@ -190,6 +190,51 @@ function applyBranch(effect: ResolvedEffect, e: Encounter): PlayerId | undefined
             addStep(steps, "effect", "failed", "GATE_CONTESTED", "Both mages reached for the GATE at once; it shudders and holds.");
             return undefined;
         }
+        // --- The gate ward (fix 4): raised by WARD, it turns the other mage's
+        // gate spells away until their BREAK shatters it; the owner passes.
+        if (effect.action === "ward") {
+            const integrity = rules.wardIntegrity > 0 ? rules.wardIntegrity : undefined;
+            next.gateWard = { ownerId: e.casterId, ...(integrity !== undefined ? { integrity } : {}) };
+            addStep(
+                steps,
+                "effect",
+                "applied",
+                "GATE_WARDED",
+                `A WARD stands on the GATE: only ${e.casterId}'s gate spells pass it.` + (integrity !== undefined ? ` Integrity ${integrity}.` : "")
+            );
+            return undefined;
+        }
+        const gateWard = next.gateWard;
+        if (gateWard && gateWard.ownerId !== e.casterId) {
+            if (effect.action === "break") {
+                delete next.gateWard;
+                addStep(steps, "effect", "applied", "GATE_WARD_BROKEN", "BREAK shattered the WARD on the GATE; the gate itself stands.");
+                return undefined;
+            }
+            addStep(steps, "boundary", "blocked", "GATE_WARD_BLOCKED", `The GATE's WARD (${gateWard.ownerId}'s) turned the ${effect.action.toUpperCase()} away.`);
+            if (rules.wardIntegrity > 0 && effect.magnitude > 0) {
+                const remaining = (gateWard.integrity ?? rules.wardIntegrity) - effect.magnitude;
+                if (remaining <= 0) {
+                    delete next.gateWard;
+                    addStep(steps, "boundary", "applied", "GATE_WARD_BROKEN", "The GATE's WARD shattered under the blow; it is gone.");
+                } else {
+                    gateWard.integrity = remaining;
+                    addStep(steps, "boundary", "info", "GATE_WARD_DENTED", `The GATE's WARD held but is dented: integrity ${remaining}.`);
+                }
+            }
+            return undefined;
+        }
+        if (
+            effect.action === "mend" &&
+            gateWard &&
+            gateWard.ownerId === e.casterId &&
+            rules.wardIntegrity > 0 &&
+            (gateWard.integrity ?? rules.wardIntegrity) < rules.wardIntegrity
+        ) {
+            gateWard.integrity = rules.wardIntegrity;
+            addStep(steps, "effect", "applied", "GATE_WARD_MENDED", `MEND restored the GATE's WARD to integrity ${rules.wardIntegrity}.`);
+            if (next.gate !== "broken") return undefined;
+        }
         switch (effect.action) {
             case "close":
             case "open": {
@@ -439,6 +484,12 @@ export function resolveEncounter(
                 ? `${reaction.toUpperCase()} is a reaction: choose it in the reaction row, it is not cast as a spell.`
                 : "The POC resolver requires a supported base action."
         );
+        return { state: next, steps };
+    }
+
+    // A ward on the gate filters nothing: gate spells carry no essence.
+    if (flat.action === "ward" && flat.target === "gate" && flat.essence) {
+        addStep(steps, "validation", "failed", "GATE_WARD_NO_ESSENCE", "A WARD on the GATE takes no essence: gate spells carry none, so there is nothing to filter.");
         return { state: next, steps };
     }
 
