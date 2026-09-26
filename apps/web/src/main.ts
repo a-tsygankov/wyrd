@@ -48,6 +48,7 @@ import { buildTimeline, createStage, type StageState } from "./stage.js";
 import { hiddenCount, revealSchedule, revealedSlots, scrySlot, type Reveal } from "./reveal.js";
 import { createSound, cueFor, extraCueFor, urgencyCue } from "./sound.js";
 import { focusMeter } from "./meter.js";
+import { GLOSSARY_GROUPS, glossaryFor } from "../../../packages/wyrd-content/src/glossary.js";
 import { glyphRegistryByDisplayName } from "../../../packages/wyrd-content/src/glyphs.js";
 import {
     REACTION_COSTS,
@@ -118,6 +119,11 @@ const settingsAnimations = byId<HTMLInputElement>("settings-animations");
 const settingsSound = byId<HTMLInputElement>("settings-sound");
 const settingsTelemetry = byId<HTMLInputElement>("settings-telemetry");
 const statsToggle = byId<HTMLButtonElement>("stats-toggle");
+const helpToggle = byId<HTMLButtonElement>("help-toggle");
+const helpPanel = byId<HTMLElement>("help");
+const helpRules = byId<HTMLElement>("help-rules");
+const helpNav = byId<HTMLElement>("help-nav");
+const helpBody = byId<HTMLElement>("help-body");
 const statsPanel = byId<HTMLElement>("stats");
 const statsLocal = byId<HTMLElement>("stats-local");
 const statsGlobal = byId<HTMLElement>("stats-global");
@@ -1356,6 +1362,56 @@ statsToggle.addEventListener("click", () => {
     }
 });
 byId<HTMLButtonElement>("stats-close").addEventListener("click", () => statsPanel.classList.add("hidden"));
+
+// --- Help: the glossary, grouped, under the ruleset in force.
+function renderHelp(): void {
+    helpRules.textContent = `Explained for the ${ruleset.title} rules. Change the ruleset in Settings and this text follows.`;
+    const entries = glossaryFor(state.rules);
+    helpNav.replaceChildren(
+        ...GLOSSARY_GROUPS.map(group => {
+            const a = document.createElement("a");
+            a.href = `#help-${group.id}`;
+            a.textContent = group.title;
+            return a;
+        })
+    );
+    helpBody.replaceChildren(
+        ...GLOSSARY_GROUPS.map(group => {
+            const section = document.createElement("section");
+            section.className = "help-group";
+            section.id = `help-${group.id}`;
+            const h3 = document.createElement("h3");
+            h3.textContent = group.title;
+            const intro = document.createElement("p");
+            intro.className = "intro";
+            intro.textContent = group.intro;
+            const list = document.createElement("ul");
+            list.className = "help-list";
+            for (const entry of entries.filter(e => e.group === group.id)) {
+                const li = document.createElement("li");
+                if (entry.pending) li.classList.add("pending");
+                const term = document.createElement("span");
+                term.className = group.id === "glyphs" || group.id === "reactions" ? "chip help-term" : "help-term";
+                if (entry.kind) term.dataset.kind = entry.kind;
+                term.textContent = entry.term;
+                const text = document.createElement("span");
+                text.textContent = entry.text;
+                li.append(term, text);
+                list.append(li);
+            }
+            section.append(h3, intro, list);
+            return section;
+        })
+    );
+}
+helpToggle.addEventListener("click", () => {
+    const open = helpPanel.classList.contains("hidden");
+    if (open) renderHelp();
+    helpPanel.classList.toggle("hidden", !open);
+    log.info(`help ${open ? "opened" : "closed"}`);
+    if (open) helpPanel.scrollIntoView({ block: "start", behavior: "smooth" });
+});
+byId<HTMLButtonElement>("help-close").addEventListener("click", () => helpPanel.classList.add("hidden"));
 
 if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
