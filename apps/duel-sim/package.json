@@ -1,1 +1,6 @@
-{"name":"@wyrd/duel-sim","private":true,"version":"0.0.1","type":"module"}
+{
+  "name": "@wyrd/duel-sim",
+  "private": true,
+  "version": "0.0.2",
+  "type": "module"
+}
