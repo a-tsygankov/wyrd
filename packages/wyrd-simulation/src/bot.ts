@@ -42,6 +42,13 @@ export type Personality = {
     temperature: number;
     /** Softmax temperature for reactions. */
     reactionTemperature: number;
+    /**
+     * Share of reaction choices drawn uniformly from the sensible options
+     * instead of the table, so the best answer is never a certainty a player
+     * can farm (always ANCHOR against a bot that always REFLECTs). Reactions
+     * the resolver probe marks as self-harming are never drawn.
+     */
+    unpredictability: number;
     /** Relative odds of each round plan. */
     planWeights: Record<Plan, number>;
     /** Extra reaction scores. */
@@ -55,6 +62,7 @@ export const PERSONALITIES: readonly Personality[] = [
         blurb: "Plays the table straight: scores when it can, wards when it must.",
         temperature: 1.5,
         reactionTemperature: 1.2,
+        unpredictability: 0.15,
         planWeights: { strike: 3, shield: 1.5, gate: 2, trick: 1.5, probe: 1 },
         reactionBias: {}
     },
@@ -62,8 +70,9 @@ export const PERSONALITIES: readonly Personality[] = [
         id: "aggressor",
         title: "the Aggressor",
         blurb: "Hits every round, amplified when it can; saves its Focus for its own spell rather than answers.",
-        temperature: 1.4,
+        temperature: 1.8,
         reactionTemperature: 1.2,
+        unpredictability: 0.15,
         planWeights: { strike: 5, shield: 0.5, gate: 1.5, trick: 1, probe: 0.5 },
         reactionBias: { none: 1.5, null: -1, reflect: -0.5, silence: -1 }
     },
@@ -73,6 +82,7 @@ export const PERSONALITIES: readonly Personality[] = [
         blurb: "Wards first, mends what dents, breaks yours; answers with SILENCE and REFLECT.",
         temperature: 1.5,
         reactionTemperature: 1.1,
+        unpredictability: 0.2,
         planWeights: { strike: 1.5, shield: 4, gate: 1.5, trick: 0.5, probe: 1 },
         reactionBias: { none: -1, reflect: 1, silence: 1.5 }
     },
@@ -82,6 +92,7 @@ export const PERSONALITIES: readonly Personality[] = [
         blurb: "REVERSEs gates, SPLITs bolts, bluffs with AMPLIFY; its reactions are hard to read.",
         temperature: 2.2,
         reactionTemperature: 2.5,
+        unpredictability: 0.3,
         planWeights: { strike: 1.5, shield: 1, gate: 1.5, trick: 4, probe: 1.5 },
         reactionBias: { silence: 0.5 }
     },
@@ -91,6 +102,7 @@ export const PERSONALITIES: readonly Personality[] = [
         blurb: "Fights over the GATE: closes, opens, shatters and mends it; NULLs a gate spell that would score.",
         temperature: 1.5,
         reactionTemperature: 1.2,
+        unpredictability: 0.12,
         planWeights: { strike: 1.5, shield: 1, gate: 5, trick: 1, probe: 0.5 },
         reactionBias: {}
     }
@@ -350,12 +362,20 @@ export function reactionProbabilities(playerSpell: readonly string[], view: BotV
     const focus = view.state.players[view.botId].focus;
     const affordable = (c: ReactionChoice): boolean =>
         c === "none" || !view.state.rules?.reactionCosts || REACTION_COSTS[c] <= focus;
-    const temperature = (view.personality ?? BALANCED).reactionTemperature;
-    const weights = REACTION_CHOICES.map(c => (affordable(c) ? Math.exp(scores[c] / temperature) : 0));
+    const personality = view.personality ?? BALANCED;
+    // A reaction the resolver probe marked self-harming (score -5) is never chosen at all.
+    const weights = REACTION_CHOICES.map(c => (affordable(c) && scores[c] > -4 ? Math.exp(scores[c] / personality.reactionTemperature) : 0));
     const total = weights.reduce((a, b) => a + b, 0);
+    // The sensible options: affordable and not marked self-harming by the
+    // resolver probe (score -5). A slice of the choice is spread evenly over
+    // them so no single answer becomes a certainty.
+    const sensible = REACTION_CHOICES.filter((c, i) => (weights[i] as number) > 0 && scores[c] > -4);
+    const epsilon = sensible.length > 1 ? personality.unpredictability : 0;
     const out = { none: 0, null: 0, reflect: 0, silence: 0 };
     REACTION_CHOICES.forEach((c, i) => {
-        out[c] = (weights[i] as number) / total;
+        const table = (weights[i] as number) / total;
+        const uniform = sensible.includes(c) ? 1 / sensible.length : 0;
+        out[c] = (1 - epsilon) * table + epsilon * uniform;
     });
     return out;
 }
