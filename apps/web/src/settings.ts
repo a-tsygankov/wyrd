@@ -10,9 +10,11 @@ export type Settings = {
     ruleset: RulesetId;
     timers: boolean;
     telemetry: boolean;
+    /** Show glyph help expanded instead of behind the tap-to-expand row. */
+    glyphHelpOpen: boolean;
 };
 
-export const DEFAULT_SETTINGS: Settings = { ruleset: "classic", timers: true, telemetry: true };
+export const DEFAULT_SETTINGS: Settings = { ruleset: "classic", timers: true, telemetry: true, glyphHelpOpen: false };
 
 type StorageLike = { getItem(key: string): string | null; setItem(key: string, value: string): void };
 
@@ -37,6 +39,7 @@ export function loadSettings(storage: StorageLike, params: URLSearchParams): Set
             if (isRuleset(saved.ruleset)) settings.ruleset = saved.ruleset;
             if (typeof saved.timers === "boolean") settings.timers = saved.timers;
             if (typeof saved.telemetry === "boolean") settings.telemetry = saved.telemetry;
+            if (typeof saved.glyphHelpOpen === "boolean") settings.glyphHelpOpen = saved.glyphHelpOpen;
         }
     } catch {
         // Unreadable storage or corrupt JSON: defaults.

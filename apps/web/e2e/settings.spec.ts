@@ -9,6 +9,11 @@ test("the settings panel switches rulesets and the Focus budget follows", async 
     await expect(page.locator("#settings")).toBeVisible();
     await expect(page.locator("#settings-rules .settings-option")).toHaveCount(4);
     await expect(page.locator("#settings-rules .settings-option.selected")).toContainText("Classic");
+    // Separate groups: Rules, Tempo, Privacy, Help; tempo is disabled for a ruleset without timers.
+    await expect(page.locator("#settings .settings-group")).toHaveCount(4);
+    await expect(page.locator("#settings-rules .settings-option.selected li")).not.toHaveCount(0);
+    await expect(page.locator("#settings-timers")).toBeDisabled();
+    await expect(page.locator("#settings-timers-note")).toContainText("Classic has no timers");
 
     // Teeth: reactions cost Focus from the same 7 you compose with.
     await page.locator('#settings-rules input[value="teeth"]').check();
@@ -16,6 +21,18 @@ test("the settings panel switches rulesets and the Focus budget follows", async 
     await expect(page.locator("#scenario-note")).toContainText("Teeth");
     await expect(page.locator('#reaction-tray [data-reaction="null"]')).toContainText("NULL · 3");
     await expect(page.locator('#reaction-tray [data-reaction="reflect"]')).toContainText("REFLECT · 2");
+    await expect(page.locator("#settings-timers")).toBeDisabled();
+    await page.locator('#settings-rules input[value="pulse"]').check();
+    await expect(page.locator("#settings-timers")).toBeEnabled();
+    await page.locator('#settings-rules input[value="teeth"]').check();
+    // Rule-aware explanations: the reaction text prices REFLECT, the glyph help knows wards shatter.
+    await page.locator('#reaction-tray [data-reaction="reflect"]').click();
+    await expect(page.locator("#reaction-explain")).toContainText("Costs 2 of your Focus");
+    await page.locator('#reaction-tray [data-reaction=""]').click();
+    await page.locator("#glyph-tray").getByRole("button", { name: "WARD", exact: true }).click();
+    await page.locator("#glyph-help-toggle").click();
+    await expect(page.locator("#glyph-help-list")).toContainText("Integrity 2");
+    await page.locator("#clear-spell").click();
 
     const tray = page.locator("#glyph-tray");
     for (const glyph of ["FIRE", "SEEK", "ENEMY", "ANCHOR"]) await tray.getByRole("button", { name: glyph, exact: true }).click();
@@ -33,6 +50,8 @@ test("the settings panel switches rulesets and the Focus budget follows", async 
     // strips nothing), our anchored SEEK lands.
     await expect(page.locator("#player-seals")).toHaveText("1");
     await expect(page.locator("#combat-log")).toContainText("SILENCE cost 1 Focus");
+    // The lesson lines are resolved under Teeth too (REFLECT still returns the seal).
+    await expect(page.locator("#combat-log .lesson-option", { hasText: "REFLECT" })).toContainText("seal to you");
 
     // The choice persists across a reload.
     await page.reload();
@@ -51,6 +70,8 @@ test("the Resolve ruleset shows resolve bars and SEEK drains them", async ({ pag
     await expect(page.locator("#player-resolve .resolve-text")).toHaveText("Resolve 9");
     await expect(page.locator("#opponent-resolve .resolve-text")).toHaveText("Resolve 9");
     await expect(page.locator("#combat-log")).toContainText("resolve drops by 1");
+    // Lessons under Resolve mention the damage.
+    await expect(page.locator("#combat-log .lesson-option", { hasText: "No reaction" })).toContainText(/resolve drops/i);
 });
 
 test("timers are off in the teaching deck and on for the bot when the ruleset has them", async ({ page }) => {

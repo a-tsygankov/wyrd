@@ -1,5 +1,5 @@
 import { rulesets, type Ruleset, type RulesetId } from "../../../packages/wyrd-content/src/rulesets.js";
-import { scenarios, type Scenario, type ScenarioOutcome } from "../../../packages/wyrd-content/src/scenarios.js";
+import { scenarios, type Scenario } from "../../../packages/wyrd-content/src/scenarios.js";
 import { parseSpell } from "../../../packages/wyrd-grammar/src/parser.js";
 import {
     adviseReaction,
@@ -13,6 +13,7 @@ import {
     explainRound,
     explainSpell,
     fixedReactionModel,
+    lessonOutcomes,
     formatTelegraph,
     projectTelegraph,
     reactionProbabilities,
@@ -111,6 +112,8 @@ const settingsToggle = byId<HTMLButtonElement>("settings-toggle");
 const settingsPanel = byId<HTMLElement>("settings");
 const settingsRules = byId<HTMLElement>("settings-rules");
 const settingsTimers = byId<HTMLInputElement>("settings-timers");
+const settingsTimersNote = byId<HTMLElement>("settings-timers-note");
+const settingsHelp = byId<HTMLInputElement>("settings-help");
 const settingsTelemetry = byId<HTMLInputElement>("settings-telemetry");
 const statsToggle = byId<HTMLButtonElement>("stats-toggle");
 const statsPanel = byId<HTMLElement>("stats");
@@ -147,19 +150,6 @@ const spellExplain = byId<HTMLUListElement>("spell-explain");
 const glyphHelpDetails = byId<HTMLDetailsElement>("glyph-help");
 const glyphHelpToggle = byId<HTMLElement>("glyph-help-toggle");
 const glyphHelpList = byId<HTMLUListElement>("glyph-help-list");
-const GLYPH_HELP_OPEN_KEY = "wyrd.glyphHelp.open";
-try {
-    glyphHelpDetails.open = localStorage.getItem(GLYPH_HELP_OPEN_KEY) === "1";
-} catch {
-    // Private mode: starts collapsed, which is the default anyway.
-}
-glyphHelpDetails.addEventListener("toggle", () => {
-    try {
-        localStorage.setItem(GLYPH_HELP_OPEN_KEY, glyphHelpDetails.open ? "1" : "0");
-    } catch {
-        // Nothing to persist to; the choice lasts for this page load.
-    }
-});
 const reactionExplain = byId<HTMLElement>("reaction-explain");
 const reactionCard = document.querySelector<HTMLElement>(".reaction")!;
 
@@ -182,6 +172,13 @@ function names(): { you: string; them: string } {
 let settings: Settings = loadSettings(deviceStorage, new URLSearchParams(location.search));
 let ruleset: Ruleset = rulesets[settings.ruleset];
 let stats: Stats = loadStats(deviceStorage);
+glyphHelpDetails.open = settings.glyphHelpOpen;
+glyphHelpDetails.addEventListener("toggle", () => {
+    if (settings.glyphHelpOpen !== glyphHelpDetails.open) {
+        settings = { ...settings, glyphHelpOpen: glyphHelpDetails.open };
+        saveSettings(deviceStorage, settings);
+    }
+});
 
 let state: DuelState = createInitialDuelState(ruleset.rules);
 let playerSpell: string[] = [];
@@ -327,24 +324,18 @@ function formatSpell(tokens: string[]): string {
     return tokens.length > 0 ? tokens.join(" → ") : "Choose glyphs";
 }
 
-const OUTCOME_TEXT: Record<ScenarioOutcome, string> = {
-    "player-seal": "seal to you",
-    "opponent-seal": "seal to the opponent",
-    blocked: "blocked by the ward",
-    canceled: "canceled",
-    "no-seal": "no seal"
-};
-
-function appendLesson(scenario: Scenario): void {
+function appendLesson(scenario: Scenario, roundStart: DuelState): void {
     const heading = document.createElement("li");
     heading.className = "lesson";
     heading.textContent = "Lesson — " + scenario.title + ": " + scenario.lesson;
     combatLog.append(heading);
-    for (const response of scenario.responses) {
+    // The documented responses are re-resolved against this round's opening
+    // state under the ruleset in force, so the lines never promise what
+    // Teeth or Resolve would not do.
+    for (const line of lessonOutcomes(scenario, roundStart, names())) {
         const li = document.createElement("li");
         li.className = "lesson-option";
-        const what = response.spell ? "Cast " + response.spell.join(" ") : response.label;
-        li.textContent = what + " → " + OUTCOME_TEXT[response.expect];
+        li.textContent = line.text;
         combatLog.append(li);
     }
 }
@@ -381,7 +372,14 @@ function renderReactionButtons(): void {
         element.textContent = cost > 0 ? `${label} · ${cost}` : label;
     }
     const slots = mode === "hotseat" && hotseat.phase === "p2-react" ? p1Telegraph : plan.telegraph;
-    reactionExplain.textContent = roundResolved || slots.length === 0 ? "" : explainReaction(selectedReaction, slots);
+    const reactor: PlayerId = mode === "hotseat" && hotseat.phase === "p2-react" ? "opponent" : "player";
+    const focusLeft = state.rules.reactionCosts
+        ? reactor === "opponent"
+            ? state.players.opponent.focus - spellFocusCost(state, "opponent", parseSpell(plan.opponentSpell).focusCost)
+            : state.players.player.focus
+        : undefined;
+    reactionExplain.textContent =
+        roundResolved || slots.length === 0 ? "" : explainReaction(selectedReaction, slots, state.rules, focusLeft);
 }
 
 /** Whose Focus pays for the spell being composed. */
@@ -683,6 +681,7 @@ function resolveRound(): void {
 
     combatLog.replaceChildren();
     const committedAt = performance.now();
+    const roundStart = state;
     const sealsBefore = { player: state.players.player.seals, opponent: state.players.opponent.seals };
 
     const opponentSpell = plan.opponentSpell;
@@ -750,7 +749,7 @@ function resolveRound(): void {
     }
 
     if (plan.scenario) {
-        appendLesson(plan.scenario);
+        appendLesson(plan.scenario, roundStart);
     }
     roundResolved = true;
     log.info(`round ${state.round} resolved`, {
@@ -1003,16 +1002,26 @@ function renderSettings(): void {
             input.checked = option.id === settings.ruleset;
             input.addEventListener("change", () => applyRuleset(option.id));
             const title = document.createElement("strong");
-            title.textContent = option.title + (option.timers ? " · timers" : "");
-            const summary = document.createElement("span");
-            summary.className = "settings-summary";
-            summary.textContent = option.summary;
-            label.append(input, title, summary);
+            title.textContent = option.title;
+            const changes = document.createElement("ul");
+            for (const change of option.changes) {
+                const li = document.createElement("li");
+                li.textContent = change;
+                changes.append(li);
+            }
+            label.append(input, title, changes);
             return label;
         })
     );
     settingsTimers.checked = settings.timers;
+    // Tempo only exists in Pulse and Resolve; say so instead of offering a switch that does nothing.
+    settingsTimers.disabled = !ruleset.timers;
+    settingsTimers.closest("label")?.classList.toggle("disabled", !ruleset.timers);
+    settingsTimersNote.textContent = ruleset.timers
+        ? "8-second reaction window and 5-second quick cast, against the bot after the teaching deck and in hot-seat turns."
+        : `${ruleset.title} has no timers. Pick Pulse or Resolve to use them.`;
     settingsTelemetry.checked = settings.telemetry;
+    settingsHelp.checked = settings.glyphHelpOpen;
 }
 
 function applyRuleset(id: RulesetId): void {
@@ -1044,6 +1053,11 @@ settingsTelemetry.addEventListener("change", () => {
     settings = { ...settings, telemetry: settingsTelemetry.checked };
     saveSettings(deviceStorage, settings);
     log.info(`telemetry: ${settings.telemetry ? "on" : "off"}`);
+});
+settingsHelp.addEventListener("change", () => {
+    settings = { ...settings, glyphHelpOpen: settingsHelp.checked };
+    saveSettings(deviceStorage, settings);
+    glyphHelpDetails.open = settings.glyphHelpOpen;
 });
 
 // --- Stats panel: this device (local storage) and everyone (worker summary).

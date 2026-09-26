@@ -51,18 +51,20 @@ self.addEventListener("fetch", event => {
         return;
     }
 
-    // Everything else (scripts, styles, manifest): cache first, fill on miss.
+    // Everything else (scripts, styles, manifest, icons): network first with
+    // the cache as the offline fallback. Cache-first paired a fresh
+    // index.html with a stale style.css right after a deploy (seen on an
+    // iPhone 2026-09-26: the settings panel rendered unstyled). Online the
+    // page always gets assets that match it; offline the shell still loads.
     event.respondWith(
-        caches.match(request).then(
-            cached =>
-                cached ??
-                fetch(request).then(response => {
-                    if (response.ok) {
-                        const copy = response.clone();
-                        caches.open(CACHE).then(cache => cache.put(request, copy));
-                    }
-                    return response;
-                })
-        )
+        fetch(request)
+            .then(response => {
+                if (response.ok) {
+                    const copy = response.clone();
+                    caches.open(CACHE).then(cache => cache.put(request, copy));
+                }
+                return response;
+            })
+            .catch(() => caches.match(request).then(cached => cached ?? Response.error()))
     );
 });
