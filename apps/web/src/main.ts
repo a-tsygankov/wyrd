@@ -1,3 +1,4 @@
+import { rulesets, type Ruleset, type RulesetId } from "../../../packages/wyrd-content/src/rulesets.js";
 import { scenarios, type Scenario, type ScenarioOutcome } from "../../../packages/wyrd-content/src/scenarios.js";
 import { parseSpell } from "../../../packages/wyrd-grammar/src/parser.js";
 import {
@@ -33,10 +34,18 @@ import {
     type HotseatRound
 } from "./hotseat.js";
 import { buildRoundEvent, createTelemetry, getSessionId } from "./telemetry.js";
+import { loadSettings, saveSettings, type Settings } from "./settings.js";
+import { loadStats, recordMatchEnd, recordRematch, recordRound, saveStats, summarize, type Stats } from "./stats.js";
+import { QUICK_CAST_MS, REACTION_WINDOW_MS, timerState } from "./timers.js";
 import {
+    REACTION_COSTS,
+    ROUND_FOCUS,
+    beginNextRound,
     createInitialDuelState,
     resolveEncounter,
+    spellFocusCost,
     type DuelState,
+    type PlayerId,
     type ReactionGlyph,
     type ResolutionResult,
     type ResolutionStep
@@ -71,7 +80,43 @@ function byId<T extends HTMLElement>(id: string): T {
     return element as T;
 }
 
+// Local storage behind a memory fallback: private mode must never break play.
+const memoryStorage = new Map<string, string>();
+const deviceStorage = {
+    getItem: (key: string): string | null => {
+        try {
+            return localStorage.getItem(key) ?? memoryStorage.get(key) ?? null;
+        } catch {
+            return memoryStorage.get(key) ?? null;
+        }
+    },
+    setItem: (key: string, value: string): void => {
+        memoryStorage.set(key, value);
+        try {
+            localStorage.setItem(key, value);
+        } catch {
+            // Private mode: the in-memory copy carries the page load.
+        }
+    }
+};
+
 const playerSeals = byId<HTMLElement>("player-seals");
+const focusBudget = byId<HTMLElement>("focus-budget");
+const playerResolve = byId<HTMLElement>("player-resolve");
+const opponentResolve = byId<HTMLElement>("opponent-resolve");
+const timerBox = byId<HTMLElement>("timer");
+const timerText = byId<HTMLElement>("timer-text");
+const timerFill = byId<HTMLElement>("timer-fill");
+const settingsToggle = byId<HTMLButtonElement>("settings-toggle");
+const settingsPanel = byId<HTMLElement>("settings");
+const settingsRules = byId<HTMLElement>("settings-rules");
+const settingsTimers = byId<HTMLInputElement>("settings-timers");
+const settingsTelemetry = byId<HTMLInputElement>("settings-telemetry");
+const statsToggle = byId<HTMLButtonElement>("stats-toggle");
+const statsPanel = byId<HTMLElement>("stats");
+const statsLocal = byId<HTMLElement>("stats-local");
+const statsGlobal = byId<HTMLElement>("stats-global");
+const statsStreak = byId<HTMLElement>("stats-streak");
 const opponentSeals = byId<HTMLElement>("opponent-seals");
 const roundNumber = byId<HTMLElement>("round-number");
 const telegraph = byId<HTMLElement>("telegraph");
@@ -133,7 +178,12 @@ function names(): { you: string; them: string } {
     return hotseat.phase === "p2-compose" ? { you: "Player 2", them: "Player 1" } : { you: "Player 1", them: "Player 2" };
 }
 
-let state: DuelState = createInitialDuelState();
+// Settings (ruleset, timers, telemetry) and per-device stats.
+let settings: Settings = loadSettings(deviceStorage, new URLSearchParams(location.search));
+let ruleset: Ruleset = rulesets[settings.ruleset];
+let stats: Stats = loadStats(deviceStorage);
+
+let state: DuelState = createInitialDuelState(ruleset.rules);
 let playerSpell: string[] = [];
 let selectedReaction: ReactionGlyph | undefined;
 let roundResolved = false;
@@ -173,6 +223,12 @@ function botView(): { state: DuelState; botId: "opponent"; lastBotSpell: string[
     return { state, botId: "opponent", lastBotSpell };
 }
 
+/** How many extra telegraph glyphs `id` leaks: one for exposed (0 Focus), one for faltering (low Resolve). */
+function leak(id: PlayerId): number {
+    const p = state.players[id];
+    return (p.exposed ? 1 : 0) + (p.faltering ? 1 : 0);
+}
+
 function planRound(): RoundPlan {
     if (mode === "hotseat") {
         // The opponent's spell arrives when Player 2 locks it in; until then
@@ -207,7 +263,7 @@ function planRound(): RoundPlan {
         return {
             scenario,
             opponentSpell: scenario.opponentSpell,
-            telegraph: projectTelegraph(scenario.opponentSpell, scenario.telegraph, rng),
+            telegraph: projectTelegraph(scenario.opponentSpell, scenario.telegraph, rng, { extraReveals: leak("opponent") }),
             reaction: spell =>
                 fixed === "bot" ? chooseBotReaction(spell, botView(), rng) : fixed === "none" ? undefined : fixed,
             reactionModel: fixed === "bot" ? spell => reactionProbabilities(spell, botView()) : fixedReactionModel(fixed),
@@ -218,7 +274,7 @@ function planRound(): RoundPlan {
     log.info(`round ${state.round} planned: heuristic bot`, { opponentSpell: spell.join(" ") });
     return {
         opponentSpell: spell,
-        telegraph: projectTelegraph(spell, "high", rng),
+        telegraph: projectTelegraph(spell, "high", rng, { extraReveals: leak("opponent") }),
         reaction: playerCast => chooseBotReaction(playerCast, botView(), rng),
         reactionModel: playerCast => reactionProbabilities(playerCast, botView()),
         reactionPolicy: "heuristic bot table"
@@ -232,29 +288,37 @@ plan = planRound();
 // `?telemetry=off`. The web version is read from the footer, which
 // build_web.mjs stamps before the worker's versions are appended.
 const WEB_VERSION = (document.getElementById("version-line")?.textContent ?? "web vdev").replace(/^web v/, "");
-const telemetry = createTelemetry({
-    endpoint: "./api/telemetry",
-    enabled: new URLSearchParams(location.search).get("telemetry") !== "off"
-});
-const memoryStorage = new Map<string, string>();
-const sessionId = getSessionId({
-    getItem: key => {
-        try {
-            return localStorage.getItem(key) ?? memoryStorage.get(key) ?? null;
-        } catch {
-            return memoryStorage.get(key) ?? null;
-        }
-    },
-    setItem: (key, value) => {
-        memoryStorage.set(key, value);
-        try {
-            localStorage.setItem(key, value);
-        } catch {
-            // Private mode: the in-memory copy carries the page load.
-        }
-    }
-});
+const telemetry = createTelemetry({ endpoint: "./api/telemetry" });
+const sessionId = getSessionId(deviceStorage);
+/** Record only when the player allows telemetry (settings or ?telemetry=off). */
+function track(event: Parameters<typeof telemetry.record>[0]): void {
+    if (settings.telemetry) telemetry.record(event);
+}
 let roundStartedAt = performance.now();
+/** Quick-cast flags captured at commit time (hot-seat keeps Player 2's from the compose phase). */
+let playerQuickCast = false;
+let p2QuickCast = false;
+let reactionLocked = false;
+
+/** Timers run for Pulse/Resolve when the player allows them, in bot rounds and hot-seat turns - never in the teaching deck. */
+function timersActive(): boolean {
+    if (!ruleset.timers || !settings.timers || roundResolved) return false;
+    if (mode === "hotseat") return hotseat.phase === "p1-turn" || hotseat.phase === "p2-react" || hotseat.phase === "p2-compose";
+    return !plan.scenario;
+}
+
+type MatchOutcome = { over: boolean; winner?: PlayerId; reason?: "seals" | "resolve" };
+function matchOutcome(): MatchOutcome {
+    const p = state.players.player;
+    const o = state.players.opponent;
+    if (p.seals >= 3) return { over: true, winner: "player", reason: "seals" };
+    if (o.seals >= 3) return { over: true, winner: "opponent", reason: "seals" };
+    if (state.rules.resolve > 0) {
+        if ((o.resolve ?? 1) <= 0) return { over: true, winner: "player", reason: "resolve" };
+        if ((p.resolve ?? 1) <= 0) return { over: true, winner: "opponent", reason: "resolve" };
+    }
+    return { over: false };
+}
 document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") void telemetry.flush();
 });
@@ -311,39 +375,63 @@ function renderReactionButtons(): void {
         const value = element.dataset.reaction as ReactionGlyph | "" | undefined;
         const selected = (value || undefined) === selectedReaction;
         element.classList.toggle("selected", selected);
-        element.disabled = roundResolved;
+        element.disabled = roundResolved || reactionLocked;
+        const label = element.dataset.label ?? (element.dataset.label = element.textContent ?? "");
+        const cost = value && state.rules.reactionCosts ? REACTION_COSTS[value] : 0;
+        element.textContent = cost > 0 ? `${label} · ${cost}` : label;
     }
     const slots = mode === "hotseat" && hotseat.phase === "p2-react" ? p1Telegraph : plan.telegraph;
     reactionExplain.textContent = roundResolved || slots.length === 0 ? "" : explainReaction(selectedReaction, slots);
 }
 
+/** Whose Focus pays for the spell being composed. */
+function composerId(): PlayerId {
+    return mode === "hotseat" && hotseat.phase === "p2-compose" ? "opponent" : "player";
+}
+
+/** Focus the composing player has left after the reaction they selected (their spell must fit in it). */
+function composeBudget(): { budget: number; spellCost: number; reactionCost: number } {
+    const parsed = parseSpell(playerSpell);
+    if (!state.rules.reactionCosts) return { budget: ROUND_FOCUS, spellCost: parsed.focusCost, reactionCost: 0 };
+    const id = composerId();
+    // Player 2's reaction is chosen later (p2-react) and paid after their spell.
+    const reactionCost = id === "player" && selectedReaction ? REACTION_COSTS[selectedReaction] : 0;
+    return { budget: state.players[id].focus - reactionCost, spellCost: spellFocusCost(state, id, parsed.focusCost), reactionCost };
+}
+
+function spellIsCastable(): boolean {
+    const parsed = parseSpell(playerSpell);
+    const { budget, spellCost } = composeBudget();
+    return parsed.status === "valid" && playerSpell.length >= 2 && playerSpell.length <= 4 && spellCost <= budget;
+}
+
 function renderValidation(): void {
     const parsed = parseSpell(playerSpell);
-    const valid =
-        parsed.status === "valid" &&
-        playerSpell.length >= 2 &&
-        playerSpell.length <= 4 &&
-        parsed.focusCost <= 7;
+    const { budget, spellCost, reactionCost } = composeBudget();
+    const valid = spellIsCastable();
 
-    focusCost.textContent = String(parsed.focusCost);
+    focusCost.textContent = String(spellCost);
+    focusBudget.textContent = String(Math.max(0, budget));
     spellPreview.textContent = formatSpell(playerSpell);
     diagnostic.classList.toggle("valid", valid);
 
     if (playerSpell.length < 2) {
         diagnostic.textContent = "Build a 2–4 glyph spell.";
-    } else if (parsed.focusCost > 7) {
-        diagnostic.textContent = "Too much Focus. Maximum is 7.";
     } else if (parsed.status !== "valid") {
         diagnostic.textContent = parsed.diagnostics[0]?.message ?? "Unstable syntax.";
+    } else if (spellCost > budget) {
+        diagnostic.textContent = state.rules.reactionCosts
+            ? `Not enough Focus: spell ${spellCost}${reactionCost ? ` + ${selectedReaction?.toUpperCase()} ${reactionCost}` : ""} exceeds the ${state.players[composerId()].focus} you have.`
+            : "Too much Focus. Maximum is 7.";
     } else {
-        diagnostic.textContent = "Stable syntax • Focus " + parsed.focusCost;
+        diagnostic.textContent = "Stable syntax • Focus " + spellCost + (reactionCost ? ` + ${reactionCost} for ${selectedReaction?.toUpperCase()}` : "");
     }
 
     resolveRoundButton.disabled = !valid || roundResolved;
 
     const composing = !roundResolved && (mode === "solo" || hotseat.phase === "p2-compose" || hotseat.phase === "p1-turn");
     const explanation = composing
-        ? explainSpell(playerSpell, state, names(), mode === "hotseat" && hotseat.phase === "p2-compose" ? "opponent" : "player")
+        ? explainSpell(playerSpell, state, names(), composerId())
         : { glyphs: [], summary: [] };
     glyphHelpDetails.classList.toggle("hidden", explanation.glyphs.length === 0);
     glyphHelpToggle.textContent =
@@ -370,10 +458,24 @@ function renderValidation(): void {
     );
 }
 
+function renderResolve(element: HTMLElement, id: PlayerId): void {
+    const value = state.players[id].resolve;
+    element.classList.toggle("hidden", state.rules.resolve === 0 || value === undefined);
+    if (value === undefined) return;
+    const fill = element.querySelector<HTMLElement>(".resolve-fill");
+    const text = element.querySelector<HTMLElement>(".resolve-text");
+    if (fill) fill.style.width = `${Math.round((value / state.rules.resolve) * 100)}%`;
+    if (text) text.textContent = `Resolve ${value}${state.players[id].faltering ? " · faltering" : ""}`;
+}
+
 function renderScoreboard(): void {
     playerSeals.textContent = String(state.players.player.seals);
     opponentSeals.textContent = String(state.players.opponent.seals);
     roundNumber.textContent = String(state.round);
+    renderResolve(playerResolve, "player");
+    renderResolve(opponentResolve, "opponent");
+    const outcome = matchOutcome();
+    const rulesNote = ` · ${ruleset.title}`;
     if (mode === "hotseat") {
         const shown = presentation(hotseat.phase);
         telegraph.textContent =
@@ -382,31 +484,25 @@ function renderScoreboard(): void {
                 : shown.telegraphOf === "p1"
                     ? formatTelegraph(p1Telegraph)
                     : "—";
-        scenarioNote.textContent = "Hot-seat · two players on this phone · seed " + matchSeedLabel;
-        matchStatus.textContent =
-            state.players.player.seals >= 3
-                ? "Player 1 wins the duel"
-                : state.players.opponent.seals >= 3
-                    ? "Player 2 wins the duel"
-                    : shown.status;
+        scenarioNote.textContent = "Hot-seat · two players on this phone · seed " + matchSeedLabel + rulesNote;
+        matchStatus.textContent = outcome.over
+            ? `${outcome.winner === "player" ? "Player 1" : "Player 2"} wins the duel${outcome.reason === "resolve" ? " on Resolve" : ""}`
+            : shown.status;
         return;
     }
 
     telegraph.textContent = formatTelegraph(plan.telegraph);
-    scenarioNote.textContent = plan.scenario
+    scenarioNote.textContent = (plan.scenario
         ? "Scenario " + state.round + "/" + scenarios.length + " · " + plan.scenario.title + " · seed " + matchSeedLabel
-        : "Heuristic opponent · seed " + matchSeedLabel + " · some glyphs are hidden; infer the threat before reacting.";
+        : "Heuristic opponent · seed " + matchSeedLabel + " · some glyphs are hidden; infer the threat before reacting.") + rulesNote;
 
-    const winner =
-        state.players.player.seals >= 3
+    matchStatus.textContent = outcome.over
+        ? outcome.winner === "player"
             ? "You win the duel"
-            : state.players.opponent.seals >= 3
-                ? "Opponent wins"
-                : roundResolved
-                    ? "Round resolved"
-                    : "Your move";
-
-    matchStatus.textContent = winner;
+            : "Opponent wins"
+        : roundResolved
+            ? "Round resolved"
+            : "Your move";
 }
 
 // Admin console: everything the player must not see (the hidden spell, the
@@ -434,10 +530,11 @@ function renderAdmin(): void {
     const wards = (["player", "opponent"] as const)
         .map(id => {
             const ward = state.players[id].ward;
-            return ward ? `${id}: ${ward.essence ?? "untyped"}` : `${id}: none`;
+            return ward ? `${id}: ${ward.essence ?? "untyped"}${ward.integrity !== undefined ? ` (integrity ${ward.integrity})` : ""}` : `${id}: none`;
         })
         .join(" · ");
     const facts: Array<[string, string]> = [
+        ["Rules", `${ruleset.title} (${ruleset.id})`],
         ["Seed", matchSeedLabel],
         ["Round", `${state.round} · ${roundResolved ? "resolved" : "awaiting your cast"}`],
         ["Scenario", plan.scenario ? `${plan.scenario.id} (telegraph ${plan.scenario.telegraph})` : "heuristic bot (telegraph high)"],
@@ -445,6 +542,7 @@ function renderAdmin(): void {
         ["Hidden spell", plan.opponentSpell.join(" ") || "(not cast yet)"],
         ["Opponent reacts", plan.reactionPolicy],
         ["Wards", wards],
+        ["Focus", `player ${state.players.player.focus} · opponent ${state.players.opponent.focus}` + (state.players.player.exposed || state.players.opponent.exposed ? " · exposed" : "")],
         ["Versions", document.getElementById("version-line")?.textContent ?? ""],
         ["Session", sessionId]
     ];
@@ -519,7 +617,7 @@ log.subscribe(() => {
 });
 
 function renderMode(): void {
-    const matchOver = state.players.player.seals >= 3 || state.players.opponent.seals >= 3;
+    const matchOver = matchOutcome().over;
     modeToggle.textContent = mode === "solo" ? "Hot-seat" : "Solo";
     if (mode === "solo") {
         youLabel.textContent = "You";
@@ -556,13 +654,10 @@ function render(): void {
     renderReactionButtons();
     renderValidation();
     renderMode();
+    renderTimer();
     renderAdmin();
 
-    const matchOver =
-        state.players.player.seals >= 3 ||
-        state.players.opponent.seals >= 3;
-
-    nextRoundButton.classList.toggle("hidden", !roundResolved || matchOver);
+    nextRoundButton.classList.toggle("hidden", !roundResolved || matchOutcome().over);
 }
 
 function appendSteps(prefix: string, steps: ResolutionStep[]): void {
@@ -582,14 +677,7 @@ function resolveRound(): void {
     if (roundResolved) {
         return;
     }
-
-    const parsed = parseSpell(playerSpell);
-    if (
-        parsed.status !== "valid" ||
-        playerSpell.length < 2 ||
-        playerSpell.length > 4 ||
-        parsed.focusCost > 7
-    ) {
+    if (!spellIsCastable()) {
         return;
     }
 
@@ -602,7 +690,8 @@ function resolveRound(): void {
         casterId: "opponent",
         defenderId: "player",
         spellTokens: opponentSpell,
-        ...(selectedReaction ? { reaction: selectedReaction } : {})
+        ...(selectedReaction ? { reaction: selectedReaction } : {}),
+        ...(mode === "hotseat" && p2QuickCast ? { quickCast: true } : {})
     });
 
     state = incoming.state;
@@ -613,19 +702,21 @@ function resolveRound(): void {
 
     let botReaction: ReactionGlyph | undefined;
     let outgoing: ResolutionResult | undefined;
-    if (state.players.opponent.seals < 3 && state.players.player.seals < 3) {
+    if (!matchOutcome().over) {
         botReaction = plan.reaction(playerSpell);
         outgoing = resolveEncounter(state, {
             casterId: "player",
             defenderId: "opponent",
             spellTokens: playerSpell,
-            ...(botReaction ? { reaction: botReaction } : {})
+            ...(botReaction ? { reaction: botReaction } : {}),
+            ...(playerQuickCast ? { quickCast: true } : {})
         });
 
         state = outgoing.state;
         appendSteps(
             "You: " + formatSpell(playerSpell) +
-                (botReaction ? " • opponent used " + botReaction.toUpperCase() : ""),
+                (botReaction ? " • opponent used " + botReaction.toUpperCase() : "") +
+                (playerQuickCast ? " • quick cast" : ""),
             outgoing.steps
         );
     }
@@ -648,10 +739,13 @@ function resolveRound(): void {
         return li;
     });
     combatLog.prepend(...verdictItems);
-    if (state.players.player.seals >= 3 || state.players.opponent.seals >= 3) {
+    const outcome = matchOutcome();
+    if (outcome.over) {
         const li = document.createElement("li");
         li.className = "verdict";
-        li.textContent = explainMatch(state, history, who);
+        li.textContent =
+            explainMatch(state, history, who) +
+            (outcome.reason === "resolve" ? ` ${outcome.winner === "player" ? who.them : who.you}'s Resolve is spent.` : "");
         combatLog.prepend(li);
     }
 
@@ -660,13 +754,28 @@ function resolveRound(): void {
     }
     roundResolved = true;
     log.info(`round ${state.round} resolved`, {
-        you: playerSpell.join(" ") + (selectedReaction ? ` (reacted ${selectedReaction})` : ""),
+        rules: ruleset.id,
+        you: playerSpell.join(" ") + (selectedReaction ? ` (reacted ${selectedReaction})` : "") + (playerQuickCast ? " quick" : ""),
         opponent: opponentSpell.join(" ") + (botReaction ? ` (reacted ${botReaction})` : ""),
         seals: `${state.players.player.seals}-${state.players.opponent.seals}`,
         commitMs: Math.round(committedAt - roundStartedAt)
     });
 
-    telemetry.record(
+    const timeToCommitMs = Math.max(0, Math.round(committedAt - roundStartedAt));
+    stats = recordRound(stats, {
+        ruleset: ruleset.id,
+        mode,
+        playerGained: Math.max(0, state.players.player.seals - sealsBefore.player),
+        opponentGained: Math.max(0, state.players.opponent.seals - sealsBefore.opponent),
+        playerReaction: selectedReaction,
+        timeToCommitMs
+    });
+    if (outcome.over) {
+        stats = recordMatchEnd(stats, { ruleset: ruleset.id, mode, won: outcome.winner === "player", reason: outcome.reason ?? "seals" });
+    }
+    saveStats(deviceStorage, stats);
+
+    track(
         buildRoundEvent({
             sessionId,
             matchSeed: matchSeedLabel,
@@ -685,13 +794,16 @@ function resolveRound(): void {
             opponentSeals: state.players.opponent.seals,
             roundStartedAt,
             committedAt,
-            mode
+            mode,
+            rules: ruleset.id
         })
     );
-    if (state.players.player.seals >= 3 || state.players.opponent.seals >= 3) {
-        telemetry.record({
+    if (outcome.over) {
+        track({
             event: "match_end",
             mode,
+            rules: ruleset.id,
+            endReason: outcome.reason ?? "seals",
             sessionId,
             matchSeed: matchSeedLabel,
             webVersion: WEB_VERSION,
@@ -701,6 +813,8 @@ function resolveRound(): void {
         });
     }
     void telemetry.flush();
+    playerQuickCast = false;
+    p2QuickCast = false;
     render();
 }
 
@@ -709,17 +823,11 @@ function startNextRound(): void {
         return;
     }
 
-    state = {
-        ...state,
-        round: state.round + 1,
-        players: {
-            player: { ...state.players.player, focus: 7 },
-            opponent: { ...state.players.opponent, focus: 7 }
-        }
-    };
+    state = beginNextRound(state);
     playerSpell = [];
     selectedReaction = undefined;
     roundResolved = false;
+    reactionLocked = false;
     plan = planRound();
     roundStartedAt = performance.now();
     combatLog.innerHTML = "<li>Opponent spell is waiting.</li>";
@@ -730,9 +838,10 @@ function resetMatch(): void {
     // A reset after at least one resolved round is a rematch signal - the
     // plan's cheapest proxy for "did they want to play again".
     if (roundResolved || state.round > 1) {
-        telemetry.record({
+        track({
             event: "rematch",
             mode,
+            rules: ruleset.id,
             sessionId,
             matchSeed: matchSeedLabel,
             webVersion: WEB_VERSION,
@@ -741,12 +850,17 @@ function resetMatch(): void {
             opponentSeals: state.players.opponent.seals
         });
         void telemetry.flush();
+        stats = recordRematch(stats, { ruleset: ruleset.id, mode });
+        saveStats(deviceStorage, stats);
     }
-    state = createInitialDuelState();
+    state = createInitialDuelState(ruleset.rules);
     history = [];
     playerSpell = [];
     selectedReaction = undefined;
     roundResolved = false;
+    reactionLocked = false;
+    playerQuickCast = false;
+    p2QuickCast = false;
     // A seeded URL replays the same match; otherwise every reset is a new one.
     newMatchSeed();
     plan = planRound();
@@ -760,8 +874,11 @@ reactionTray.addEventListener("click", event => {
     if (!(target instanceof HTMLButtonElement) || !target.classList.contains("reaction-button")) {
         return;
     }
+    if (reactionLocked) return;
     selectedReaction = (target.dataset.reaction || undefined) as ReactionGlyph | undefined;
-    renderReactionButtons();
+    // The reaction shares the Focus budget with the spell, so the composer
+    // must re-validate too.
+    render();
 });
 
 undoButton.addEventListener("click", () => {
@@ -778,21 +895,22 @@ clearButton.addEventListener("click", () => {
     }
 });
 
-function spellIsCastable(): boolean {
-    const parsed = parseSpell(playerSpell);
-    return parsed.status === "valid" && playerSpell.length >= 2 && playerSpell.length <= 4 && parsed.focusCost <= 7;
-}
-
 function onPrimaryAction(): void {
     if (mode === "solo") {
+        playerQuickCast = timerState(performance.now() - roundStartedAt, timersActive()).quickCast;
         resolveRound();
         return;
     }
     switch (hotseat.phase) {
         case "p2-compose": {
             if (!spellIsCastable()) return;
+            p2QuickCast = timerState(performance.now() - roundStartedAt, timersActive()).quickCast;
             hotseat = lockP2Spell(hotseat, playerSpell);
-            plan = { ...plan, opponentSpell: [...playerSpell], telegraph: projectTelegraph(playerSpell, "high", rng) };
+            plan = {
+                ...plan,
+                opponentSpell: [...playerSpell],
+                telegraph: projectTelegraph(playerSpell, "high", rng, { extraReveals: leak("opponent") })
+            };
             log.info(`round ${state.round}: player 2 locked in`, { glyphs: playerSpell.length });
             playerSpell = [];
             selectedReaction = undefined;
@@ -800,8 +918,9 @@ function onPrimaryAction(): void {
         }
         case "p1-turn": {
             if (!spellIsCastable()) return;
+            playerQuickCast = timerState(performance.now() - roundStartedAt, timersActive()).quickCast;
             hotseat = commitP1(hotseat, playerSpell, selectedReaction);
-            p1Telegraph = projectTelegraph(playerSpell, "high", rng);
+            p1Telegraph = projectTelegraph(playerSpell, "high", rng, { extraReveals: leak("player") });
             log.info(`round ${state.round}: player 1 committed`, { glyphs: playerSpell.length, reaction: selectedReaction ?? "none" });
             playerSpell = [];
             selectedReaction = undefined;
@@ -827,6 +946,9 @@ resolveRoundButton.addEventListener("click", onPrimaryAction);
 handoffReady.addEventListener("click", () => {
     if (hotseat.phase === "handoff-to-p1" || hotseat.phase === "handoff-to-p2") {
         hotseat = acknowledgeHandoff(hotseat);
+        // Each player's clock starts when they take the phone.
+        roundStartedAt = performance.now();
+        reactionLocked = false;
         render();
     }
 });
@@ -837,6 +959,198 @@ modeToggle.addEventListener("click", () => {
 });
 nextRoundButton.addEventListener("click", startNextRound);
 resetButton.addEventListener("click", resetMatch);
+
+// --- Tempo (Pulse / Resolve): reaction ring and quick-cast badge.
+function renderTimer(): void {
+    const active = timersActive();
+    timerBox.classList.toggle("hidden", !active);
+    if (!active) {
+        resolveRoundButton.classList.remove("quick");
+        return;
+    }
+    const t = timerState(performance.now() - roundStartedAt, true);
+    if (t.reactionLocked && !reactionLocked) {
+        reactionLocked = true;
+        log.info(`round ${state.round}: reaction window closed`, { reaction: selectedReaction ?? "none" });
+        renderReactionButtons();
+    }
+    const showsReactions = mode === "solo" || hotseat.phase === "p1-turn" || hotseat.phase === "p2-react";
+    timerText.textContent = showsReactions
+        ? t.reactionLocked
+            ? "Reaction locked in"
+            : `React within ${(t.reactionRemainingMs / 1000).toFixed(1)} s`
+        : t.quickCast
+            ? `Quick cast for ${(t.quickRemainingMs / 1000).toFixed(1)} s`
+            : "Compose";
+    timerFill.style.width = `${Math.round(((showsReactions ? t.reactionRemainingMs : t.quickRemainingMs) / (showsReactions ? REACTION_WINDOW_MS : QUICK_CAST_MS)) * 100)}%`;
+    const canQuick = hotseat.phase !== "p2-react";
+    resolveRoundButton.classList.toggle("quick", canQuick && t.quickCast);
+}
+window.setInterval(() => {
+    if (timersActive()) renderTimer();
+}, 100);
+
+// --- Settings panel: ruleset, timers, telemetry.
+function renderSettings(): void {
+    settingsRules.replaceChildren(
+        ...(Object.values(rulesets) as Ruleset[]).map(option => {
+            const label = document.createElement("label");
+            label.className = "settings-option" + (option.id === settings.ruleset ? " selected" : "");
+            const input = document.createElement("input");
+            input.type = "radio";
+            input.name = "ruleset";
+            input.value = option.id;
+            input.checked = option.id === settings.ruleset;
+            input.addEventListener("change", () => applyRuleset(option.id));
+            const title = document.createElement("strong");
+            title.textContent = option.title + (option.timers ? " · timers" : "");
+            const summary = document.createElement("span");
+            summary.className = "settings-summary";
+            summary.textContent = option.summary;
+            label.append(input, title, summary);
+            return label;
+        })
+    );
+    settingsTimers.checked = settings.timers;
+    settingsTelemetry.checked = settings.telemetry;
+}
+
+function applyRuleset(id: RulesetId): void {
+    if (id === settings.ruleset) return;
+    settings = { ...settings, ruleset: id };
+    saveSettings(deviceStorage, settings);
+    ruleset = rulesets[id];
+    log.info(`ruleset: ${id}`);
+    resetMatch();
+    renderSettings();
+}
+
+settingsToggle.addEventListener("click", () => {
+    const open = settingsPanel.classList.contains("hidden");
+    settingsPanel.classList.toggle("hidden", !open);
+    if (open) {
+        renderSettings();
+        settingsPanel.scrollIntoView({ block: "start", behavior: "smooth" });
+    }
+});
+byId<HTMLButtonElement>("settings-close").addEventListener("click", () => settingsPanel.classList.add("hidden"));
+settingsTimers.addEventListener("change", () => {
+    settings = { ...settings, timers: settingsTimers.checked };
+    saveSettings(deviceStorage, settings);
+    log.info(`timers: ${settings.timers ? "on" : "off"}`);
+    render();
+});
+settingsTelemetry.addEventListener("change", () => {
+    settings = { ...settings, telemetry: settingsTelemetry.checked };
+    saveSettings(deviceStorage, settings);
+    log.info(`telemetry: ${settings.telemetry ? "on" : "off"}`);
+});
+
+// --- Stats panel: this device (local storage) and everyone (worker summary).
+function cell(text: string, header = false): HTMLElement {
+    const td = document.createElement(header ? "th" : "td");
+    td.textContent = text;
+    return td;
+}
+
+function table(headers: string[], rows: string[][]): HTMLTableElement {
+    const t = document.createElement("table");
+    t.className = "stats-table";
+    const head = document.createElement("tr");
+    head.append(...headers.map(h => cell(h, true)));
+    t.append(head);
+    for (const row of rows) {
+        const tr = document.createElement("tr");
+        tr.append(...row.map(v => cell(v)));
+        t.append(tr);
+    }
+    return t;
+}
+
+const pct = (n: number): string => `${Math.round(n * 100)}%`;
+const secs = (ms: number | null | undefined): string => (ms === null || ms === undefined ? "—" : `${(ms / 1000).toFixed(1)} s`);
+
+function renderLocalStats(): void {
+    const rows = summarize(stats);
+    statsStreak.textContent = `Streak ${stats.streak > 0 ? "+" : ""}${stats.streak} · best ${stats.bestStreak} · hot-seat rounds ${stats.modes.hotseat.rounds}`;
+    statsLocal.replaceChildren(
+        table(
+            ["Rules", "Matches", "Won", "Rounds", "Seal rate", "Avg commit", "Top reaction", "Rematches"],
+            rows.map(r => [
+                rulesets[r.ruleset].title + (r.endedBy["resolve"] ? ` (${r.endedBy["resolve"]} on Resolve)` : ""),
+                String(r.matches),
+                r.matches ? pct(r.winRate) : "—",
+                String(r.rounds),
+                r.rounds ? pct(r.sealRate) : "—",
+                secs(r.avgCommitMs),
+                r.topReaction,
+                String(r.rematches)
+            ])
+        )
+    );
+}
+
+type GlobalSummary = {
+    rounds: number;
+    rematches: number;
+    sessions: number;
+    rulesets: Array<{ rules: string; mode: string; rounds: number; matches: number; endedByResolve: number; rematches: number; sessions: number; playerSealRate: number; medianTimeToCommitMs: number | null }>;
+    scenarios: Array<{ scenarioId: string | null; rounds: number; reactions: Record<string, number>; playerSealRate: number; medianTimeToCommitMs: number | null }>;
+};
+
+async function renderGlobalStats(): Promise<void> {
+    statsGlobal.textContent = "Loading everyone's numbers…";
+    try {
+        const response = await fetch("./api/telemetry/summary", { headers: { accept: "application/json" } });
+        if (!response.ok) throw new Error(String(response.status));
+        const summary = (await response.json()) as GlobalSummary;
+        const totals = document.createElement("p");
+        totals.className = "muted";
+        totals.textContent = `${summary.sessions} devices · ${summary.rounds} rounds · ${summary.rematches} rematches`;
+        // Older workers (before 0003) answer without the per-ruleset block.
+        const byRules = table(
+            ["Rules", "Mode", "Rounds", "Matches", "On Resolve", "Seal rate", "Median commit", "Devices"],
+            (summary.rulesets ?? []).map(r => [
+                rulesets[r.rules as RulesetId]?.title ?? r.rules,
+                r.mode,
+                String(r.rounds),
+                String(r.matches),
+                String(r.endedByResolve),
+                r.rounds ? pct(r.playerSealRate) : "—",
+                secs(r.medianTimeToCommitMs),
+                String(r.sessions)
+            ])
+        );
+        const byScenario = table(
+            ["Scenario", "Rounds", "Reactions", "Seal rate", "Median commit"],
+            (summary.scenarios ?? []).map(s => [
+                s.scenarioId ?? "bot / hot-seat",
+                String(s.rounds),
+                Object.entries(s.reactions)
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([k, v]) => `${k} ${v}`)
+                    .join(", "),
+                pct(s.playerSealRate),
+                secs(s.medianTimeToCommitMs)
+            ])
+        );
+        statsGlobal.replaceChildren(totals, byRules, byScenario);
+    } catch (error) {
+        statsGlobal.textContent = "Everyone's numbers are unavailable right now (offline?).";
+        log.warn("telemetry summary unavailable", String(error));
+    }
+}
+
+statsToggle.addEventListener("click", () => {
+    const open = statsPanel.classList.contains("hidden");
+    statsPanel.classList.toggle("hidden", !open);
+    if (open) {
+        renderLocalStats();
+        void renderGlobalStats();
+        statsPanel.scrollIntoView({ block: "start", behavior: "smooth" });
+    }
+});
+byId<HTMLButtonElement>("stats-close").addEventListener("click", () => statsPanel.classList.add("hidden"));
 
 if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {

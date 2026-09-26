@@ -11,6 +11,8 @@ const EVENTS = new Set(["round", "rematch", "match_end"]);
 const REACTIONS = new Set(["null", "reflect", "silence"]);
 const PRESETS = new Set(["high", "medium"]);
 const MODES = new Set(["solo", "hotseat"]);
+const RULES = new Set(["classic", "teeth", "pulse", "resolve"]);
+const END_REASONS = new Set(["seals", "resolve"]);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_BATCH = 20;
 const MAX_TEXT = 200;
@@ -35,6 +37,8 @@ export type TelemetryEvent = {
     timeToCommitMs: number | null;
     webVersion: string;
     mode: "solo" | "hotseat";
+    rules: "classic" | "teeth" | "pulse" | "resolve";
+    endReason: "seals" | "resolve" | null;
 };
 
 type Raw = Record<string, unknown>;
@@ -99,7 +103,9 @@ export function parseEvent(raw: unknown): TelemetryEvent {
         opponentGained: r.opponentGained === undefined ? 0 : int(r.opponentGained, "opponentGained", { max: 100 }),
         timeToCommitMs: optInt(r.timeToCommitMs, "timeToCommitMs"),
         webVersion: text(r.webVersion, "webVersion"),
-        mode: optEnum<"solo" | "hotseat">(r.mode, "mode", MODES) ?? "solo"
+        mode: optEnum<"solo" | "hotseat">(r.mode, "mode", MODES) ?? "solo",
+        rules: optEnum<"classic" | "teeth" | "pulse" | "resolve">(r.rules, "rules", RULES) ?? "classic",
+        endReason: optEnum<"seals" | "resolve">(r.endReason, "endReason", END_REASONS)
     };
 }
 
@@ -110,7 +116,7 @@ export function parseBatch(body: unknown): TelemetryEvent[] {
 }
 
 const INSERT =
-    "INSERT INTO telemetry_events (id, ts, event, session_id, match_seed, round, scenario_id, telegraph_preset, telegraph, opponent_spell, player_spell, player_reaction, opponent_reaction, player_seals, opponent_seals, player_gained, opponent_gained, time_to_commit_ms, web_version, mode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    "INSERT INTO telemetry_events (id, ts, event, session_id, match_seed, round, scenario_id, telegraph_preset, telegraph, opponent_spell, player_spell, player_reaction, opponent_reaction, player_seals, opponent_seals, player_gained, opponent_gained, time_to_commit_ms, web_version, mode, rules, end_reason) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
 export const telemetryRouter = new Hono<{ Bindings: Bindings }>()
     .post("/", async c => {
@@ -152,7 +158,9 @@ export const telemetryRouter = new Hono<{ Bindings: Bindings }>()
                     e.opponentGained,
                     e.timeToCommitMs,
                     e.webVersion,
-                    e.mode
+                    e.mode,
+                    e.rules,
+                    e.endReason
                 )
             )
         );
@@ -198,10 +206,42 @@ export const telemetryRouter = new Hono<{ Bindings: Bindings }>()
         const median = (sorted: number[]): number | null =>
             sorted.length === 0 ? null : (sorted[Math.floor((sorted.length - 1) / 2)] as number);
 
+        // Per ruleset: rounds, matches, how they ended, player seal rate and
+        // median commit time - the numbers that judge each package.
+        const perRules = (
+            await db
+                .prepare(
+                    "SELECT rules, mode, SUM(event = 'round') AS rounds, SUM(event = 'match_end') AS matches, SUM(event = 'match_end' AND end_reason = 'resolve') AS by_resolve, SUM(event = 'rematch') AS rematches, SUM(event = 'round' AND player_gained > 0) AS scored, COUNT(DISTINCT session_id) AS sessions FROM telemetry_events GROUP BY rules, mode"
+                )
+                .all<{ rules: string; mode: string; rounds: number; matches: number; by_resolve: number; rematches: number; scored: number; sessions: number }>()
+        ).results;
+        const rulesTimes = (
+            await db
+                .prepare("SELECT rules, time_to_commit_ms FROM telemetry_events WHERE event = 'round' AND time_to_commit_ms IS NOT NULL ORDER BY time_to_commit_ms")
+                .all<{ rules: string; time_to_commit_ms: number }>()
+        ).results;
+        const timesByRules = new Map<string, number[]>();
+        for (const row of rulesTimes) {
+            const list = timesByRules.get(row.rules) ?? [];
+            list.push(row.time_to_commit_ms);
+            timesByRules.set(row.rules, list);
+        }
+
         return c.json({
             rounds: totals?.rounds ?? 0,
             rematches: totals?.rematches ?? 0,
             sessions: totals?.sessions ?? 0,
+            rulesets: perRules.map(row => ({
+                rules: row.rules,
+                mode: row.mode,
+                rounds: row.rounds,
+                matches: row.matches,
+                endedByResolve: row.by_resolve,
+                rematches: row.rematches,
+                sessions: row.sessions,
+                playerSealRate: row.rounds === 0 ? 0 : row.scored / row.rounds,
+                medianTimeToCommitMs: median(timesByRules.get(row.rules) ?? [])
+            })),
             scenarios: [...byScenario.entries()].map(([scenarioId, b]) => ({
                 scenarioId,
                 rounds: b.rounds,

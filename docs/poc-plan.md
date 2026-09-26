@@ -102,6 +102,9 @@ Players can explain why a counter worked or failed without a facilitator: each g
 ### POC-6 — short iterate/deploy loops
 Unchanged: change one rule/cost, deploy (CI does it), replay the same scenarios, compare. The tier versions in the footer tell testers which build they are on.
 
+### POC-7 — rulesets for the engagement experiment — **done (code); evidence pending**
+The four decisions in `docs/duel-engagement-options.md` §6 were taken as proposed. Players pick one of four rulesets in Settings: Classic, Teeth (ward integrity, reaction Focus costs, ignite), Pulse (Teeth + timers and quick cast), Resolve (Pulse + hit points as a second clock). Every round and match is tagged with its ruleset; the Stats panel shows this device's numbers and everyone's per-ruleset summary. Deferred from the packages: weather/sudden death, progressive telegraph reveal, bot personalities, in-match draft, the SVG/CSS stage.
+
 ## Post-POC path (only after POC-5 evidence) **[v2]**
 
 Ordered per `docs/architecture.md` §24:

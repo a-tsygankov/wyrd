@@ -1,13 +1,20 @@
 import { parseSpell } from "../../wyrd-grammar/src/parser.js";
 import type { SpellNode } from "../../wyrd-grammar/src/types.js";
-import type {
-    DuelState,
-    PlayerId,
-    ReactionGlyph,
-    ResolutionContext,
-    ResolutionResult,
-    ResolutionStep,
-    ResolvedEffect
+import {
+    BOUND_TAX,
+    CLASSIC_RULES,
+    FALTERING_AT,
+    REACTION_COSTS,
+    ROUND_FOCUS,
+    type DuelState,
+    type PlayerId,
+    type PlayerState,
+    type ReactionGlyph,
+    type ResolutionContext,
+    type ResolutionResult,
+    type ResolutionStep,
+    type ResolvedEffect,
+    type RuleOptions
 } from "./types.js";
 
 type FlattenedSpell = {
@@ -144,15 +151,48 @@ function applyReaction(
     }
 }
 
-export function createInitialDuelState(): DuelState {
+function newPlayer(id: PlayerId, rules: RuleOptions): PlayerState {
+    return {
+        id,
+        focus: ROUND_FOCUS,
+        seals: 0,
+        ...(rules.resolve > 0 ? { resolve: rules.resolve, faltering: false } : {})
+    };
+}
+
+export function createInitialDuelState(rules: RuleOptions = CLASSIC_RULES): DuelState {
     return {
         round: 1,
         activePlayerId: "player",
         players: {
-            player: { id: "player", focus: 7, seals: 0 },
-            opponent: { id: "opponent", focus: 7, seals: 0 }
-        }
+            player: newPlayer("player", rules),
+            opponent: newPlayer("opponent", rules)
+        },
+        rules: { ...rules }
     };
+}
+
+/**
+ * Advance to the next round: Focus refills for both, everything else
+ * carries over. `exposed` stays set for exactly the round after a player
+ * ran dry; the next encounter re-evaluates it.
+ */
+export function beginNextRound(state: DuelState): DuelState {
+    const next = cloneState(state);
+    next.round += 1;
+    for (const id of ["player", "opponent"] as const) next.players[id].focus = ROUND_FOCUS;
+    return next;
+}
+
+/** Focus the caster will pay for this spell under the state's rules (0 when Focus is not tracked). */
+export function spellFocusCost(state: DuelState, casterId: PlayerId, parsedFocusCost: number): number {
+    if (!state.rules.reactionCosts) return 0;
+    const tax = state.rules.resolve > 0 && state.players[casterId].bound ? BOUND_TAX : 0;
+    return parsedFocusCost + tax;
+}
+
+function updateFaltering(player: PlayerState, rules: RuleOptions): void {
+    if (rules.resolve > 0 && player.resolve !== undefined) player.faltering = player.resolve <= FALTERING_AT;
 }
 
 export function resolveEncounter(
@@ -160,7 +200,11 @@ export function resolveEncounter(
     context: ResolutionContext
 ): ResolutionResult {
     const next = cloneState(state);
+    const rules: RuleOptions = next.rules ?? CLASSIC_RULES;
+    next.rules = rules;
     const steps: ResolutionStep[] = [];
+    const caster = next.players[context.casterId];
+    const defender = next.players[context.defenderId];
     const parsed = parseSpell(context.spellTokens);
 
     if (parsed.status !== "valid" || !parsed.ast) {
@@ -207,6 +251,35 @@ export function resolveEncounter(
         return { state: next, steps };
     }
 
+    // --- Focus accounting (rules.reactionCosts). The caster pays the spell;
+    // a bound caster under the resolve rule pays the BIND tax on top and is
+    // freed by it. The defender pays for the reaction or does not get it.
+    let reaction = context.reaction;
+    if (rules.reactionCosts) {
+        const tax = rules.resolve > 0 && caster.bound ? BOUND_TAX : 0;
+        caster.focus = Math.max(0, caster.focus - parsed.focusCost - tax);
+        if (tax > 0) {
+            caster.bound = false;
+            addStep(steps, "cost", "applied", "BOUND_TAX", `Being BOUND cost ${tax} extra Focus for this spell.`);
+        }
+        if (reaction) {
+            const price = REACTION_COSTS[reaction];
+            if (defender.focus < price) {
+                addStep(
+                    steps,
+                    "cost",
+                    "failed",
+                    "REACTION_UNAFFORDABLE",
+                    `${reaction.toUpperCase()} costs ${price} Focus; only ${defender.focus} left - no reaction.`
+                );
+                reaction = undefined;
+            } else {
+                defender.focus -= price;
+                addStep(steps, "cost", "applied", "REACTION_PAID", `${reaction.toUpperCase()} cost ${price} Focus (${defender.focus} left).`);
+            }
+        }
+    }
+
     const effect: ResolvedEffect = {
         action: flat.action,
         ...(flat.target ? { target: flat.target } : {}),
@@ -227,18 +300,39 @@ export function resolveEncounter(
             "AMPLIFY increased the spell's magnitude."
         );
     }
+    if (rules.ignite && effect.essence && caster.lastEssence === effect.essence) {
+        effect.magnitude += 1;
+        addStep(steps, "magnitude", "applied", "IGNITE_APPLIED", `${effect.essence.toUpperCase()} again: ignite adds +1 magnitude.`);
+    }
+    if (rules.quickCast && context.quickCast) {
+        effect.magnitude += 1;
+        addStep(steps, "magnitude", "applied", "QUICK_CAST", "Quick cast: +1 magnitude for committing fast.");
+    }
+    // The essence memory is per caster and per resolved spell: an untyped
+    // spell forgets it.
+    if (rules.ignite) {
+        if (effect.essence) caster.lastEssence = effect.essence;
+        else delete caster.lastEssence;
+    }
 
-    applyReaction(effect, context.reaction, steps);
+    applyReaction(effect, reaction, steps);
+
+    const finish = (result: Omit<ResolutionResult, "state">): ResolutionResult => {
+        if (rules.reactionCosts) {
+            for (const id of ["player", "opponent"] as const) next.players[id].exposed = next.players[id].focus === 0;
+        }
+        updateFaltering(caster, rules);
+        updateFaltering(defender, rules);
+        return { state: next, ...result };
+    };
 
     if (effect.canceled) {
-        return { state: next, effect, steps };
+        return finish({ effect, steps });
     }
 
     // Who the effect lands on follows the target glyph: SELF stays with the
     // caster, ENEMY (or a REFLECTed ENEMY, which becomes SELF+reflected)
-    // crosses to the other side. Before this, the target glyph only gated
-    // wards/REFLECT and a SELF-targeted SEEK quietly hit the defender and
-    // scored an unwardable, unreflectable seal (test: self-targeted SEEK).
+    // crosses to the other side.
     const landsOnCaster = effect.reflected || effect.target === "self";
     const targetPlayerId: PlayerId = landsOnCaster ? context.casterId : context.defenderId;
 
@@ -268,7 +362,19 @@ export function resolveEncounter(
                     ? "WARD blocked the " + (effect.essence ?? "untyped") + " spell."
                     : "WARD blocked the incoming spell."
             );
-            return { state: next, effect, steps };
+            // Ward integrity: the blocked spell still wears the ward down by
+            // its magnitude; at 0 it shatters and the NEXT hit gets through.
+            if (rules.wardIntegrity > 0) {
+                const remaining = (ward.integrity ?? rules.wardIntegrity) - effect.magnitude;
+                if (remaining <= 0) {
+                    delete targetPlayer.ward;
+                    addStep(steps, "boundary", "applied", "WARD_BROKEN", "The WARD shattered under the blow; it is gone.");
+                } else {
+                    ward.integrity = remaining;
+                    addStep(steps, "boundary", "info", "WARD_DENTED", `The WARD held but is dented: integrity ${remaining}.`);
+                }
+            }
+            return finish({ effect, steps });
         }
     }
 
@@ -276,18 +382,24 @@ export function resolveEncounter(
         case "ward": {
             const ownerId =
                 effect.target === "enemy" ? context.defenderId : context.casterId;
-            next.players[ownerId].ward = {
+            const owner = next.players[ownerId];
+            // Faltering players raise brittle wards. Read resolve directly:
+            // the flag is only refreshed when the encounter finishes.
+            const brittle = rules.resolve > 0 && (owner.resolve ?? Number.POSITIVE_INFINITY) <= FALTERING_AT;
+            const integrity = rules.wardIntegrity > 0 ? (brittle ? Math.min(1, rules.wardIntegrity) : rules.wardIntegrity) : undefined;
+            owner.ward = {
                 ownerId,
-                ...(effect.essence ? { essence: effect.essence } : {})
+                ...(effect.essence ? { essence: effect.essence } : {}),
+                ...(integrity !== undefined ? { integrity } : {})
             };
             addStep(
                 steps,
                 "effect",
                 "applied",
                 "WARD_CREATED",
-                effect.essence
+                (effect.essence
                     ? "A " + effect.essence.toUpperCase() + "-filtered WARD is active."
-                    : "A WARD is active."
+                    : "A WARD is active.") + (integrity !== undefined ? ` Integrity ${integrity}.` : "")
             );
             break;
         }
@@ -311,6 +423,16 @@ export function resolveEncounter(
                 "SEEK_HIT",
                 "SEEK reached " + targetPlayerId + " with magnitude " + effect.magnitude + "."
             );
+            if (rules.resolve > 0 && targetPlayer.resolve !== undefined) {
+                targetPlayer.resolve = Math.max(0, targetPlayer.resolve - effect.magnitude);
+                addStep(
+                    steps,
+                    "effect",
+                    "applied",
+                    "RESOLVE_DAMAGE",
+                    `${targetPlayerId}'s resolve drops by ${effect.magnitude} to ${targetPlayer.resolve}.`
+                );
+            }
             break;
 
         case "close":
@@ -322,7 +444,7 @@ export function resolveEncounter(
                     "CLOSE_REQUIRES_GATE",
                     "CLOSE requires a GATE in the POC rules."
                 );
-                return { state: next, effect, steps };
+                return finish({ effect, steps });
             }
             addStep(
                 steps,
@@ -351,12 +473,7 @@ export function resolveEncounter(
             "SEAL_AWARDED",
             scoringPlayerId + " gains 1 seal."
         );
-        return {
-            state: next,
-            effect,
-            steps,
-            sealAwardedTo: scoringPlayerId
-        };
+        return finish({ effect, steps, sealAwardedTo: scoringPlayerId });
     }
 
     addStep(
@@ -367,5 +484,5 @@ export function resolveEncounter(
         "No seal was awarded this encounter."
     );
 
-    return { state: next, effect, steps };
+    return finish({ effect, steps });
 }
