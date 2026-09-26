@@ -158,31 +158,41 @@ jobs:
           workingDirectory: apps/web
           command: pages deploy dist --project-name=wyrd-web --branch=${{ github.head_ref }} --commit-dirty=true
 
-  # No Playwright suite yet (the POC is a single static page), so the
-  # smoke check is curl: the page must serve, and the /api proxy must
-  # reach the production worker. The proxy check only warns until the
-  # worker's first deploy, otherwise every PR before it would be red.
+  # Playwright against the branch preview on the two platforms the
+  # product ships on: WebKit as an iPhone and Chromium as a Pixel. Plays a
+  # client-side duel, checks the version footer and the service worker.
   web-smoke-preview:
-    name: Web smoke (preview)
+    name: Web E2E (preview, iPhone + Pixel)
     needs: web-preview-deploy
     runs-on: ubuntu-latest
-    env:
-      URL: ${{ needs.web-preview-deploy.outputs.preview_url }}
+    defaults: { run: { working-directory: apps/web } }
     steps:
-      - name: Page serves
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: 'pnpm' }
+      - run: pnpm install --frozen-lockfile
+        working-directory: .
+      - run: pnpm exec playwright install --with-deps webkit chromium
+      - name: Wait for the preview to serve
+        env:
+          URL: ${{ needs.web-preview-deploy.outputs.preview_url }}
         run: |
           for _ in $(seq 1 12); do
-            if curl -sf "$URL" | grep -q "Wyrd Duel POC"; then echo "ok: $URL"; exit 0; fi
+            curl -sf "$URL" | grep -q "Wyrd Duel POC" && exit 0
             sleep 5
           done
           echo "::error::preview at $URL never served the page"; exit 1
-      - name: /api proxy reaches the worker
-        run: |
-          if curl -sf "$URL/api/health" | grep -q '"ok":true'; then
-            echo "ok: $URL/api/health"
-          else
-            echo "::warning::$URL/api/health did not answer - worker not deployed yet, or the proxy origin is wrong"
-          fi
+      - name: Run E2E against the branch preview
+        env:
+          E2E_BASE_URL: ${{ needs.web-preview-deploy.outputs.preview_url }}
+        run: pnpm test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report-preview
+          path: apps/web/playwright-report
+          retention-days: 7
 
   web-deploy:
     name: Web deploy

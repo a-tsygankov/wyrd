@@ -1,14 +1,17 @@
 {
     "name": "@wyrd/web",
     "private": true,
-    "version": "0.0.2",
+    "version": "0.0.3",
     "type": "module",
     "scripts": {
-        "typecheck": "tsc -p tsconfig.functions.json",
-        "deploy": "wrangler pages deploy dist --project-name=wyrd-web --branch=main"
+        "typecheck": "tsc -p tsconfig.functions.json && tsc -p tsconfig.e2e.json",
+        "deploy": "wrangler pages deploy dist --project-name=wyrd-web --branch=main",
+        "test:e2e": "playwright test"
     },
     "devDependencies": {
         "@cloudflare/workers-types": "^4.20250101.0",
+        "@playwright/test": "^1.49.0",
+        "@types/node": "^22.0.0",
         "typescript": "^5.9.3",
         "wrangler": "^4.0.0"
     }
