@@ -38,6 +38,8 @@ import { buildRoundEvent, createTelemetry, getSessionId } from "./telemetry.js";
 import { loadSettings, saveSettings, type Settings } from "./settings.js";
 import { loadStats, recordMatchEnd, recordRematch, recordRound, saveStats, summarize, type Stats } from "./stats.js";
 import { QUICK_CAST_MS, REACTION_WINDOW_MS, timerState } from "./timers.js";
+import { buildTimeline, createStage, type StageState } from "./stage.js";
+import { createSound, cueFor } from "./sound.js";
 import {
     REACTION_COSTS,
     ROUND_FOCUS,
@@ -114,6 +116,8 @@ const settingsRules = byId<HTMLElement>("settings-rules");
 const settingsTimers = byId<HTMLInputElement>("settings-timers");
 const settingsTimersNote = byId<HTMLElement>("settings-timers-note");
 const settingsHelp = byId<HTMLInputElement>("settings-help");
+const settingsAnimations = byId<HTMLInputElement>("settings-animations");
+const settingsSound = byId<HTMLInputElement>("settings-sound");
 const settingsTelemetry = byId<HTMLInputElement>("settings-telemetry");
 const statsToggle = byId<HTMLButtonElement>("stats-toggle");
 const statsPanel = byId<HTMLElement>("stats");
@@ -172,6 +176,36 @@ function names(): { you: string; them: string } {
 let settings: Settings = loadSettings(deviceStorage, new URLSearchParams(location.search));
 let ruleset: Ruleset = rulesets[settings.ruleset];
 let stats: Stats = loadStats(deviceStorage);
+// The stage and its sound. Reduced motion follows the system setting or
+// the Animations switch; sound stays silent until the first tap unlocks it.
+const reducedMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+const sound = createSound(settings.sound);
+const stageRoot = byId<SVGSVGElement & HTMLElement>("stage");
+const stage = createStage(
+    stageRoot,
+    {
+        onBeat: beat => {
+            stageRoot.dataset.lastBeat = beat.kind;
+            const cue = cueFor(beat);
+            if (cue) sound.play(cue);
+        }
+    },
+    { reduced: () => !settings.animations || reducedMotionQuery.matches }
+);
+let gateClosedThisRound = false;
+function stageState(): StageState {
+    return {
+        wards: { player: state.players.player.ward, opponent: state.players.opponent.ward },
+        bound: { player: state.players.player.bound === true, opponent: state.players.opponent.bound === true },
+        gateClosed: gateClosedThisRound
+    };
+}
+document.addEventListener("pointerdown", () => sound.unlock(), { passive: true });
+stageRoot.addEventListener("click", () => {
+    // A tap skips the current animation: an empty run supersedes it.
+    if (stageRoot.dataset.playing === "1") void stage.play([], stageState());
+});
+
 glyphHelpDetails.open = settings.glyphHelpOpen;
 glyphHelpDetails.addEventListener("toggle", () => {
     if (settings.glyphHelpOpen !== glyphHelpDetails.open) {
@@ -654,6 +688,7 @@ function render(): void {
     renderMode();
     renderTimer();
     renderAdmin();
+    if (stageRoot.dataset.playing !== "1") stage.setIdle(stageState());
 
     nextRoundButton.classList.toggle("hidden", !roundResolved || matchOutcome().over);
 }
@@ -814,7 +849,29 @@ function resolveRound(): void {
     void telemetry.flush();
     playerQuickCast = false;
     p2QuickCast = false;
+    gateClosedThisRound =
+        incoming.steps.some(s => s.code === "GATE_CLOSED") || (outgoing?.steps.some(s => s.code === "GATE_CLOSED") ?? false);
     render();
+
+    // The stage replays the round from the resolver's steps; the log above
+    // is already complete, so a tap can skip it without losing anything.
+    void (async () => {
+        stageRoot.dataset.playing = "1";
+        stage.setIdle({
+            wards: { player: roundStart.players.player.ward, opponent: roundStart.players.opponent.ward },
+            bound: { player: roundStart.players.player.bound === true, opponent: roundStart.players.opponent.bound === true },
+            gateClosed: false
+        });
+        await stage.play(
+            buildTimeline(
+                { result: incoming, casterId: "opponent", defenderId: "player", spell: opponentSpell, reaction: selectedReaction },
+                outgoing ? { result: outgoing, casterId: "player", defenderId: "opponent", spell: playerSpell, reaction: botReaction } : undefined
+            ),
+            stageState()
+        );
+        delete stageRoot.dataset.playing;
+        stage.setIdle(stageState());
+    })();
 }
 
 function startNextRound(): void {
@@ -823,6 +880,7 @@ function startNextRound(): void {
     }
 
     state = beginNextRound(state);
+    gateClosedThisRound = false;
     playerSpell = [];
     selectedReaction = undefined;
     roundResolved = false;
@@ -853,6 +911,7 @@ function resetMatch(): void {
         saveStats(deviceStorage, stats);
     }
     state = createInitialDuelState(ruleset.rules);
+    gateClosedThisRound = false;
     history = [];
     playerSpell = [];
     selectedReaction = undefined;
@@ -1022,6 +1081,8 @@ function renderSettings(): void {
         : `${ruleset.title} has no timers. Pick Pulse or Resolve to use them.`;
     settingsTelemetry.checked = settings.telemetry;
     settingsHelp.checked = settings.glyphHelpOpen;
+    settingsAnimations.checked = settings.animations;
+    settingsSound.checked = settings.sound;
 }
 
 function applyRuleset(id: RulesetId): void {
@@ -1053,6 +1114,18 @@ settingsTelemetry.addEventListener("change", () => {
     settings = { ...settings, telemetry: settingsTelemetry.checked };
     saveSettings(deviceStorage, settings);
     log.info(`telemetry: ${settings.telemetry ? "on" : "off"}`);
+});
+settingsAnimations.addEventListener("change", () => {
+    settings = { ...settings, animations: settingsAnimations.checked };
+    saveSettings(deviceStorage, settings);
+    log.info(`animations: ${settings.animations ? "on" : "off"}`);
+});
+settingsSound.addEventListener("change", () => {
+    settings = { ...settings, sound: settingsSound.checked };
+    saveSettings(deviceStorage, settings);
+    sound.setEnabled(settings.sound);
+    if (settings.sound) sound.unlock();
+    log.info(`sound: ${settings.sound ? "on" : "off"}`);
 });
 settingsHelp.addEventListener("change", () => {
     settings = { ...settings, glyphHelpOpen: settingsHelp.checked };

@@ -12,9 +12,13 @@ export type Settings = {
     telemetry: boolean;
     /** Show glyph help expanded instead of behind the tap-to-expand row. */
     glyphHelpOpen: boolean;
+    /** Play the stage animation for each resolution. */
+    animations: boolean;
+    /** Synthesised sound cues on stage beats. */
+    sound: boolean;
 };
 
-export const DEFAULT_SETTINGS: Settings = { ruleset: "classic", timers: true, telemetry: true, glyphHelpOpen: false };
+export const DEFAULT_SETTINGS: Settings = { ruleset: "classic", timers: true, telemetry: true, glyphHelpOpen: false, animations: true, sound: false };
 
 type StorageLike = { getItem(key: string): string | null; setItem(key: string, value: string): void };
 
@@ -40,6 +44,8 @@ export function loadSettings(storage: StorageLike, params: URLSearchParams): Set
             if (typeof saved.timers === "boolean") settings.timers = saved.timers;
             if (typeof saved.telemetry === "boolean") settings.telemetry = saved.telemetry;
             if (typeof saved.glyphHelpOpen === "boolean") settings.glyphHelpOpen = saved.glyphHelpOpen;
+            if (typeof saved.animations === "boolean") settings.animations = saved.animations;
+            if (typeof saved.sound === "boolean") settings.sound = saved.sound;
         }
     } catch {
         // Unreadable storage or corrupt JSON: defaults.
@@ -50,6 +56,10 @@ export function loadSettings(storage: StorageLike, params: URLSearchParams): Set
     if (timers !== undefined) settings.timers = timers;
     const telemetry = parseSwitch(params.get("telemetry"));
     if (telemetry !== undefined) settings.telemetry = telemetry;
+    const animations = parseSwitch(params.get("animations"));
+    if (animations !== undefined) settings.animations = animations;
+    const sound = parseSwitch(params.get("sound"));
+    if (sound !== undefined) settings.sound = sound;
     return settings;
 }
 

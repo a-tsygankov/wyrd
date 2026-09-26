@@ -9,8 +9,8 @@ test("the settings panel switches rulesets and the Focus budget follows", async 
     await expect(page.locator("#settings")).toBeVisible();
     await expect(page.locator("#settings-rules .settings-option")).toHaveCount(4);
     await expect(page.locator("#settings-rules .settings-option.selected")).toContainText("Classic");
-    // Separate groups: Rules, Tempo, Privacy, Help; tempo is disabled for a ruleset without timers.
-    await expect(page.locator("#settings .settings-group")).toHaveCount(4);
+    // Separate groups: Rules, Tempo, Privacy, Stage, Help; tempo is disabled for a ruleset without timers.
+    await expect(page.locator("#settings .settings-group")).toHaveCount(5);
     await expect(page.locator("#settings-rules .settings-option.selected li")).not.toHaveCount(0);
     await expect(page.locator("#settings-timers")).toBeDisabled();
     await expect(page.locator("#settings-timers-note")).toContainText("Classic has no timers");

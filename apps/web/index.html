@@ -58,6 +58,73 @@
             </div>
         </section>
 
+        <!-- The stage: the resolver's steps replayed as a fight. Pure presentation;
+             every beat comes from a ResolutionStep (apps/web/src/stage.ts). Tap to skip. -->
+        <section class="stage card" aria-label="Duel stage">
+            <svg id="stage" viewBox="0 0 360 170" role="img" aria-labelledby="stage-caption" preserveAspectRatio="xMidYMid meet">
+                <defs>
+                    <linearGradient id="stage-floor" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0" stop-color="#2a2140" stop-opacity="0"/>
+                        <stop offset="1" stop-color="#2a2140" stop-opacity="0.9"/>
+                    </linearGradient>
+                    <radialGradient id="stage-glow">
+                        <stop offset="0" stop-color="#ffffff" stop-opacity="0.9"/>
+                        <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+                    </radialGradient>
+                </defs>
+                <rect x="0" y="0" width="360" height="170" fill="url(#stage-floor)"/>
+                <ellipse cx="180" cy="150" rx="150" ry="10" fill="#000" opacity="0.35"/>
+
+                <!-- The gate: the objective between the mages. -->
+                <g id="stage-gate">
+                    <rect x="164" y="70" width="32" height="70" rx="6" fill="none" stroke="#a994e8" stroke-width="2" opacity="0.7"/>
+                    <rect id="stage-gate-door" x="167" y="73" width="26" height="64" rx="4" fill="#5b3fd1" opacity="0.25"/>
+                    <circle cx="180" cy="92" r="4" fill="#f4f0ff" opacity="0.6"/>
+                </g>
+
+                <!-- Mages: left is you / Player 1, right the opponent / Player 2. -->
+                <!-- Position on the outer group; the inner group carries the CSS sway
+                     and hit transforms, which would otherwise override the placement. -->
+                <g transform="translate(70 118)">
+                <g id="stage-mage-player" class="mage">
+                    <ellipse cx="0" cy="26" rx="18" ry="3" fill="#000" opacity="0.4"/>
+                    <path d="M -16 24 L -12 -10 Q 0 -22 12 -10 L 16 24 Z" fill="#4a35a6"/>
+                    <circle cx="0" cy="-20" r="9" fill="#d8d1e1"/>
+                    <path d="M -11 -18 Q 0 -32 11 -18 Z" fill="#6c4fe0"/>
+                    <path class="arm" d="M 12 -4 L 26 -12" stroke="#d8d1e1" stroke-width="4" stroke-linecap="round"/>
+                    <circle class="palm" cx="27" cy="-13" r="3.5" fill="#ad63ff"/>
+                    <g id="stage-chains-player" opacity="0">
+                        <path d="M -20 -6 L 20 -6 M -20 6 L 20 6 M -20 18 L 20 18" stroke="#a56bff" stroke-width="2" stroke-dasharray="4 3"/>
+                    </g>
+                </g>
+                </g>
+                <g transform="translate(290 118)">
+                <g id="stage-mage-opponent" class="mage">
+                    <ellipse cx="0" cy="26" rx="18" ry="3" fill="#000" opacity="0.4"/>
+                    <path d="M -16 24 L -12 -10 Q 0 -22 12 -10 L 16 24 Z" fill="#6a2e5a"/>
+                    <circle cx="0" cy="-20" r="9" fill="#d8d1e1"/>
+                    <path d="M -11 -18 Q 0 -32 11 -18 Z" fill="#a34a8a"/>
+                    <path class="arm" d="M -12 -4 L -26 -12" stroke="#d8d1e1" stroke-width="4" stroke-linecap="round"/>
+                    <circle class="palm" cx="-27" cy="-13" r="3.5" fill="#ff7a3d"/>
+                    <g id="stage-chains-opponent" opacity="0">
+                        <path d="M -20 -6 L 20 -6 M -20 6 L 20 6 M -20 18 L 20 18" stroke="#a56bff" stroke-width="2" stroke-dasharray="4 3"/>
+                    </g>
+                </g>
+                </g>
+
+                <!-- Wards: hexagon shields in front of each mage. -->
+                <polygon id="stage-ward-player" class="ward" points="104,88 118,96 118,124 104,132 90,124 90,96" opacity="0" fill="#f4f0ff" fill-opacity="0.12" stroke="#f4f0ff" stroke-width="2"/>
+                <polygon id="stage-ward-opponent" class="ward" points="256,88 270,96 270,124 256,132 242,124 242,96" opacity="0" fill="#f4f0ff" fill-opacity="0.12" stroke="#f4f0ff" stroke-width="2"/>
+
+                <!-- The bolt and its trail, the seal orb, the impact flash. -->
+                <line id="stage-trail" x1="0" y1="0" x2="0" y2="0" stroke="#fff" stroke-width="3" stroke-linecap="round" opacity="0"/>
+                <circle id="stage-bolt" cx="0" cy="0" r="8" fill="#fff" opacity="0"/>
+                <circle id="stage-orb" cx="0" cy="0" r="9" fill="url(#stage-glow)" opacity="0"/>
+                <rect id="stage-flash" x="0" y="0" width="360" height="170" fill="#fff" opacity="0"/>
+                <text id="stage-caption" x="180" y="30" text-anchor="middle" fill="#f4f0ff" font-size="13" font-weight="800" letter-spacing="1"></text>
+            </svg>
+        </section>
+
         <section class="opponent card">
             <div class="section-heading">
                 <div>
@@ -145,6 +212,18 @@
                 <label class="settings-switch">
                     <input id="settings-telemetry" type="checkbox">
                     <span><strong>Anonymous playtest telemetry</strong><span class="settings-summary">Rounds, reactions and outcomes, tagged with the ruleset. No account, IP or device details. Stats → Everyone is built from this.</span></span>
+                </label>
+            </fieldset>
+
+            <fieldset class="settings-group">
+                <legend class="label">Stage</legend>
+                <label class="settings-switch">
+                    <input id="settings-animations" type="checkbox">
+                    <span><strong>Animations</strong><span class="settings-summary">Play each resolution on the stage. Off, or a reduced-motion system setting, shows the result at once.</span></span>
+                </label>
+                <label class="settings-switch">
+                    <input id="settings-sound" type="checkbox">
+                    <span><strong>Sound</strong><span class="settings-summary">Short synthesised cues for casts, blocks, seals. Starts after your first tap.</span></span>
                 </label>
             </fieldset>
 

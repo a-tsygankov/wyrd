@@ -402,3 +402,38 @@ h2 {
 
 /* The switch rows stack title over description; the rule cards alone use the two-column grid. */
 .settings-switch .settings-summary { grid-column: auto; }
+
+.stage { padding: 8px 10px 4px; overflow: hidden; }
+.stage svg { display: block; width: 100%; height: auto; max-height: 190px; }
+.stage .mage { transform-box: fill-box; transform-origin: 50% 100%; }
+.stage .mage .arm, .stage .mage .palm { transition: transform 0.25s ease-out; transform-box: fill-box; transform-origin: 0 50%; }
+.stage .mage.casting .arm { transform: rotate(-25deg); }
+.stage .mage.casting .palm { filter: drop-shadow(0 0 6px currentColor); }
+.stage .mage.hit path:first-of-type { filter: brightness(2) saturate(0.2); }
+.stage .ward { transform-box: fill-box; transform-origin: center; }
+.stage .ward.cracked { stroke-dasharray: 6 4; fill-opacity: 0.05; }
+#stage-bolt, #stage-orb { transform-box: view-box; transform-origin: 0 0; filter: drop-shadow(0 0 6px currentColor); }
+#stage-gate-door { transform-box: fill-box; transform-origin: center; }
+#stage-caption { pointer-events: none; }
+
+@keyframes stage-sway {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-2px); }
+}
+.stage .mage { animation: stage-sway 3.2s ease-in-out infinite; }
+#stage-mage-opponent { animation-delay: -1.6s; }
+
+@keyframes stage-shake {
+    0%, 100% { transform: translate(0, 0); }
+    20% { transform: translate(-3px, 1px); }
+    40% { transform: translate(3px, -1px); }
+    60% { transform: translate(-2px, 0); }
+    80% { transform: translate(2px, 1px); }
+}
+#stage.shake { animation: stage-shake 0.26s linear; }
+
+@media (prefers-reduced-motion: reduce) {
+    .stage .mage { animation: none; }
+    #stage.shake { animation: none; }
+    .stage .mage .arm, .stage .mage .palm { transition: none; }
+}
