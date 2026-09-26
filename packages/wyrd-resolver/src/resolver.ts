@@ -9,7 +9,10 @@ import {
     REACTION_COSTS,
     ROUND_FOCUS,
     type DuelState,
+    type Initiative,
     type PlayerId,
+    type RoundContext,
+    type RoundResolution,
     type PlayerState,
     type ReactionGlyph,
     type ResolutionContext,
@@ -157,6 +160,7 @@ type Encounter = {
     defenderId: PlayerId;
     rules: RuleOptions;
     steps: ResolutionStep[];
+    gateContested: boolean;
     /** Set while a SPLIT spell resolves, so each branch's steps are tagged. */
     branch?: number;
 };
@@ -180,6 +184,12 @@ function applyBranch(effect: ResolvedEffect, e: Encounter): PlayerId | undefined
     // --- The gate: a contested objective. CLOSE scores while open, OPEN while
     // closed; BREAK shatters it (no seal) and MEND repairs it (no seal).
     if (effect.target === "gate") {
+        // Two hands on the gate in one round: it shudders and holds for both,
+        // so the same-round race is nobody's (docs/balance-analysis.md §3.1).
+        if (e.gateContested) {
+            addStep(steps, "effect", "failed", "GATE_CONTESTED", "Both mages reached for the GATE at once; it shudders and holds.");
+            return undefined;
+        }
         switch (effect.action) {
             case "close":
             case "open": {
@@ -615,7 +625,14 @@ export function resolveEncounter(
         turned.target = "self";
     }
 
-    const encounter: Encounter = { state: next, casterId: context.casterId, defenderId: context.defenderId, rules, steps };
+    const encounter: Encounter = {
+        state: next,
+        casterId: context.casterId,
+        defenderId: context.defenderId,
+        rules,
+        steps,
+        gateContested: context.gateContested === true
+    };
     // One seal per side per encounter, however many branches reach.
     const sealsAwarded: Partial<Record<PlayerId, number>> = {};
     for (const [index, branch] of branches.entries()) {
@@ -641,4 +658,77 @@ export function resolveEncounter(
         steps,
         ...(sealAwardedTo ? { sealAwardedTo, sealsAwarded } : {})
     });
+}
+
+/** The gate target of a valid spell, if it has one. */
+function aimsAtGate(tokens: readonly string[]): boolean {
+    const parsed = parseSpell([...tokens]);
+    if (parsed.status !== "valid" || !parsed.ast) return false;
+    try {
+        return flatten(parsed.ast).target === "gate";
+    } catch {
+        return false;
+    }
+}
+
+/** Both spells aim at the GATE this round. */
+export function gateContested(spells: Record<PlayerId, readonly string[]>): boolean {
+    return aimsAtGate(spells.player) && aimsAtGate(spells.opponent);
+}
+
+/**
+ * Who resolves first (docs/balance-analysis.md §3.5): the only quick cast
+ * under rules.quickCast; else the cheaper spell; else the mage with fewer
+ * seals; else the player on odd rounds and the opponent on even ones. An
+ * invalid spell never has initiative.
+ */
+export function initiative(
+    state: DuelState,
+    spells: Record<PlayerId, readonly string[]>,
+    options: { quickCast?: Partial<Record<PlayerId, boolean>> } = {}
+): Initiative {
+    const rules = state.rules ?? CLASSIC_RULES;
+    const quickP = rules.quickCast && options.quickCast?.player === true;
+    const quickO = rules.quickCast && options.quickCast?.opponent === true;
+    if (quickP !== quickO) return { first: quickP ? "player" : "opponent", reason: "quick" };
+    const cost = (tokens: readonly string[]): number => {
+        const parsed = parseSpell([...tokens]);
+        return parsed.status === "valid" ? parsed.focusCost : Number.POSITIVE_INFINITY;
+    };
+    const p = cost(spells.player);
+    const o = cost(spells.opponent);
+    if (p !== o) return { first: p < o ? "player" : "opponent", reason: "focus" };
+    const sp = state.players.player.seals;
+    const so = state.players.opponent.seals;
+    if (sp !== so) return { first: sp < so ? "player" : "opponent", reason: "seals" };
+    return { first: state.round % 2 === 1 ? "player" : "opponent", reason: "round" };
+}
+
+/**
+ * A whole round: both spells in initiative order against the same evolving
+ * state, the gate contested when both aim at it, and an early stop when the
+ * match is decided (`stopWhen`). The client and the simulator both use this
+ * so the order is a rule, not a seat.
+ */
+export function resolveRound(
+    state: DuelState,
+    contexts: Record<PlayerId, RoundContext>,
+    options: { stopWhen?: (state: DuelState) => boolean } = {}
+): RoundResolution {
+    const spells = { player: contexts.player.spellTokens, opponent: contexts.opponent.spellTokens };
+    const who = initiative(state, spells, {
+        quickCast: { player: contexts.player.quickCast === true, opponent: contexts.opponent.quickCast === true }
+    });
+    const order: [PlayerId, PlayerId] = who.first === "player" ? ["player", "opponent"] : ["opponent", "player"];
+    const contested = gateContested(spells);
+    const results: Partial<Record<PlayerId, ResolutionResult>> = {};
+    let current = state;
+    for (const casterId of order) {
+        if (Object.keys(results).length > 0 && options.stopWhen?.(current)) break;
+        const defenderId: PlayerId = casterId === "player" ? "opponent" : "player";
+        const result = resolveEncounter(current, { ...contexts[casterId], casterId, defenderId, ...(contested ? { gateContested: true } : {}) });
+        results[casterId] = result;
+        current = result.state;
+    }
+    return { state: current, initiative: who, order, contested, results };
 }

@@ -73,7 +73,8 @@ const reactionEntries: GlossaryEntry[] = ["REFLECT", "SILENCE", "NULL", "SPELL"]
 }));
 
 const termEntries: GlossaryEntry[] = [
-    { term: "Round", text: "One exchange: read the telegraph, choose a reaction, compose your spell, cast. Both spells resolve, seals are awarded, the next round begins." },
+    { term: "Round", text: "One exchange: read the telegraph, choose a reaction, compose your spell, cast. Both spells resolve in initiative order, seals are awarded, the next round begins." },
+    { term: "Initiative", text: "Who resolves first: the only quick cast (under timers), else the cheaper spell, else the mage behind on seals, else you on odd rounds and the opponent on even ones. The verdict names it every round." },
     { term: "Telegraph", text: "What you see of the opponent's spell before you react: the essence and action glyphs shown, the target and modifiers hidden. Some rules reveal more: a mage who ended at 0 Focus or is faltering leaks one extra glyph." },
     { term: "Reaction window", text: "Under Pulse and Resolve, 8 seconds to choose a reaction after the telegraph appears; hidden glyphs flip face-up across the window, so waiting buys information and risks the lock. The last 3 seconds pulse the card edge." },
     { term: "Scry", text: "In reaction-cost rulesets, pay 1 Focus to reveal one hidden telegraph glyph now, from the same budget as your spell and reaction." },
@@ -82,7 +83,7 @@ const termEntries: GlossaryEntry[] = [
     { term: "Seal", text: "The score. A SEEK or BIND that reaches the opponent, or a gate spell that moves the gate, is one seal. First to 3 wins the duel." },
     { term: "Ward", text: "A lasting shield on a mage. It blocks hostile spells of its essence (or every hostile spell if untyped) until it is broken. Your own spells pass your own ward." },
     { term: "Integrity", text: "Under Teeth and up a ward absorbs 2 magnitude before it shatters; each blocked hit dents it. MEND restores it." },
-    { term: "Gate", text: "The objective between the mages: open, closed or broken. CLOSE scores while it stands open, OPEN while it is closed, BREAK shatters it, MEND repairs it. Wards and REFLECT cannot touch it; only NULL stops a gate spell." },
+    { term: "Gate", text: "The objective between the mages: open, closed or broken. CLOSE scores while it stands open, OPEN while it is closed, BREAK shatters it, MEND repairs it. Wards and REFLECT cannot touch it; only NULL stops a gate spell. When both mages cast a gate spell in the same round, the gate shudders and holds: neither scores." },
     { term: "Bound", text: `The state BIND leaves. Under Resolve a bound mage pays ${BOUND_TAX} extra Focus for their next spell, which frees them.` },
     { term: "Resolve", text: `Under the Resolve ruleset each mage has hit points; SEEK deals its magnitude, MEND SELF heals ${MEND_RESOLVE}. Emptying the opponent's Resolve wins the duel as surely as 3 seals.` },
     { term: "Faltering", text: `At Resolve ${FALTERING_AT} or less: your wards come up brittle (integrity 1) and your telegraph leaks one more glyph.` },

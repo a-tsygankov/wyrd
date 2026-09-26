@@ -106,6 +106,27 @@ export type ResolutionContext = {
     reaction?: ReactionGlyph;
     /** The caster committed fast (client-measured); +1 magnitude under rules.quickCast. */
     quickCast?: boolean;
+    /** Both mages cast a gate spell this round: the gate shudders and holds for both (resolveRound sets it). */
+    gateContested?: boolean;
+};
+
+/** Who resolves first this round and why (docs/balance-analysis.md §3.5). */
+export type Initiative = {
+    first: PlayerId;
+    /** quick: the only quick cast; focus: the cheaper spell; seals: the mage behind; round: odd rounds the player, even the opponent. */
+    reason: "quick" | "focus" | "seals" | "round";
+};
+
+export type RoundContext = Omit<ResolutionContext, "casterId" | "defenderId" | "gateContested">;
+
+export type RoundResolution = {
+    state: DuelState;
+    initiative: Initiative;
+    order: [PlayerId, PlayerId];
+    /** Two spells aimed at the gate: neither moves it. */
+    contested: boolean;
+    /** The second result is absent when `stopWhen` ended the match after the first. */
+    results: Partial<Record<PlayerId, ResolutionResult>>;
 };
 
 export type SpellAction = "seek" | "bind" | "ward" | "close" | "open" | "break" | "mend";

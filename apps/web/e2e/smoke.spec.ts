@@ -50,7 +50,9 @@ test("a spell can be cast and scores a seal", async ({ page }) => {
     await expect(page.locator("#combat-log .lesson")).toContainText("Lesson");
     // Round verdict on top of the log: 1-1 in round 1 without a reaction.
     await expect(page.locator("#combat-log .verdict").first()).toContainText(/even round/i);
-    await expect(page.locator("#combat-log .reason").first()).toContainText(/gained a seal/i);
+    // The first reason is who resolved first (initiative); the seals follow.
+    await expect(page.locator("#combat-log .reason").first()).toContainText(/resolved first/i);
+    await expect(page.locator("#combat-log .reason").nth(1)).toContainText(/gained a seal/i);
     await expect(page.locator("#next-round")).toBeVisible();
 });
 

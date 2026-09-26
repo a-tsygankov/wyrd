@@ -44,7 +44,7 @@ import { buildRoundEvent, createTelemetry, getSessionId } from "./telemetry.js";
 import { loadSettings, saveSettings, type Settings } from "./settings.js";
 import { loadStats, recordMatchEnd, recordRematch, recordRound, saveStats, summarize, type Stats } from "./stats.js";
 import { QUICK_CAST_MS, REACTION_WINDOW_MS, timerState } from "./timers.js";
-import { buildTimeline, createStage, type StageState } from "./stage.js";
+import { buildTimeline, createStage, type Contribution, type StageState } from "./stage.js";
 import { hiddenCount, revealSchedule, revealedSlots, scrySlot, type Reveal } from "./reveal.js";
 import { createSound, cueFor, extraCueFor, urgencyCue } from "./sound.js";
 import { focusMeter } from "./meter.js";
@@ -54,6 +54,7 @@ import {
     REACTION_COSTS,
     ROUND_FOCUS,
     beginNextRound,
+    resolveRound as resolveBothSpells,
     createInitialDuelState,
     resolveEncounter,
     spellFocusCost,
@@ -372,12 +373,12 @@ function timersActive(): boolean {
 }
 
 type MatchOutcome = { over: boolean; winner?: PlayerId; reason?: "seals" | "resolve" };
-function matchOutcome(): MatchOutcome {
-    const p = state.players.player;
-    const o = state.players.opponent;
+function matchOutcome(of: DuelState = state): MatchOutcome {
+    const p = of.players.player;
+    const o = of.players.opponent;
     if (p.seals >= 3) return { over: true, winner: "player", reason: "seals" };
     if (o.seals >= 3) return { over: true, winner: "opponent", reason: "seals" };
-    if (state.rules.resolve > 0) {
+    if (of.rules.resolve > 0) {
         if ((o.resolve ?? 1) <= 0) return { over: true, winner: "player", reason: "resolve" };
         if ((p.resolve ?? 1) <= 0) return { over: true, winner: "opponent", reason: "resolve" };
     }
@@ -803,39 +804,52 @@ function resolveRound(): void {
     const sealsBefore = { player: state.players.player.seals, opponent: state.players.opponent.seals };
 
     const opponentSpell = plan.opponentSpell;
-    const incoming = resolveEncounter(state, {
-        casterId: "opponent",
-        defenderId: "player",
-        spellTokens: opponentSpell,
-        ...(selectedReaction ? { reaction: selectedReaction } : {}),
-        ...(mode === "hotseat" && p2QuickCast ? { quickCast: true } : {})
-    });
-
-    state = incoming.state;
-    appendSteps(
-        "Opponent: " + formatSpell(opponentSpell) + (selectedReaction ? " • you used " + selectedReaction.toUpperCase() : ""),
-        incoming.steps
+    // The opponent's reaction to the player's spell is decided before either
+    // resolves (a reaction is chosen from the telegraph, not from the result).
+    const botReaction: ReactionGlyph | undefined = plan.reaction(playerSpell);
+    // Both spells resolve in initiative order - cheaper first, then the mage
+    // behind, then the round - and two gate spells contest the gate; the
+    // match stops the second spell when the first decides it.
+    const round = resolveBothSpells(
+        state,
+        {
+            opponent: {
+                spellTokens: opponentSpell,
+                ...(selectedReaction ? { reaction: selectedReaction } : {}),
+                ...(mode === "hotseat" && p2QuickCast ? { quickCast: true } : {})
+            },
+            player: {
+                spellTokens: playerSpell,
+                ...(botReaction ? { reaction: botReaction } : {}),
+                ...(playerQuickCast ? { quickCast: true } : {})
+            }
+        },
+        { stopWhen: s => matchOutcome(s).over }
     );
-
-    let botReaction: ReactionGlyph | undefined;
-    let outgoing: ResolutionResult | undefined;
-    if (!matchOutcome().over) {
-        botReaction = plan.reaction(playerSpell);
-        outgoing = resolveEncounter(state, {
-            casterId: "player",
-            defenderId: "opponent",
-            spellTokens: playerSpell,
-            ...(botReaction ? { reaction: botReaction } : {}),
-            ...(playerQuickCast ? { quickCast: true } : {})
-        });
-
-        state = outgoing.state;
-        appendSteps(
-            "You: " + formatSpell(playerSpell) +
-                (botReaction ? " • opponent used " + botReaction.toUpperCase() : "") +
-                (playerQuickCast ? " • quick cast" : ""),
-            outgoing.steps
-        );
+    state = round.state;
+    const incoming = round.results.opponent;
+    const outgoing = round.results.player;
+    for (const id of round.order) {
+        if (id === "opponent" && incoming) {
+            appendSteps(
+                "Opponent: " + formatSpell(opponentSpell) + (selectedReaction ? " • you used " + selectedReaction.toUpperCase() : ""),
+                incoming.steps
+            );
+        }
+        if (id === "player" && outgoing) {
+            appendSteps(
+                "You: " + formatSpell(playerSpell) +
+                    (botReaction ? " • opponent used " + botReaction.toUpperCase() : "") +
+                    (playerQuickCast ? " • quick cast" : ""),
+                outgoing.steps
+            );
+        }
+    }
+    if (!incoming) {
+        // Only the player's spell resolved (it decided the match); the
+        // explanation still needs an incoming contribution, so resolve the
+        // opponent's spell against the final state for the record only.
+        appendSteps("Opponent: " + formatSpell(opponentSpell) + " • too late, the duel is decided", []);
     }
 
     lastBotSpell = opponentSpell;
@@ -844,13 +858,14 @@ function resolveRound(): void {
     // Who won the round and why, on top of the log; the match verdict when
     // the duel ends. Both come from the resolutions themselves.
     const who = names();
-    const round = explainRound(
-        { result: incoming, spell: opponentSpell, reaction: selectedReaction },
-        outgoing ? { result: outgoing, spell: playerSpell, reaction: botReaction } : undefined,
-        who
+    const explained = explainRound(
+        { result: incoming ?? outgoing!, spell: incoming ? opponentSpell : playerSpell, reaction: incoming ? selectedReaction : botReaction },
+        incoming && outgoing ? { result: outgoing, spell: playerSpell, reaction: botReaction } : undefined,
+        who,
+        round.initiative
     );
-    history.push({ round: state.round, reasons: round.reasons });
-    const verdictItems = [round.verdict, ...round.reasons].map((text, index) => {
+    history.push({ round: state.round, reasons: explained.reasons });
+    const verdictItems = [explained.verdict, ...explained.reasons].map((text, index) => {
         const li = document.createElement("li");
         li.className = index === 0 ? "verdict" : "reason";
         li.textContent = text;
@@ -945,13 +960,13 @@ function resolveRound(): void {
             bound: { player: roundStart.players.player.bound === true, opponent: roundStart.players.opponent.bound === true },
             gate: roundStart.gate
         });
-        await stage.play(
-            buildTimeline(
-                { result: incoming, casterId: "opponent", defenderId: "player", spell: opponentSpell, reaction: selectedReaction },
-                outgoing ? { result: outgoing, casterId: "player", defenderId: "opponent", spell: playerSpell, reaction: botReaction } : undefined
-            ),
-            stageState()
-        );
+        const contributions: Contribution[] = [];
+        for (const id of round.order) {
+            if (id === "opponent" && incoming) contributions.push({ result: incoming, casterId: "opponent", defenderId: "player", spell: opponentSpell, reaction: selectedReaction });
+            if (id === "player" && outgoing) contributions.push({ result: outgoing, casterId: "player", defenderId: "opponent", spell: playerSpell, reaction: botReaction });
+        }
+        const [lead, follow] = contributions;
+        if (lead) await stage.play(buildTimeline(lead, follow), stageState());
         delete stageRoot.dataset.playing;
         stage.setIdle(stageState());
     })();
