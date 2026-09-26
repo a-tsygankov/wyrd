@@ -24,7 +24,7 @@ cpSync("dist/apps/web/src/install.js", `${out}/apps/web/src/install.js`);
 cpSync("dist/apps/web/src/telemetry.js", `${out}/apps/web/src/telemetry.js`);
 cpSync("dist/apps/web/src/log.js", `${out}/apps/web/src/log.js`);
 cpSync("dist/apps/web/src/hotseat.js", `${out}/apps/web/src/hotseat.js`);
-for (const file of ["settings.js", "stats.js", "timers.js"]) cpSync(`dist/apps/web/src/${file}`, `${out}/apps/web/src/${file}`);
+for (const file of ["settings.js", "stats.js", "timers.js", "stage.js", "sound.js"]) cpSync(`dist/apps/web/src/${file}`, `${out}/apps/web/src/${file}`);
 
 mkdirSync(`${out}/packages`, { recursive: true });
 for (const pkg of ["wyrd-grammar", "wyrd-content", "wyrd-resolver", "wyrd-simulation"]) {

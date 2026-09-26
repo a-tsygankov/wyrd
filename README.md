@@ -41,6 +41,10 @@ The pre-commit hook needs a working `python`/`python3`/`py`; without one it skip
 
 **Stats** (header) shows this device's games per ruleset (matches, win rate, seal rate, average time to commit, top reaction, rematches, streak) from local storage, and everyone's numbers from `GET /api/telemetry/summary` (per ruleset and mode, per scenario).
 
+## Stage
+
+Each resolution is replayed on an inline SVG stage between the scoreboard and the telegraph: two mages, the gate, hexagon wards that crack and shatter, a bolt coloured by essence, seal orbs, an impact flash. `apps/web/src/stage.ts` maps the resolver's steps to beats (so the picture always agrees with the combat log) and plays them with the Web Animations API; tap the stage to skip. Settings → Stage: Animations (also follows the system reduced-motion preference) and Sound (eight synthesised cues, off by default, start after the first tap).
+
 ## Hot-seat
 
 Tap **Hot-seat** in the header (or open `?mode=hotseat`) for two players on one phone: Player 2 composes in secret and locks in, the phone is passed, Player 1 reads the telegraph, reacts and casts, the phone is passed back, Player 2 reacts, both see the resolution. The hand-off overlay hides the board between turns. State machine in `apps/web/src/hotseat.ts`.
