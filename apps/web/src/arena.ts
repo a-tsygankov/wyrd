@@ -67,9 +67,21 @@ export function createArena(container: HTMLElement, options: ArenaOptions): Aren
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(30, ASPECT, 0.1, 50);
-    // Close enough that a mage is about a third of the frame's height on a phone.
-    const CAMERA_AT = new THREE.Vector3(0, 2.0, 6.4);
-    const LOOK_AT = new THREE.Vector3(0, 1.15, 0);
+    // Camera poses per phase (docs/duel-3d-assets-and-ui.md §3, layout A):
+    // read/react push in on the opponent, shape looks over the player's
+    // shoulder, cast frames both marks, resolve goes wide, verdict pulls
+    // back to take in the gate. The trauma shake rides on top.
+    type Pose = { at: THREE.Vector3; look: THREE.Vector3; fov: number };
+    const POSES: Record<"read" | "react" | "shape" | "cast" | "resolve" | "verdict", Pose> = {
+        read: { at: new THREE.Vector3(1.4, 1.9, 4.4), look: new THREE.Vector3(2.0, 1.25, 0), fov: 30 },
+        react: { at: new THREE.Vector3(1.0, 1.9, 4.8), look: new THREE.Vector3(1.6, 1.2, 0), fov: 30 },
+        shape: { at: new THREE.Vector3(-4.4, 2.2, 2.8), look: new THREE.Vector3(0.4, 1.2, 0), fov: 34 },
+        cast: { at: new THREE.Vector3(0, 2.0, 6.4), look: new THREE.Vector3(0, 1.15, 0), fov: 30 },
+        resolve: { at: new THREE.Vector3(0, 2.2, 7.0), look: new THREE.Vector3(0, 1.1, 0), fov: 32 },
+        verdict: { at: new THREE.Vector3(0, 3.1, 8.2), look: new THREE.Vector3(0, 1.0, 0), fov: 30 }
+    };
+    const CAMERA_AT = POSES.cast.at.clone();
+    const LOOK_AT = POSES.cast.look.clone();
     camera.position.copy(CAMERA_AT);
     camera.lookAt(LOOK_AT);
 
@@ -267,6 +279,22 @@ export function createArena(container: HTMLElement, options: ArenaOptions): Aren
         renderer.render(scene, camera);
     }
     tick();
+
+    let cameraPhase: keyof typeof POSES = "cast";
+    function setPhase(phase: keyof typeof POSES): void {
+        if (phase === cameraPhase) return;
+        cameraPhase = phase;
+        container.dataset.camera = phase;
+        const from = { at: CAMERA_AT.clone(), look: LOOK_AT.clone(), fov: camera.fov };
+        const to = POSES[phase];
+        void tween(650, t => {
+            const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; // ease in-out
+            CAMERA_AT.lerpVectors(from.at, to.at, e);
+            LOOK_AT.lerpVectors(from.look, to.look, e);
+            camera.fov = from.fov + (to.fov - from.fov) * e;
+            camera.updateProjectionMatrix();
+        });
+    }
 
     function addTrauma(amount: number): void {
         if (amount <= 0 || motion.reduced()) return;
@@ -523,6 +551,7 @@ export function createArena(container: HTMLElement, options: ArenaOptions): Aren
 
     return {
         setIdle,
+        setPhase,
         play,
         clearMarks: () => marks.clear(),
         reducedMotion: () => motion.reduced(),
