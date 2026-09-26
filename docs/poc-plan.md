@@ -56,7 +56,7 @@ Note: a thin backend now exists (`apps/api`: health, version, `POST /api/duel/re
 
 ## POC glyph set
 
-Unchanged: FIRE, SHADOW, SELF, ENEMY, SPELL, GATE · SEEK, BIND, WARD, CLOSE · AMPLIFY, REFLECT, ANCHOR, NULL, SILENCE · SPLIT only if it does not delay. The parser may support more grammar than the UI exposes (it does: 30 glyphs).
+**Tray (16, `packages/wyrd-content/src/tray.ts`, 2026-09-26):** essences FIRE, WATER, SHADOW, LIFE · targets SELF, ENEMY, GATE · actions SEEK, BIND, WARD, BREAK, MEND, OPEN, CLOSE · modifiers AMPLIFY, ANCHOR; reactions REFLECT, NULL, SILENCE. The gate is a contested objective (open/closed/broken). Original list: FIRE, SHADOW, SELF, ENEMY, SPELL, GATE · SEEK, BIND, WARD, CLOSE · AMPLIFY, REFLECT, ANCHOR, NULL, SILENCE. The parser supports all 30 registry glyphs; PUSH/PULL, WEAKEN, SPLIT, REVERSE, DELAY, IF remain outside the resolver.
 
 ## Accelerated milestone order
 

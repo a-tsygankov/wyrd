@@ -1,4 +1,4 @@
-import type { PlayerId, ReactionGlyph, ResolutionResult } from "../../../packages/wyrd-resolver/src/index.js";
+import type { GateState, PlayerId, ReactionGlyph, ResolutionResult } from "../../../packages/wyrd-resolver/src/index.js";
 
 /**
  * The duel stage (docs/duel-engagement-options.md §F): two mages, a gate,
@@ -12,14 +12,19 @@ export type Side = PlayerId;
 
 export type Beat =
     | { kind: "cast"; side: Side; essence?: string; spell: string }
-    | { kind: "fly"; from: Side; to: Side; essence?: string; magnitude: number; action: "seek" | "bind" }
+    | { kind: "fly"; from: Side; to: Side; essence?: string; magnitude: number; action: "seek" | "bind" | "break" | "mend" }
     | { kind: "reflect"; side: Side }
     | { kind: "silence"; side: Side }
     | { kind: "null"; side: Side }
     | { kind: "ward-block"; side: Side; broken: boolean; integrity?: number }
+    | { kind: "ward-break"; side: Side }
     | { kind: "ward-up"; side: Side; essence?: string; integrity?: number }
+    | { kind: "mend"; side: Side }
     | { kind: "bind"; side: Side }
     | { kind: "gate-close" }
+    | { kind: "gate-open" }
+    | { kind: "gate-break" }
+    | { kind: "gate-mend" }
     | { kind: "hit"; side: Side; magnitude: number; damage?: number }
     | { kind: "seal"; side: Side }
     | { kind: "fizzle"; side: Side; reason: string };
@@ -40,9 +45,14 @@ export const BEAT_MS: Record<Beat["kind"], number> = {
     silence: 260,
     null: 380,
     "ward-block": 360,
+    "ward-break": 420,
     "ward-up": 420,
+    mend: 420,
     bind: 380,
     "gate-close": 480,
+    "gate-open": 480,
+    "gate-break": 480,
+    "gate-mend": 480,
     hit: 300,
     seal: 520,
     fizzle: 420
@@ -60,10 +70,6 @@ export function essenceColor(essence: string | undefined): string {
     return (essence && COLORS[essence]) ?? "#f4f0ff";
 }
 
-function other(side: Side): Side {
-    return side === "player" ? "opponent" : "player";
-}
-
 function stepCodes(result: ResolutionResult): Set<string> {
     return new Set(result.steps.map(s => s.code));
 }
@@ -78,9 +84,26 @@ export function contributionBeats(c: Contribution): Beat[] {
     const effect = c.result.effect;
     const spell = c.spell.join(" ");
     const beats: Beat[] = [{ kind: "cast", side: c.casterId, ...(effect?.essence ? { essence: effect.essence } : {}), spell }];
+    const failed = c.result.steps.find(s => s.result === "failed" && s.stage !== "routing");
 
     if (!effect || codes.has("INVALID_SPELL") || codes.has("UNSUPPORTED_POC_SPELL") || codes.has("NO_BASE_ACTION")) {
-        beats.push({ kind: "fizzle", side: c.casterId, reason: c.result.steps.find(s => s.result === "failed")?.text ?? "The spell failed." });
+        beats.push({ kind: "fizzle", side: c.casterId, reason: failed?.text ?? "The spell failed." });
+        return beats;
+    }
+
+    if (codes.has("NULL_CANCELED")) {
+        // Anything aimed at a mage at least leaves the hand before NULL takes it.
+        if (effect.target !== "gate" && effect.action !== "ward") {
+            beats.push({
+                kind: "fly",
+                from: c.casterId,
+                to: effect.target === "self" ? c.casterId : c.defenderId,
+                ...(effect.essence ? { essence: effect.essence } : {}),
+                magnitude: effect.magnitude,
+                action: effect.action === "seek" || effect.action === "bind" || effect.action === "break" || effect.action === "mend" ? effect.action : "seek"
+            });
+        }
+        beats.push({ kind: "null", side: c.defenderId });
         return beats;
     }
 
@@ -95,26 +118,38 @@ export function contributionBeats(c: Contribution): Beat[] {
         return beats;
     }
 
-    if (effect.action === "close") {
-        if (codes.has("NULL_CANCELED")) {
-            beats.push({ kind: "null", side: c.defenderId });
+    if (effect.target === "gate") {
+        if (codes.has("GATE_CLOSED")) beats.push({ kind: "gate-close" });
+        else if (codes.has("GATE_OPENED")) beats.push({ kind: "gate-open" });
+        else if (codes.has("GATE_SHATTERED")) beats.push({ kind: "gate-break" });
+        else if (codes.has("GATE_MENDED")) beats.push({ kind: "gate-mend" });
+        else {
+            beats.push({ kind: "fizzle", side: c.casterId, reason: failed?.text ?? c.result.steps.find(s => s.result === "info" && s.stage === "effect")?.text ?? "Nothing happened." });
             return beats;
         }
-        if (codes.has("CLOSE_REQUIRES_GATE")) {
-            beats.push({ kind: "fizzle", side: c.casterId, reason: "CLOSE needs the GATE." });
-            return beats;
-        }
-        beats.push({ kind: "gate-close" });
         if (c.result.sealAwardedTo) beats.push({ kind: "seal", side: c.result.sealAwardedTo });
         return beats;
     }
 
-    // SEEK / BIND: the bolt. It launches with the magnitude the caster gave
-    // it (AMPLIFY, ignite, quick cast) and may be dimmed by SILENCE.
+    if (effect.action === "close" || effect.action === "open") {
+        beats.push({ kind: "fizzle", side: c.casterId, reason: failed?.text ?? "Needs the GATE." });
+        return beats;
+    }
+
+    // MEND on a mage: nothing travels, the target simply brightens.
+    if (effect.action === "mend") {
+        if (codes.has("WARD_MENDED") || codes.has("RESOLVE_MENDED")) {
+            beats.push({ kind: "mend", side: effect.reflected || effect.target === "self" ? c.casterId : c.defenderId });
+        } else {
+            beats.push({ kind: "fizzle", side: c.casterId, reason: "Nothing to mend." });
+        }
+        return beats;
+    }
+
+    // SEEK / BIND / BREAK on a mage: the bolt. It launches with the
+    // magnitude the caster gave it and may be dimmed by SILENCE.
     const launchedMagnitude =
-        (c.result.steps.some(s => s.code === "AMPLIFY_APPLIED") ? 2 : 1) +
-        (c.result.steps.some(s => s.code === "IGNITE_APPLIED") ? 1 : 0) +
-        (c.result.steps.some(s => s.code === "QUICK_CAST") ? 1 : 0);
+        (codes.has("AMPLIFY_APPLIED") ? 2 : 1) + (codes.has("IGNITE_APPLIED") ? 1 : 0) + (codes.has("QUICK_CAST") ? 1 : 0);
     const towards: Side = effect.target === "self" && !effect.reflected ? c.casterId : c.defenderId;
     beats.push({
         kind: "fly",
@@ -122,13 +157,9 @@ export function contributionBeats(c: Contribution): Beat[] {
         to: towards,
         ...(effect.essence ? { essence: effect.essence } : {}),
         magnitude: launchedMagnitude,
-        action: effect.action
+        action: effect.action as "seek" | "bind" | "break" | "mend"
     });
 
-    if (codes.has("NULL_CANCELED")) {
-        beats.push({ kind: "null", side: c.defenderId });
-        return beats;
-    }
     if (codes.has("SILENCE_STRIPPED_MODIFIERS")) beats.push({ kind: "silence", side: c.defenderId });
     let landsOn: Side = towards;
     if (codes.has("REFLECT_APPLIED")) {
@@ -140,8 +171,14 @@ export function contributionBeats(c: Contribution): Beat[] {
             to: c.casterId,
             ...(effect.essence ? { essence: effect.essence } : {}),
             magnitude: effect.magnitude,
-            action: effect.action
+            action: effect.action as "seek" | "bind" | "break" | "mend"
         });
+    }
+
+    if (effect.action === "break") {
+        if (codes.has("WARD_BROKEN")) beats.push({ kind: "ward-break", side: landsOn });
+        else beats.push({ kind: "fizzle", side: landsOn, reason: "No ward to break." });
+        return beats;
     }
 
     if (codes.has("WARD_BLOCKED")) {
@@ -171,7 +208,7 @@ export function buildTimeline(incoming: Contribution, outgoing?: Contribution): 
 export type StageState = {
     wards: Record<Side, { essence?: string; integrity?: number } | undefined>;
     bound: Record<Side, boolean>;
-    gateClosed: boolean;
+    gate: GateState;
 };
 
 export type StageHooks = {
@@ -202,6 +239,7 @@ export function createStage(root: SVGSVGElement, hooks: StageHooks = {}, motion:
     const chains: Record<Side, SVGGElement> = { player: q("#stage-chains-player"), opponent: q("#stage-chains-opponent") };
     const bolt = q<SVGCircleElement>("#stage-bolt");
     const trail = q<SVGLineElement>("#stage-trail");
+    const gate = q<SVGGElement>("#stage-gate");
     const gateDoor = q<SVGRectElement>("#stage-gate-door");
     const orb = q<SVGCircleElement>("#stage-orb");
     const flash = q<SVGRectElement>("#stage-flash");
@@ -228,13 +266,19 @@ export function createStage(root: SVGSVGElement, hooks: StageHooks = {}, motion:
         el.classList.toggle("cracked", w.integrity === 1);
     }
 
+    function drawGate(state: GateState): void {
+        gate.classList.toggle("closed", state === "closed");
+        gate.classList.toggle("broken", state === "broken");
+        gateDoor.setAttribute("opacity", state === "closed" ? "1" : state === "broken" ? "0.08" : "0.25");
+    }
+
     function setIdle(state: StageState): void {
         for (const side of ["player", "opponent"] as const) {
             drawWard(side, state.wards[side]);
             chains[side].setAttribute("opacity", state.bound[side] ? "1" : "0");
             mage[side].classList.remove("hit", "casting", "faltering");
         }
-        gateDoor.setAttribute("opacity", state.gateClosed ? "1" : "0.25");
+        drawGate(state.gate);
         bolt.setAttribute("opacity", "0");
         trail.setAttribute("opacity", "0");
         orb.setAttribute("opacity", "0");
@@ -327,10 +371,26 @@ export function createStage(root: SVGSVGElement, hooks: StageHooks = {}, motion:
                 }
                 return;
             }
+            case "ward-break": {
+                say("WARD BROKEN");
+                bolt.setAttribute("opacity", "0");
+                await animate(ward[beat.side], [{ opacity: 1, transform: "scale(1)" }, { opacity: 0, transform: "scale(1.6) rotate(-14deg)" }], BEAT_MS["ward-break"]);
+                drawWard(beat.side, undefined);
+                await shake();
+                return;
+            }
             case "ward-up": {
                 say("WARD");
                 drawWard(beat.side, { ...(beat.essence ? { essence: beat.essence } : {}), ...(beat.integrity !== undefined ? { integrity: beat.integrity } : {}) });
                 await animate(ward[beat.side], [{ opacity: 0, transform: "scale(0.4)" }, { opacity: 1, transform: "scale(1)" }], BEAT_MS["ward-up"]);
+                return;
+            }
+            case "mend": {
+                say("MEND");
+                bolt.setAttribute("opacity", "0");
+                const w = state.wards[beat.side];
+                if (w) drawWard(beat.side, w.essence ? { essence: w.essence } : {}); // full integrity again: no crack
+                await animate(mage[beat.side], [{ filter: "brightness(1)" }, { filter: "brightness(1.8)" }, { filter: "brightness(1)" }], BEAT_MS.mend);
                 return;
             }
             case "bind": {
@@ -342,9 +402,29 @@ export function createStage(root: SVGSVGElement, hooks: StageHooks = {}, motion:
             }
             case "gate-close": {
                 say("GATE CLOSED");
-                gateDoor.setAttribute("opacity", "1");
+                drawGate("closed");
                 await animate(gateDoor, [{ transform: "translateY(-40px)" }, { transform: "translateY(0)" }], BEAT_MS["gate-close"]);
                 await shake();
+                return;
+            }
+            case "gate-open": {
+                say("GATE OPENED");
+                await animate(gateDoor, [{ transform: "translateY(0)", opacity: 1 }, { transform: "translateY(-40px)", opacity: 0.25 }], BEAT_MS["gate-open"]);
+                drawGate("open");
+                await shake();
+                return;
+            }
+            case "gate-break": {
+                say("GATE SHATTERS");
+                await animate(gate, [{ transform: "rotate(0)" }, { transform: "rotate(-4deg) scale(1.05)" }, { transform: "rotate(3deg)" }, { transform: "rotate(0)" }], BEAT_MS["gate-break"]);
+                drawGate("broken");
+                await shake();
+                return;
+            }
+            case "gate-mend": {
+                say("GATE MENDED");
+                drawGate("open");
+                await animate(gate, [{ filter: "brightness(1)" }, { filter: "brightness(2)" }, { filter: "brightness(1)" }], BEAT_MS["gate-mend"]);
                 return;
             }
             case "hit": {
@@ -370,6 +450,7 @@ export function createStage(root: SVGSVGElement, hooks: StageHooks = {}, motion:
             }
             case "fizzle": {
                 say("FIZZLE");
+                bolt.setAttribute("opacity", "0");
                 await animate(mage[beat.side], [{ opacity: 1 }, { opacity: 0.5 }, { opacity: 1 }], BEAT_MS.fizzle);
                 return;
             }

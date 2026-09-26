@@ -87,7 +87,10 @@ export const glyphs: GlyphDefinition[] = [
         displayName: "BREAK",
         family: "action",
         produces: ["InstantEffect"],
-        inputs: [{ name: "boundary", accepts: ["BoundaryRef", "PersistentEffect"] }],
+        // EntityRef: "break the ward standing on that mage" - the handoff's
+        // target family lists WARD as a target, and the POC has no ward
+        // reference value, so the entity carrying the ward stands in for it.
+        inputs: [{ name: "boundary", accepts: ["BoundaryRef", "PersistentEffect", "EntityRef"] }],
         baseFocusCost: 2,
         precedence: 100,
         attachment: "operator",

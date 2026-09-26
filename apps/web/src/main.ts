@@ -1,4 +1,5 @@
 import { rulesets, type Ruleset, type RulesetId } from "../../../packages/wyrd-content/src/rulesets.js";
+import { POC_TRAY, TRAY_FAMILY, type TrayFamily } from "../../../packages/wyrd-content/src/tray.js";
 import { scenarios, type Scenario } from "../../../packages/wyrd-content/src/scenarios.js";
 import { parseSpell } from "../../../packages/wyrd-grammar/src/parser.js";
 import {
@@ -54,26 +55,14 @@ import {
     type ResolutionStep
 } from "../../../packages/wyrd-resolver/src/index.js";
 
-type GlyphFamily = "essence" | "action" | "target" | "modifier";
-
 type GlyphChoice = {
     token: string;
-    family: GlyphFamily;
+    family: TrayFamily;
 };
 
-const glyphChoices: GlyphChoice[] = [
-    { token: "FIRE", family: "essence" },
-    { token: "SHADOW", family: "essence" },
-    { token: "SELF", family: "target" },
-    { token: "ENEMY", family: "target" },
-    { token: "GATE", family: "target" },
-    { token: "SEEK", family: "action" },
-    { token: "BIND", family: "action" },
-    { token: "WARD", family: "action" },
-    { token: "CLOSE", family: "action" },
-    { token: "AMPLIFY", family: "modifier" },
-    { token: "ANCHOR", family: "modifier" }
-];
+// The composer's tray is content (packages/wyrd-content/src/tray.ts): the
+// bot pool, the help text and the tests all derive from the same list.
+const glyphChoices: GlyphChoice[] = POC_TRAY.map(token => ({ token, family: TRAY_FAMILY[token] ?? "action" }));
 
 function byId<T extends HTMLElement>(id: string): T {
     const element = document.getElementById(id);
@@ -192,12 +181,11 @@ const stage = createStage(
     },
     { reduced: () => !settings.animations || reducedMotionQuery.matches }
 );
-let gateClosedThisRound = false;
 function stageState(): StageState {
     return {
         wards: { player: state.players.player.ward, opponent: state.players.opponent.ward },
         bound: { player: state.players.player.bound === true, opponent: state.players.opponent.bound === true },
-        gateClosed: gateClosedThisRound
+        gate: state.gate
     };
 }
 document.addEventListener("pointerdown", () => sound.unlock(), { passive: true });
@@ -285,6 +273,9 @@ function planRound(): RoundPlan {
         if (scenario.setup?.opponentWard) {
             state.players.opponent.ward = { ownerId: "opponent", ...scenario.setup.opponentWard };
         }
+        // The gate persists across rounds like wards do; a scenario that needs
+        // it in a known state says so in its setup.
+        if (scenario.setup?.gate) state.gate = scenario.setup.gate;
         const fixed = scenario.opponentReaction;
         log.info(`round ${state.round} planned: scenario ${scenario.id}`, {
             telegraph: scenario.telegraph,
@@ -573,6 +564,7 @@ function renderAdmin(): void {
         ["Mode", mode === "solo" ? "solo" : `hot-seat · ${hotseat.phase}`],
         ["Hidden spell", plan.opponentSpell.join(" ") || "(not cast yet)"],
         ["Opponent reacts", plan.reactionPolicy],
+        ["Gate", state.gate],
         ["Wards", wards],
         ["Focus", `player ${state.players.player.focus} · opponent ${state.players.opponent.focus}` + (state.players.player.exposed || state.players.opponent.exposed ? " · exposed" : "")],
         ["Versions", document.getElementById("version-line")?.textContent ?? ""],
@@ -849,8 +841,6 @@ function resolveRound(): void {
     void telemetry.flush();
     playerQuickCast = false;
     p2QuickCast = false;
-    gateClosedThisRound =
-        incoming.steps.some(s => s.code === "GATE_CLOSED") || (outgoing?.steps.some(s => s.code === "GATE_CLOSED") ?? false);
     render();
 
     // The stage replays the round from the resolver's steps; the log above
@@ -860,7 +850,7 @@ function resolveRound(): void {
         stage.setIdle({
             wards: { player: roundStart.players.player.ward, opponent: roundStart.players.opponent.ward },
             bound: { player: roundStart.players.player.bound === true, opponent: roundStart.players.opponent.bound === true },
-            gateClosed: false
+            gate: roundStart.gate
         });
         await stage.play(
             buildTimeline(
@@ -880,7 +870,6 @@ function startNextRound(): void {
     }
 
     state = beginNextRound(state);
-    gateClosedThisRound = false;
     playerSpell = [];
     selectedReaction = undefined;
     roundResolved = false;
@@ -911,7 +900,6 @@ function resetMatch(): void {
         saveStats(deviceStorage, stats);
     }
     state = createInitialDuelState(ruleset.rules);
-    gateClosedThisRound = false;
     history = [];
     playerSpell = [];
     selectedReaction = undefined;

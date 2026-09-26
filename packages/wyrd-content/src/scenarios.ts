@@ -35,6 +35,8 @@ export type Scenario = {
     setup?: {
         playerWard?: { essence?: string };
         opponentWard?: { essence?: string };
+        /** Gate state at the start of the round (default open). */
+        gate?: "open" | "closed" | "broken";
     };
     lesson: string;
     responses: ScenarioResponse[];
@@ -113,6 +115,7 @@ export const scenarios: Scenario[] = [
         telegraph: "medium",
         opponentSpell: ["GATE", "CLOSE", "ANCHOR"],
         opponentReaction: "bot",
+        setup: { gate: "open" },
         lesson: "CLOSE GATE is an objective, not an attack: there is no hostile route to REFLECT and no WARD in the way. NULL is the only reaction that stops it, which is exactly why NULL must stay expensive.",
         responses: [
             { label: "NULL", reaction: "null", expect: "canceled" },
@@ -127,12 +130,13 @@ export const scenarios: Scenario[] = [
         opponentSpell: ["SELF", "WARD", "FIRE"],
         opponentReaction: "none",
         setup: { opponentWard: { essence: "fire" } },
-        lesson: "The opponent stands behind a FIRE ward. FIRE attacks and untyped BIND are blocked; a SHADOW attack or the GATE objective passes. Wards are read by their essence, not their presence.",
+        lesson: "The opponent stands behind a FIRE ward. FIRE attacks and untyped BIND are blocked; a SHADOW attack or the GATE objective passes, and BREAK ENEMY removes the ward outright for next round. Wards are read by their essence, not their presence.",
         responses: [
             { label: "FIRE SEEK ENEMY (blocked)", spell: ["FIRE", "SEEK", "ENEMY"], expect: "blocked" },
             { label: "ENEMY BIND (untyped, blocked)", spell: ["ENEMY", "BIND"], expect: "blocked" },
             { label: "SHADOW SEEK ENEMY", spell: ["SHADOW", "SEEK", "ENEMY"], expect: "player-seal" },
             { label: "GATE CLOSE", spell: ["GATE", "CLOSE"], expect: "player-seal" },
+            { label: "ENEMY BREAK (ward gone, no seal yet)", spell: ["ENEMY", "BREAK"], expect: "no-seal" },
             { label: "Opponent's ward spell itself scores nothing", reaction: null, expect: "no-seal" }
         ]
     },
@@ -151,6 +155,22 @@ export const scenarios: Scenario[] = [
         ]
     }
 ];
+
+scenarios.push({
+    id: "shattered-gate",
+    title: "Taking the objective off the table",
+    telegraph: "high",
+    opponentSpell: ["GATE", "BREAK", "ANCHOR"],
+    opponentReaction: "bot",
+    setup: { gate: "open" },
+    lesson: "BREAK GATE scores nothing, but it denies every GATE seal until someone spends a turn on MEND GATE. REFLECT has no hostile route to reverse; only NULL stops it. A tempo play for whoever is ahead.",
+    responses: [
+        { label: "NULL", reaction: "null", expect: "canceled" },
+        { label: "REFLECT (no hostile route)", reaction: "reflect", expect: "no-seal" },
+        { label: "No reaction (gate shatters)", reaction: null, expect: "no-seal" },
+        { label: "GATE CLOSE this round (still open when you cast)", spell: ["GATE", "CLOSE"], expect: "player-seal" }
+    ]
+});
 
 export function scenarioById(id: string): Scenario | undefined {
     return scenarios.find(s => s.id === id);

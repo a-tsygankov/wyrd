@@ -49,11 +49,19 @@ export const CLASSIC_RULES: RuleOptions = {
     resolve: 0
 };
 
+/**
+ * The objective between the mages. CLOSE scores while it is open, OPEN
+ * scores while it is closed; BREAK takes it out of play until MEND repairs
+ * it. Persists across rounds, resets with the match.
+ */
+export type GateState = "open" | "closed" | "broken";
+
 export type DuelState = {
     round: number;
     activePlayerId: PlayerId;
     players: Record<PlayerId, PlayerState>;
     rules: RuleOptions;
+    gate: GateState;
 };
 
 export type ReactionGlyph = "null" | "reflect" | "silence";
@@ -66,6 +74,8 @@ export const ROUND_FOCUS = 7;
 export const FALTERING_AT = 3;
 /** Extra Focus a bound player pays for their next spell under the resolve rule. */
 export const BOUND_TAX = 2;
+/** Resolve restored by MEND SELF under the resolve rule. */
+export const MEND_RESOLVE = 2;
 
 export type ResolutionStage =
     | "validation"
@@ -95,8 +105,10 @@ export type ResolutionContext = {
     quickCast?: boolean;
 };
 
+export type SpellAction = "seek" | "bind" | "ward" | "close" | "open" | "break" | "mend";
+
 export type ResolvedEffect = {
-    action: "seek" | "bind" | "ward" | "close";
+    action: SpellAction;
     target?: "self" | "enemy" | "gate";
     essence?: string;
     magnitude: number;

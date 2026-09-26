@@ -5,7 +5,8 @@ import { reactionProbabilities } from "../dist/packages/wyrd-simulation/src/bot.
 import { enumerateLegalSpells } from "../dist/packages/wyrd-simulation/src/spells.js";
 import { createInitialDuelState, resolveEncounter } from "../dist/packages/wyrd-resolver/src/index.js";
 
-const TRAY = ["FIRE", "SHADOW", "SELF", "ENEMY", "GATE", "SEEK", "BIND", "WARD", "CLOSE", "AMPLIFY", "ANCHOR"];
+import { POC_TRAY } from "../dist/packages/wyrd-content/src/tray.js";
+const TRAY = [...POC_TRAY];
 const pool = enumerateLegalSpells(TRAY);
 
 test("classifyOutcome names what the resolver did", () => {

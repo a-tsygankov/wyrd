@@ -6,7 +6,8 @@ import { createInitialDuelState, resolveEncounter } from "../dist/packages/wyrd-
 import { projectTelegraph } from "../dist/packages/wyrd-simulation/src/telegraph.js";
 import { createRng } from "../dist/packages/wyrd-simulation/src/rng.js";
 
-const TRAY = ["FIRE", "SHADOW", "SELF", "ENEMY", "GATE", "SEEK", "BIND", "WARD", "CLOSE", "AMPLIFY", "ANCHOR"];
+import { POC_TRAY } from "../dist/packages/wyrd-content/src/tray.js";
+const TRAY = [...POC_TRAY];
 const NAMES = { you: "You", them: "Opponent" };
 
 test("every POC tray glyph has player-facing help that says how it affects whom", () => {

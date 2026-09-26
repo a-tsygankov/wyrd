@@ -69,7 +69,10 @@ export function classifySpell(tokens: readonly string[], limits: SpellLimits = P
         defenderId: "player",
         spellTokens: [...tokens]
     });
-    if (!probe.effect || probe.steps.some(s => s.result === "failed")) return undefined;
+    // Only a parse/shape failure makes a spell illegal. A state-dependent
+    // failure on the fresh probe (OPEN on an open gate, MEND with nothing
+    // to mend) is a legal spell that would simply do nothing right now.
+    if (!probe.effect || probe.steps.some(s => s.stage === "validation" && s.result === "failed")) return undefined;
     const effect = probe.effect;
     return {
         tokens: [...tokens],
