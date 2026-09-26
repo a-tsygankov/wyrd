@@ -73,8 +73,8 @@ Remaining: freeze the exact POC glyph subset in content (currently frozen in the
 
 Deviation from v1: React/Vite was deferred (architecture doc §2). Adopt React only when UI complexity (grimoire, replay, map) demands it; grammar/resolver stay untouched.
 
-### POC-3 — simple opponent — **done (bot + challenge seed); hot-seat deferred**
-`packages/wyrd-simulation`: seeded RNG, enumeration of every legal spell the tray allows (parser + resolver as the authority), a scoring-table bot for spells (prefers scoring threats, never walks into a ward, bluffs with AMPLIFY/ANCHOR, never repeats) and reactions (REFLECT open routes, SILENCE modifiers, NULL only at match point). `?seed=<text>` replays the same opponent. Same-device hot-seat is deferred until playtests ask for it.
+### POC-3 — simple opponent — **done (bot, challenge seed, hot-seat)**
+`packages/wyrd-simulation`: seeded RNG, enumeration of every legal spell the tray allows (parser + resolver as the authority), a scoring-table bot for spells (prefers scoring threats, never walks into a ward, bluffs with AMPLIFY/ANCHOR, never repeats) and reactions (REFLECT open routes, SILENCE modifiers, NULL only at match point). `?seed=<text>` replays the same opponent. Same-device hot-seat (`apps/web/src/hotseat.ts`): Player 2 composes → hand-off → Player 1 reads, reacts, casts → hand-off → Player 2 reacts → resolve; telemetry tags rounds with `mode`.
 
 ### POC-4 — deploy — **done**
 Cloudflare Pages `wyrd-web` (HTTPS, stable URL, auto-deploy from `main`, per-branch previews), Worker `wyrd-api`, D1 `wyrd-db`, GitHub Actions `deploy.yml`, tier version bumps enforced. Secrets set; first CI deploy green.

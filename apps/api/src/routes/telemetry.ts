@@ -10,6 +10,7 @@ import type { Bindings } from "../env.ts";
 const EVENTS = new Set(["round", "rematch", "match_end"]);
 const REACTIONS = new Set(["null", "reflect", "silence"]);
 const PRESETS = new Set(["high", "medium"]);
+const MODES = new Set(["solo", "hotseat"]);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_BATCH = 20;
 const MAX_TEXT = 200;
@@ -33,6 +34,7 @@ export type TelemetryEvent = {
     opponentGained: number;
     timeToCommitMs: number | null;
     webVersion: string;
+    mode: "solo" | "hotseat";
 };
 
 type Raw = Record<string, unknown>;
@@ -96,7 +98,8 @@ export function parseEvent(raw: unknown): TelemetryEvent {
         playerGained: r.playerGained === undefined ? 0 : int(r.playerGained, "playerGained", { max: 100 }),
         opponentGained: r.opponentGained === undefined ? 0 : int(r.opponentGained, "opponentGained", { max: 100 }),
         timeToCommitMs: optInt(r.timeToCommitMs, "timeToCommitMs"),
-        webVersion: text(r.webVersion, "webVersion")
+        webVersion: text(r.webVersion, "webVersion"),
+        mode: optEnum<"solo" | "hotseat">(r.mode, "mode", MODES) ?? "solo"
     };
 }
 
@@ -107,7 +110,7 @@ export function parseBatch(body: unknown): TelemetryEvent[] {
 }
 
 const INSERT =
-    "INSERT INTO telemetry_events (id, ts, event, session_id, match_seed, round, scenario_id, telegraph_preset, telegraph, opponent_spell, player_spell, player_reaction, opponent_reaction, player_seals, opponent_seals, player_gained, opponent_gained, time_to_commit_ms, web_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    "INSERT INTO telemetry_events (id, ts, event, session_id, match_seed, round, scenario_id, telegraph_preset, telegraph, opponent_spell, player_spell, player_reaction, opponent_reaction, player_seals, opponent_seals, player_gained, opponent_gained, time_to_commit_ms, web_version, mode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
 export const telemetryRouter = new Hono<{ Bindings: Bindings }>()
     .post("/", async c => {
@@ -148,7 +151,8 @@ export const telemetryRouter = new Hono<{ Bindings: Bindings }>()
                     e.playerGained,
                     e.opponentGained,
                     e.timeToCommitMs,
-                    e.webVersion
+                    e.webVersion,
+                    e.mode
                 )
             )
         );

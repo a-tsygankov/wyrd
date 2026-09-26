@@ -18,6 +18,15 @@ import {
 } from "../../../packages/wyrd-simulation/src/index.js";
 import { installHint } from "./install.js";
 import { createLog } from "./log.js";
+import {
+    acknowledgeHandoff,
+    commitP1,
+    lockP2Spell,
+    presentation,
+    resolveP2,
+    startRound,
+    type HotseatRound
+} from "./hotseat.js";
 import { buildRoundEvent, createTelemetry, getSessionId } from "./telemetry.js";
 import {
     createInitialDuelState,
@@ -74,6 +83,23 @@ const clearButton = byId<HTMLButtonElement>("clear-spell");
 const resetButton = byId<HTMLButtonElement>("reset-match");
 
 const scenarioNote = byId<HTMLElement>("scenario-note");
+const modeToggle = byId<HTMLButtonElement>("mode-toggle");
+const handoff = byId<HTMLElement>("handoff");
+const handoffText = byId<HTMLElement>("handoff-text");
+const handoffReady = byId<HTMLButtonElement>("handoff-ready");
+const youLabel = byId<HTMLElement>("you-label");
+const oppLabel = byId<HTMLElement>("opp-label");
+const telegraphLabel = byId<HTMLElement>("telegraph-label");
+const reactionLabel = byId<HTMLElement>("reaction-label");
+const composerCard = document.querySelector<HTMLElement>(".composer")!;
+const reactionCard = document.querySelector<HTMLElement>(".reaction")!;
+
+// Solo: the scenario deck, then the heuristic bot. Hot-seat: Player 2 on the
+// same phone takes the opponent's seat (state machine in hotseat.ts).
+type Mode = "solo" | "hotseat";
+let mode: Mode = new URLSearchParams(location.search).get("mode") === "hotseat" ? "hotseat" : "solo";
+let hotseat: HotseatRound = startRound();
+let p1Telegraph: TelegraphSlot[] = [];
 
 let state: DuelState = createInitialDuelState();
 let playerSpell: string[] = [];
@@ -116,6 +142,20 @@ function botView(): { state: DuelState; botId: "opponent"; lastBotSpell: string[
 }
 
 function planRound(): RoundPlan {
+    if (mode === "hotseat") {
+        // The opponent's spell arrives when Player 2 locks it in; until then
+        // there is nothing to telegraph and nothing for the advisor to read.
+        hotseat = startRound();
+        p1Telegraph = [];
+        log.info(`round ${state.round} planned: hot-seat`);
+        return {
+            opponentSpell: [],
+            telegraph: [],
+            reaction: () => hotseat.p2Reaction,
+            reactionModel: () => ({ none: 0.25, null: 0.25, reflect: 0.25, silence: 0.25 }),
+            reactionPolicy: "Player 2 decides"
+        };
+    }
     const scenario = scenarios[state.round - 1];
     if (scenario) {
         // Scenario setup (an existing ward) is applied as the round opens so
@@ -272,6 +312,24 @@ function renderScoreboard(): void {
     playerSeals.textContent = String(state.players.player.seals);
     opponentSeals.textContent = String(state.players.opponent.seals);
     roundNumber.textContent = String(state.round);
+    if (mode === "hotseat") {
+        const shown = presentation(hotseat.phase);
+        telegraph.textContent =
+            shown.telegraphOf === "p2"
+                ? formatTelegraph(plan.telegraph)
+                : shown.telegraphOf === "p1"
+                    ? formatTelegraph(p1Telegraph)
+                    : "—";
+        scenarioNote.textContent = "Hot-seat · two players on this phone · seed " + matchSeedLabel;
+        matchStatus.textContent =
+            state.players.player.seals >= 3
+                ? "Player 1 wins the duel"
+                : state.players.opponent.seals >= 3
+                    ? "Player 2 wins the duel"
+                    : shown.status;
+        return;
+    }
+
     telegraph.textContent = formatTelegraph(plan.telegraph);
     scenarioNote.textContent = plan.scenario
         ? "Scenario " + state.round + "/" + scenarios.length + " · " + plan.scenario.title + " · seed " + matchSeedLabel
@@ -321,7 +379,8 @@ function renderAdmin(): void {
         ["Seed", matchSeedLabel],
         ["Round", `${state.round} · ${roundResolved ? "resolved" : "awaiting your cast"}`],
         ["Scenario", plan.scenario ? `${plan.scenario.id} (telegraph ${plan.scenario.telegraph})` : "heuristic bot (telegraph high)"],
-        ["Hidden spell", plan.opponentSpell.join(" ")],
+        ["Mode", mode === "solo" ? "solo" : `hot-seat · ${hotseat.phase}`],
+        ["Hidden spell", plan.opponentSpell.join(" ") || "(not cast yet)"],
         ["Opponent reacts", plan.reactionPolicy],
         ["Wards", wards],
         ["Versions", document.getElementById("version-line")?.textContent ?? ""],
@@ -337,7 +396,7 @@ function renderAdmin(): void {
         })
     );
 
-    const reactions = adviseReaction(state, plan.opponentSpell);
+    const reactions = plan.opponentSpell.length > 0 ? adviseReaction(state, plan.opponentSpell) : [];
     adminReactions.replaceChildren(
         ...reactions.map((advice, index) => {
             const li = document.createElement("li");
@@ -397,11 +456,44 @@ log.subscribe(() => {
     if (adminOpen) renderAdmin();
 });
 
+function renderMode(): void {
+    const matchOver = state.players.player.seals >= 3 || state.players.opponent.seals >= 3;
+    modeToggle.textContent = mode === "solo" ? "Hot-seat" : "Solo";
+    if (mode === "solo") {
+        youLabel.textContent = "You";
+        oppLabel.textContent = "Opponent";
+        telegraphLabel.textContent = "Opponent telegraph";
+        reactionLabel.textContent = "Reaction to opponent";
+        composerCard.classList.remove("hidden");
+        reactionCard.classList.remove("hidden");
+        reactionTray.classList.remove("hidden");
+        handoff.classList.add("hidden");
+        resolveRoundButton.textContent = "CAST ROUND";
+        return;
+    }
+    const shown = presentation(hotseat.phase);
+    youLabel.textContent = "Player 1";
+    oppLabel.textContent = "Player 2";
+    telegraphLabel.textContent = shown.telegraphLabel || "Telegraph";
+    reactionLabel.textContent = shown.reactionLabel;
+    composerCard.classList.toggle("hidden", !shown.showComposer);
+    // The primary button lives in the reaction card, so the card stays for
+    // Player 2's compose step while the tray itself is hidden.
+    const needsPrimary = shown.castLabel !== "" && !matchOver;
+    reactionCard.classList.toggle("hidden", !(shown.showReaction || needsPrimary));
+    reactionTray.classList.toggle("hidden", !shown.showReaction);
+    handoff.classList.toggle("hidden", shown.overlay === undefined);
+    handoffText.textContent = shown.overlay ?? "";
+    resolveRoundButton.textContent = shown.castLabel || "CAST ROUND";
+    if (hotseat.phase === "p2-react") resolveRoundButton.disabled = matchOver;
+}
+
 function render(): void {
     renderScoreboard();
     renderGlyphTray();
     renderReactionButtons();
     renderValidation();
+    renderMode();
     renderAdmin();
 
     const matchOver =
@@ -505,12 +597,14 @@ function resolveRound(): void {
             playerSeals: state.players.player.seals,
             opponentSeals: state.players.opponent.seals,
             roundStartedAt,
-            committedAt
+            committedAt,
+            mode
         })
     );
     if (state.players.player.seals >= 3 || state.players.opponent.seals >= 3) {
         telemetry.record({
             event: "match_end",
+            mode,
             sessionId,
             matchSeed: matchSeedLabel,
             webVersion: WEB_VERSION,
@@ -551,6 +645,7 @@ function resetMatch(): void {
     if (roundResolved || state.round > 1) {
         telemetry.record({
             event: "rematch",
+            mode,
             sessionId,
             matchSeed: matchSeedLabel,
             webVersion: WEB_VERSION,
@@ -595,7 +690,63 @@ clearButton.addEventListener("click", () => {
     }
 });
 
-resolveRoundButton.addEventListener("click", resolveRound);
+function spellIsCastable(): boolean {
+    const parsed = parseSpell(playerSpell);
+    return parsed.status === "valid" && playerSpell.length >= 2 && playerSpell.length <= 4 && parsed.focusCost <= 7;
+}
+
+function onPrimaryAction(): void {
+    if (mode === "solo") {
+        resolveRound();
+        return;
+    }
+    switch (hotseat.phase) {
+        case "p2-compose": {
+            if (!spellIsCastable()) return;
+            hotseat = lockP2Spell(hotseat, playerSpell);
+            plan = { ...plan, opponentSpell: [...playerSpell], telegraph: projectTelegraph(playerSpell, "high", rng) };
+            log.info(`round ${state.round}: player 2 locked in`, { glyphs: playerSpell.length });
+            playerSpell = [];
+            selectedReaction = undefined;
+            break;
+        }
+        case "p1-turn": {
+            if (!spellIsCastable()) return;
+            hotseat = commitP1(hotseat, playerSpell, selectedReaction);
+            p1Telegraph = projectTelegraph(playerSpell, "high", rng);
+            log.info(`round ${state.round}: player 1 committed`, { glyphs: playerSpell.length, reaction: selectedReaction ?? "none" });
+            playerSpell = [];
+            selectedReaction = undefined;
+            break;
+        }
+        case "p2-react": {
+            hotseat = resolveP2(hotseat, selectedReaction);
+            // Restore Player 1's commitment: resolveRound reads the player's
+            // spell and reaction from the shared composer state, and takes
+            // the opponent's reaction from plan.reaction (Player 2's choice).
+            playerSpell = [...(hotseat.p1Spell ?? [])];
+            selectedReaction = hotseat.p1Reaction;
+            resolveRound();
+            return;
+        }
+        default:
+            return;
+    }
+    render();
+}
+
+resolveRoundButton.addEventListener("click", onPrimaryAction);
+handoffReady.addEventListener("click", () => {
+    if (hotseat.phase === "handoff-to-p1" || hotseat.phase === "handoff-to-p2") {
+        hotseat = acknowledgeHandoff(hotseat);
+        render();
+    }
+});
+modeToggle.addEventListener("click", () => {
+    mode = mode === "solo" ? "hotseat" : "solo";
+    log.info(`mode: ${mode}`);
+    resetMatch();
+});
 nextRoundButton.addEventListener("click", startNextRound);
 resetButton.addEventListener("click", resetMatch);
 

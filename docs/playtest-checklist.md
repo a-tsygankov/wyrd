@@ -54,6 +54,8 @@ Record results in the tables at the bottom and copy the outcome line into `hando
 
 ## Part B — gameplay experiment (POC-5)
 
+For pairs of testers, **Hot-seat** in the header lets two people duel on one phone; telemetry tags those rounds `mode=hotseat` so they do not mix with the deck's numbers. Use it after both have played the solo deck once.
+
 Run with at least 3 people who have never seen the game, on their own phone, one at a time, no explanation beyond "read the opponent's spell and beat them to 3 seals". Rounds 1–8 are the curated deck (high-information telegraph in rounds 1–4 and 7, medium in 5, 6, 8); from round 9 the heuristic bot plays. Watch silently; note decision times and hesitations.
 
 After each **duel round**, ask (write the answers verbatim):

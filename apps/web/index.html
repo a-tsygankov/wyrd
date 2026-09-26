@@ -21,12 +21,25 @@
                 <div class="eyebrow">WYRD • DUEL POC</div>
                 <h1>Read the spell. Shape the counter.</h1>
             </div>
-            <button id="reset-match" class="ghost-button" type="button">Reset</button>
+            <div class="topbar-actions">
+                <button id="mode-toggle" class="ghost-button" type="button" title="Switch between solo and two players on this phone">Hot-seat</button>
+                <button id="reset-match" class="ghost-button" type="button">Reset</button>
+            </div>
         </header>
+
+        <!-- Hot-seat hand-off: covers the board while the phone changes hands. -->
+        <div id="handoff" class="handoff hidden" role="dialog" aria-modal="true" aria-labelledby="handoff-text">
+            <div class="card handoff-card">
+                <span class="label">Hot-seat</span>
+                <h2 id="handoff-text">Pass the phone</h2>
+                <p class="muted">The other player must not see this screen until you tap.</p>
+                <button id="handoff-ready" class="cast-button" type="button">I'm ready</button>
+            </div>
+        </div>
 
         <section class="scoreboard card">
             <div>
-                <span class="label">You</span>
+                <span id="you-label" class="label">You</span>
                 <strong id="player-seals">0</strong>
                 <span class="muted">seals</span>
             </div>
@@ -35,7 +48,7 @@
                 <strong id="round-number">1</strong>
             </div>
             <div class="right">
-                <span class="label">Opponent</span>
+                <span id="opp-label" class="label">Opponent</span>
                 <strong id="opponent-seals">0</strong>
                 <span class="muted">seals</span>
             </div>
@@ -44,7 +57,7 @@
         <section class="opponent card">
             <div class="section-heading">
                 <div>
-                    <span class="label">Opponent telegraph</span>
+                    <span id="telegraph-label" class="label">Opponent telegraph</span>
                     <h2 id="telegraph">—</h2>
                 </div>
                 <span id="match-status" class="status-pill">Your move</span>
@@ -69,7 +82,7 @@
         </section>
 
         <section class="reaction card">
-            <span class="label">Reaction to opponent</span>
+            <span id="reaction-label" class="label">Reaction to opponent</span>
             <div id="reaction-tray" class="reaction-tray">
                 <button data-reaction="" class="reaction-button selected" type="button">No reaction</button>
                 <button data-reaction="reflect" class="reaction-button" type="button">REFLECT</button>

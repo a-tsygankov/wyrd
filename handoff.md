@@ -12,7 +12,7 @@ M0 grammar + playable browser duel POC. Cloudflare deployment pipeline (worker +
 |---|---|---|
 | Worker | `wyrd-api` → https://wyrd-api.atsyg-feedme.workers.dev | deployed by `.github/workflows/deploy.yml` on push to main |
 | Pages | `wyrd-web` → https://wyrd-web.pages.dev | per-branch previews `<branch>.wyrd-web.pages.dev`; `/api/*` proxied to the worker |
-| D1 | `wyrd-db` (`68b495d9-ab5a-4a84-b996-702dc4c2de0e`) | migrations via `wrangler d1 migrations apply`; `0000_init.sql`, `0001_telemetry.sql` |
+| D1 | `wyrd-db` (`68b495d9-ab5a-4a84-b996-702dc4c2de0e`) | migrations via `wrangler d1 migrations apply`; `0000_init.sql`, `0001_telemetry.sql`, `0002_telemetry_mode.sql` |
 | Playtest review | https://wyrd-web.pages.dev/api/telemetry/summary | per-scenario reactions, seal rate, median time-to-commit; rematches and sessions |
 | GitHub secrets | `CLOUDFLARE_API_KEY`, `CLOUDFLARE_ACCOUNT_ID` | set 2026-09-26 with `scripts/setup-secrets.local.ps1 -GitHub` (same token as gigsy/feedme2) |
 | Worker secrets | none | — |
@@ -27,6 +27,7 @@ M0 grammar + playable browser duel POC. Cloudflare deployment pipeline (worker +
 - `wrangler pages project create` (wrangler ≥ 4.14x) delegates to Pages-on-Workers and reads the nearest `wrangler.toml`; run it from `apps/web` with `--force` (the `-Provision` script does). `wrangler pages deploy` from `apps/web` still targets the classic project.
 
 ## Log
+- 2026-09-26 — hot-seat mode: two players on one phone with a hand-off overlay (`hotseat.ts` state machine, mode toggle in the header, `?mode=hotseat`); telemetry gains `mode` (`0002_telemetry_mode.sql`) so solo and hot-seat rounds stay separable in the summary.
 - 2026-09-26 — admin mode: triple-tap the title (or `?admin=1`) for a console with hidden state, best-move advice with resolver explanations (`advisor.ts`: adviseReaction / adviseSpell over a reaction-probability model; the bot now exposes `reactionProbabilities`) and the client log ring buffer (`log.ts`).
 - 2026-09-26 — phone playtest prep: PWA icon set (192/512/maskable/apple-touch, `apps/web/scripts/generate-icons.mjs`), manifest id/scope/icons, iOS meta tags; Playwright installability tests (manifest criteria, icon sizes, iOS metadata, coach mark per platform) which caught the always-visible install banner (`.hidden` lost to a later rule); `docs/playtest-checklist.md` written.
 - 2026-09-26 — POC-5 telemetry: `telemetry_events` table (`0001_telemetry.sql`), `POST /api/telemetry` (validated batches, atomic D1 batch insert) and `GET /api/telemetry/summary`; client records each resolved round, rematch and match end, fire-and-forget, `?telemetry=off` to opt out. Everything needed for phone playtests is now in place.
