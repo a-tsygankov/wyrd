@@ -6,7 +6,7 @@ import type { Beat } from "./stage.js";
  * The mapping and the cue table are pure; `createSound` owns the
  * AudioContext.
  */
-export type CueName = "cast" | "reflect" | "silence" | "null" | "block" | "shatter" | "ward" | "bind" | "gate" | "hit" | "seal" | "fizzle";
+export type CueName = "cast" | "reflect" | "silence" | "null" | "block" | "shatter" | "ward" | "bind" | "gate" | "hit" | "seal" | "fizzle" | "impact" | "tick" | "tick2" | "tick3";
 
 export type Cue = { notes: number[]; duration: number; type: OscillatorType; gain: number };
 
@@ -22,8 +22,32 @@ export const CUES: Record<CueName, Cue> = {
     gate: { notes: [110, 90], duration: 0.45, type: "square", gain: 0.06 },
     hit: { notes: [180, 120], duration: 0.2, type: "sawtooth", gain: 0.07 },
     seal: { notes: [523, 659, 784, 1046], duration: 0.5, type: "sine", gain: 0.06 },
-    fizzle: { notes: [300, 250, 200], duration: 0.3, type: "triangle", gain: 0.04 }
+    fizzle: { notes: [300, 250, 200], duration: 0.3, type: "triangle", gain: 0.04 },
+    // Bass under a landing hit (ideas doc §D: "more bass"), layered on the hit cue.
+    impact: { notes: [70, 45], duration: 0.28, type: "sine", gain: 0.11 },
+    // The last three seconds of the reaction window, one tick a second, rising.
+    tick: { notes: [660], duration: 0.08, type: "square", gain: 0.03 },
+    tick2: { notes: [880], duration: 0.08, type: "square", gain: 0.035 },
+    tick3: { notes: [1100], duration: 0.1, type: "square", gain: 0.04 }
 };
+
+/** A second cue played under the main one: the bass of an impact. */
+export function extraCueFor(beat: Pick<Beat, "kind">): CueName | null {
+    switch (beat.kind) {
+        case "hit":
+        case "ward-break":
+        case "gate-break":
+            return "impact";
+        default:
+            return null;
+    }
+}
+
+/** The tick for an urgent remaining time (ms), rising as it runs out; null outside the last three seconds. */
+export function urgencyCue(remainingMs: number): CueName | null {
+    if (remainingMs <= 0 || remainingMs > 3000) return null;
+    return remainingMs > 2000 ? "tick" : remainingMs > 1000 ? "tick2" : "tick3";
+}
 
 export function cueFor(beat: Pick<Beat, "kind"> & { broken?: boolean }): CueName | null {
     switch (beat.kind) {

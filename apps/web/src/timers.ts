@@ -6,23 +6,28 @@
  */
 export const REACTION_WINDOW_MS = 8000;
 export const QUICK_CAST_MS = 5000;
+/** The last stretch of the reaction window: the card edge pulses and a tick rises (ideas doc §E). */
+export const URGENT_MS = 3000;
 
 export type TimerState = {
     /** The reaction window has closed: whatever is selected is final. */
     reactionLocked: boolean;
     /** Committing now counts as a quick cast. */
     quickCast: boolean;
+    /** Inside the last URGENT_MS of an open reaction window. */
+    urgent: boolean;
     reactionRemainingMs: number;
     quickRemainingMs: number;
 };
 
 export function timerState(elapsedMs: number, enabled = true): TimerState {
-    if (!enabled) return { reactionLocked: false, quickCast: false, reactionRemainingMs: 0, quickRemainingMs: 0 };
+    if (!enabled) return { reactionLocked: false, quickCast: false, urgent: false, reactionRemainingMs: 0, quickRemainingMs: 0 };
     const reactionRemainingMs = Math.max(0, REACTION_WINDOW_MS - elapsedMs);
     const quickRemainingMs = Math.max(0, QUICK_CAST_MS - elapsedMs);
     return {
         reactionLocked: reactionRemainingMs === 0,
         quickCast: quickRemainingMs > 0,
+        urgent: reactionRemainingMs > 0 && reactionRemainingMs <= URGENT_MS,
         reactionRemainingMs,
         quickRemainingMs
     };
