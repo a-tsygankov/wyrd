@@ -33,6 +33,10 @@ E2E_BASE_URL=http://127.0.0.1:8788 pnpm --filter @wyrd/web test:e2e   # Playwrig
 
 The pre-commit hook needs a working `python`/`python3`/`py`; without one it skips the bump and CI's version check catches it.
 
+## Telemetry
+
+The client posts anonymous round/rematch/match-end events to `POST /api/telemetry` (no account, IP or user agent; a random session UUID in local storage). `GET /api/telemetry/summary` aggregates them per scenario for playtest review. Add `?telemetry=off` to the URL to opt out.
+
 ## Versioning and deployment
 
 Same model as gigsy and feedme2. Each tier has its own version, bumped automatically on commit for the tiers the staged diff touches (`scripts/version_rules.py`; a package change cascades to everything bundled on top of it). PRs are gated by `.github/workflows/version-check.yml`. A schema change is a **new** numbered file in `apps/api/migrations/`; never edit one in place.

@@ -94,7 +94,7 @@ The curated deck ships as data in `packages/wyrd-content/src/scenarios.ts` (8 sc
 
 Original content: 6–10 curated situations (direct threat, AMPLIFY bluff, REFLECT opportunity, ANCHOR protecting route, SILENCE stripping a modifier, NULL as expensive hard counter, WARD interaction, SPLIT if included). Test high-information telegraph first, then medium. Ask after each duel: understood why you won/lost? inference or guess? more than one reasonable choice? useless glyph? mandatory glyph? another duel?
 
-**[v2]** Telemetry, now cheap: `POST /api/telemetry` (telegraph shown, spell, reaction, outcome, time-to-commit, rematch) into a D1 table via a new migration; anonymous session id in IndexedDB; fire-and-forget so offline play is unaffected.
+**[v2] Telemetry — done.** `POST /api/telemetry` stores round / rematch / match_end events (telegraph shown, spells, both reactions, seals gained, time-to-commit) in `telemetry_events` (`0001_telemetry.sql`); anonymous session UUID in local storage; fire-and-forget with keepalive, `?telemetry=off` disables it. `GET /api/telemetry/summary` gives the playtest review view: per scenario, reaction distribution, player seal rate and median time-to-commit, plus rematch and session counts.
 
 ### POC-6 — short iterate/deploy loops
 Unchanged: change one rule/cost, deploy (CI does it), replay the same scenarios, compare. The tier versions in the footer tell testers which build they are on.
@@ -123,7 +123,7 @@ apps/      web (PWA — primary deliverable)   api (Worker + D1)   duel-sim (deb
 2. ~~Playwright smoke~~ done.
 3. ~~Heuristic bot~~ done.
 4. ~~Scenario deck + telegraph presets~~ done.
-5. Telemetry endpoint + migration.
+5. ~~Telemetry endpoint + migration~~ done.
 6. Playtest on phones; tune rules/costs (the bot's scoring weights and the deck are the knobs); repeat.
 7. Only then decide between deeper resolver work, React migration, or PvP.
 
