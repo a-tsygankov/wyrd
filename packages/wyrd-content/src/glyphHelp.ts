@@ -62,7 +62,7 @@ export const glyphHelp: Record<string, GlyphHelp> = {
     },
     GATE: {
         role: "target",
-        text: "The objective between the mages, not a player. CLOSE scores while it stands open, OPEN scores while it is closed; BREAK shatters it until someone MENDs it. Wards and REFLECT cannot touch it; only NULL stops a GATE spell - and if both mages cast a gate spell in the same round, the gate shudders and holds for both."
+        text: "The objective between the mages, not a player. CLOSE scores while it stands open, OPEN scores while it is closed; BREAK shatters it until someone MENDs it. Wards on a mage and REFLECT cannot touch it; NULL stops a GATE spell, and GATE WARD claims it (only the owner's gate spells pass until BREAK GATE removes the ward). If both mages cast a gate spell in the same round, the gate shudders and holds for both."
     },
 
     // --- actions ------------------------------------------------------------
@@ -76,7 +76,7 @@ export const glyphHelp: Record<string, GlyphHelp> = {
     },
     WARD: {
         role: "action",
-        text: "Action: raises a ward on the target that lasts into later rounds. Add an essence to filter it (only that essence is blocked) or leave it untyped to block every hostile spell. Any ward blocks an ANCHORed spell. Scores nothing this round."
+        text: "Action: raises a ward on the target that lasts into later rounds. Add an essence to filter it (only that essence is blocked) or leave it untyped to block every hostile spell. Any ward blocks an ANCHORed spell. GATE WARD wards the objective instead: only your gate spells pass it until the opponent's BREAK GATE shatters it (no essence on a gate ward). Scores nothing this round."
     },
     OPEN: {
         role: "action",

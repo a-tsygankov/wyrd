@@ -12,6 +12,7 @@ import {
     type Personality,
     type Plan,
     createRng,
+    classifySpell,
     enumerateLegalSpells,
     glyphFits,
     explainMatch,
@@ -208,7 +209,8 @@ function stageState(): StageState {
     return {
         wards: { player: state.players.player.ward, opponent: state.players.opponent.ward },
         bound: { player: state.players.player.bound === true, opponent: state.players.opponent.bound === true },
-        gate: state.gate
+        gate: state.gate,
+        gateWard: state.gateWard
     };
 }
 document.addEventListener("pointerdown", () => sound.unlock(), { passive: true });
@@ -509,7 +511,9 @@ function composeBudget(): { budget: number; spellCost: number; reactionCost: num
 function spellIsCastable(): boolean {
     const parsed = parseSpell(playerSpell);
     const { budget, spellCost } = composeBudget();
-    return parsed.status === "valid" && playerSpell.length >= 2 && playerSpell.length <= 4 && spellCost <= budget;
+    // The resolver has the last word on shape (REVERSE with nothing to
+    // invert, a filtered gate ward): a spell it refuses at validation cannot be cast.
+    return parsed.status === "valid" && playerSpell.length >= 2 && playerSpell.length <= 4 && spellCost <= budget && classifySpell(playerSpell) !== undefined;
 }
 
 function renderValidation(): void {
@@ -656,7 +660,7 @@ function renderAdmin(): void {
         ["Hidden spell", plan.opponentSpell.join(" ") || "(not cast yet)"],
         ["Opponent", `${personality.title} (${personality.id}) - ${personality.blurb}`],
         ["Opponent reacts", plan.reactionPolicy],
-        ["Gate", state.gate],
+        ["Gate", state.gate + (state.gateWard ? ` · warded by ${state.gateWard.ownerId}${state.gateWard.integrity !== undefined ? ` (integrity ${state.gateWard.integrity})` : ""}` : "")],
         ["Wards", wards],
         ["Focus", `player ${state.players.player.focus} · opponent ${state.players.opponent.focus}` + (state.players.player.exposed || state.players.opponent.exposed ? " · exposed" : "")],
         ["Versions", document.getElementById("version-line")?.textContent ?? ""],
@@ -958,7 +962,8 @@ function resolveRound(): void {
         stage.setIdle({
             wards: { player: roundStart.players.player.ward, opponent: roundStart.players.opponent.ward },
             bound: { player: roundStart.players.player.bound === true, opponent: roundStart.players.opponent.bound === true },
-            gate: roundStart.gate
+            gate: roundStart.gate,
+            gateWard: roundStart.gateWard
         });
         const contributions: Contribution[] = [];
         for (const id of round.order) {

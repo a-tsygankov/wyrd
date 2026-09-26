@@ -47,7 +47,9 @@ export const glyphs: GlyphDefinition[] = [
         family: "boundary",
         produces: ["PersistentEffect"],
         inputs: [
-            { name: "target", accepts: ["EntityRef", "RegionRef"] },
+            // BoundaryRef: a ward on the GATE (balance fix 4); the spec lists
+            // boundaries as "scopes for persistent effects".
+            { name: "target", accepts: ["EntityRef", "RegionRef", "BoundaryRef"] },
             { name: "filter", accepts: ["Essence"], optional: true }
         ],
         baseFocusCost: 2,

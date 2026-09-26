@@ -164,11 +164,16 @@ export function scoreSpell(spell: LegalSpell, view: BotView): number {
         } else score -= 6;
     }
     if (wardStops(spell, them)) score -= 7; // walking into a ward is the one clear mistake
-    if (spell.action === "ward") {
+    if (spell.action === "ward" && spell.target !== "gate") {
         // A ward is worth having once, mostly when the match is long enough
         // for it to matter; SELF wards only - warding the enemy helps them.
         score += me.ward ? -3 : spell.target === "self" ? 2.5 : -4;
     }
+    // The gate ward (balance fix 4): take the gate while it is free; break
+    // theirs before trying to move the gate; never ward it twice.
+    const gateWard = view.state.gateWard;
+    if (spell.action === "ward" && spell.target === "gate") score += gateWard ? -4 : (view.state.gate ?? "open") === "broken" ? -2 : 2.5;
+    if (spell.target === "gate" && spell.action !== "ward" && gateWard && gateWard.ownerId !== view.botId) score += spell.action === "break" ? 4 : -6;
     if (spell.target === "self" && spell.action !== "ward" && spell.action !== "mend") score -= 5; // hits the caster, scores nothing
     if (spell.amplified) score += 1.2; // reads as a threat in the telegraph
     if (spell.anchored && spell.target === "enemy") score += 1.5; // insures the route against REFLECT

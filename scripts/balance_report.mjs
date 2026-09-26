@@ -25,6 +25,7 @@ function fresh(setup = {}) {
     const state = createInitialDuelState(rules);
     if (setup.playerWard) state.players.player.ward = { ownerId: "player", ...setup.playerWard, ...(rules.wardIntegrity ? { integrity: rules.wardIntegrity } : {}) };
     if (setup.gate) state.gate = setup.gate;
+    if (setup.gateWard) state.gateWard = { ...setup.gateWard, ...(rules.wardIntegrity ? { integrity: rules.wardIntegrity } : {}) };
     return state;
 }
 
@@ -48,7 +49,8 @@ const situations = [
     { id: "you hold an untyped ward", setup: { playerWard: {} } },
     { id: "you hold a FIRE ward", setup: { playerWard: { essence: "fire" } } },
     { id: "gate closed", setup: { gate: "closed" } },
-    { id: "gate broken", setup: { gate: "broken" } }
+    { id: "gate broken", setup: { gate: "broken" } },
+    { id: "you ward the gate", setup: { gateWard: { ownerId: "player" } } }
 ];
 
 const rows = [];
