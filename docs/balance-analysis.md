@@ -1,6 +1,8 @@
 # Wyrd — balance analysis: does every opponent move have an answer?
 
-Status: analysis, 2026-09-26, against the resolver as shipped (19-glyph tray with WEAKEN, SPLIT, REVERSE; rulesets Classic / Teeth / Pulse / Resolve). Numbers come from `scripts/balance_report.mjs`, which runs the real resolver over the legal pool; regenerate with:
+Status: analysis 2026-09-26; **fixes 1 and 2 shipped the same day** (see §6). The tables in §2–§3 are the *before* picture; §6 has the after.
+
+Written against the resolver as shipped (19-glyph tray with WEAKEN, SPLIT, REVERSE; rulesets Classic / Teeth / Pulse / Resolve). Numbers come from `scripts/balance_report.mjs`, which runs the real resolver over the legal pool; regenerate with:
 
 ```bash
 pnpm build && node scripts/balance_report.mjs teeth
@@ -93,7 +95,7 @@ Recommendation: 2, with 3 layered on for the timed rulesets. The engine already 
 - BREAK on a mage is unblockable but reflectable and scores nothing; its threat is one ward, the answer costs 2. Fair.
 - Nothing is unanswerable in any ruleset.
 
-## 5. Suggested order of work
+## 5. Suggested order of work (original)
 
 1. Bot NULL policy for scoring gate spells (3.6) — a number in `bot.ts`, no rule change; rerun the report.
 2. ANCHORed spells blocked by any ward (3.2 option 1) — one resolver condition plus tests and help text.
@@ -102,3 +104,11 @@ Recommendation: 2, with 3 layered on for the timed rulesets. The engine already 
 5. Revisit prices (ANCHOR 3, CLOSE/OPEN 3) only if telemetry still shows the patterns after 1–4.
 
 Each step should move the NULL-only share (108 of 250 rows under Teeth) down; the report is the regression test.
+
+## 6. Status of the fixes
+
+**1. Bot NULL policy — shipped.** Every personality now rates NULL at 2.5 or more against a gate spell that would score (the Gatekeeper 3). Beyond that, `scoreReactions` asks the resolver about each reaction before choosing: a reaction that leaves the bot worse off (SILENCE turning a failing `GATE CLOSE REVERSE` back into the scoring CLOSE; REFLECT into ANCHOR) scores −5, a reaction that changes nothing that matters is capped at −1, reactions that remove the harm are floored (SILENCE and REFLECT 3, NULL 1.5, or 2.5 when NULL is the only answer), and "no reaction" is capped at 1 whenever something answers the spell. The dominance tables now measure the rules, not the bot's blind spots: the best player spell on a fresh board fell from **+0.91 to +0.27** expected seals (the ANCHORed spells left the top eight entirely), and against a warded opponent from **+0.87 to +0.27**; positive-expectation spells fell from 43 to 38 of 286.
+
+**2. Any ward blocks an ANCHORed hostile spell — shipped.** `FIRE SEEK ENEMY ANCHOR` into a SHADOW ward is now blocked ("ANCHOR fixed its route, and a fixed route is a known route"), dents the ward like any blocked hit, and SILENCE, by stripping the anchor, lets the mismatched spell through again — the reaction text warns about it. Help for ANCHOR and WARD, the bot's ward model and the composer summary follow. The NULL-only row count does not move because the report's situations pair a FIRE ward with FIRE spells; the rule bites on mismatched essences, which the `--all` listing shows.
+
+**3. Contested gate and initiative by Focus — next.** **4. Gate wards — after.** **5. Prices — only if telemetry still shows the pattern.**

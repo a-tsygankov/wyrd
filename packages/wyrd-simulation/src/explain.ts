@@ -171,8 +171,14 @@ export function explainSpell(
     if (uncontested === "blocked") {
         const ward = state.players[defenderId].ward;
         const dent = plain.steps.find(s => s.code === "WARD_BROKEN" || s.code === "WARD_DENTED");
+        const wardEssence = ward?.essence;
+        const anchoredInto = plain.effect?.anchored && wardEssence && plain.effect.essence && wardEssence !== plain.effect.essence;
         summary.push(
-            cap(`${names.them}'s ${ward?.essence ? ward.essence.toUpperCase() + "-filtered" : "untyped"} ward blocks this.${dent ? " " + dent.text : ""} Change the essence, or aim at the GATE.`)
+            cap(
+                anchoredInto
+                    ? `${names.them}'s ${wardEssence.toUpperCase()}-filtered ward blocks this because of ANCHOR: a fixed route is a known route, any ward catches it.${dent ? " " + dent.text : ""} Drop ANCHOR to slip past, or aim at the GATE.`
+                    : `${names.them}'s ${ward?.essence ? ward.essence.toUpperCase() + "-filtered" : "untyped"} ward blocks this.${dent ? " " + dent.text : ""} Change the essence, or aim at the GATE.`
+            )
         );
         return { glyphs, summary };
     }
@@ -244,7 +250,7 @@ export function explainReaction(
     }
     // silence
     const integrityNote = rules.wardIntegrity > 0 ? " With wards that shatter, stripping AMPLIFY also spares your ward one dent." : "";
-    return `SILENCE strips every modifier - AMPLIFY, WEAKEN, SPLIT, REVERSE, ANCHOR - from ${spellName} but the base spell still lands as telegraphed: it undoes a REVERSEd gate trick or a SPLIT, and reopens an ANCHORed route, but never stops a plain seal.${integrityNote}${costNote("silence")}${hiddenNote}`;
+    return `SILENCE strips every modifier - AMPLIFY, WEAKEN, SPLIT, REVERSE, ANCHOR - from ${spellName} but the base spell still lands as telegraphed: it undoes a REVERSEd gate trick or a SPLIT, and reopens an ANCHORed route, but never stops a plain seal. Mind your ward: an ANCHORed spell is caught by any ward, an unanchored one only by a matching one.${integrityNote}${costNote("silence")}${hiddenNote}`;
 }
 
 export type Contribution = {

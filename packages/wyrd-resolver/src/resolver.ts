@@ -271,19 +271,24 @@ function applyBranch(effect: ResolvedEffect, e: Encounter): PlayerId | undefined
             effect.target === "enemy" ||
             (effect.reflected && effect.target === "self");
 
+        // A fixed route is a known route: an ANCHORed spell cannot swerve
+        // around a ward of the wrong essence (docs/balance-analysis.md §3.2).
+        const anchoredIntoWard = effect.anchored && ward !== undefined;
         if (
             hostilePlayerTarget &&
             ward &&
-            (!ward.essence || !effect.essence || ward.essence === effect.essence)
+            (anchoredIntoWard || !ward.essence || !effect.essence || ward.essence === effect.essence)
         ) {
             addStep(
                 steps,
                 "boundary",
                 "blocked",
                 "WARD_BLOCKED",
-                ward.essence
-                    ? "WARD blocked the " + (effect.essence ?? "untyped") + " spell."
-                    : "WARD blocked the incoming spell."
+                anchoredIntoWard && ward.essence && effect.essence && ward.essence !== effect.essence
+                    ? "WARD blocked the " + effect.essence + " spell: ANCHOR fixed its route, and a fixed route is a known route."
+                    : ward.essence
+                        ? "WARD blocked the " + (effect.essence ?? "untyped") + " spell."
+                        : "WARD blocked the incoming spell."
             );
             // Ward integrity: the blocked spell still wears the ward down by
             // its magnitude; at 0 it shatters and the NEXT hit gets through.

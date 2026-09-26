@@ -76,7 +76,7 @@ export const glyphHelp: Record<string, GlyphHelp> = {
     },
     WARD: {
         role: "action",
-        text: "Action: raises a ward on the target that lasts into later rounds. Add an essence to filter it (only that essence is blocked) or leave it untyped to block every hostile spell. Scores nothing this round."
+        text: "Action: raises a ward on the target that lasts into later rounds. Add an essence to filter it (only that essence is blocked) or leave it untyped to block every hostile spell. Any ward blocks an ANCHORed spell. Scores nothing this round."
     },
     OPEN: {
         role: "action",
@@ -128,7 +128,7 @@ export const glyphHelp: Record<string, GlyphHelp> = {
     },
     ANCHOR: {
         role: "modifier",
-        text: "Modifier: fixes the spell's route so REFLECT fails against it. SILENCE strips it. It does not stop REVERSE - it protects the route, not the meaning. Costs 2 Focus."
+        text: "Modifier: fixes the spell's route so REFLECT fails against it - but a fixed route is a known route, so any ward on the target blocks an anchored spell, whatever its essence. SILENCE strips it. It does not stop REVERSE - it protects the route, not the meaning. Costs 2 Focus."
     },
     SILENCE: {
         role: "reaction",
