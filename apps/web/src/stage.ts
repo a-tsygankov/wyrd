@@ -1,4 +1,5 @@
 import type { GateState, PlayerId, ReactionGlyph, ResolutionResult } from "../../../packages/wyrd-resolver/src/index.js";
+import { HIT_STOP_MS, decayTrauma, markFor, shakeOffset, traumaFor, type FloorMark } from "./juice.js";
 
 /**
  * The duel stage (docs/duel-engagement-options.md §F): two mages, a gate,
@@ -12,7 +13,7 @@ export type Side = PlayerId;
 
 export type Beat =
     | { kind: "cast"; side: Side; essence?: string; spell: string }
-    | { kind: "fly"; from: Side; to: Side; essence?: string; magnitude: number; action: "seek" | "bind" | "break" | "mend" }
+    | { kind: "fly"; from: Side; to: Side; essence?: string; magnitude: number; action: "seek" | "bind" | "break" | "mend"; emphasis?: Emphasis }
     | { kind: "reflect"; side: Side }
     | { kind: "split"; side: Side }
     | { kind: "reverse"; side: Side; from: string; to: string }
@@ -27,8 +28,8 @@ export type Beat =
     | { kind: "gate-open" }
     | { kind: "gate-break" }
     | { kind: "gate-mend" }
-    | { kind: "hit"; side: Side; magnitude: number; damage?: number }
-    | { kind: "seal"; side: Side }
+    | { kind: "hit"; side: Side; magnitude: number; damage?: number; emphasis?: Emphasis }
+    | { kind: "seal"; side: Side; emphasis?: Emphasis }
     | { kind: "fizzle"; side: Side; reason: string };
 
 export type Contribution = {
@@ -39,10 +40,17 @@ export type Contribution = {
     reaction: ReactionGlyph | undefined;
 };
 
-/** Beat durations in ms (full motion). Reduced motion collapses them to a frame. */
+/**
+ * "decisive": the long version (ideas doc §I) - the seal that wins the
+ * match, a knock-out on Resolve, or an amplified / split hit that seals.
+ * Everything else stays short so the tenth round still feels quick.
+ */
+export type Emphasis = "decisive";
+
+/** Beat durations in ms (full motion), every one at or under half a second. Reduced motion collapses them to a frame. */
 export const BEAT_MS: Record<Beat["kind"], number> = {
     cast: 320,
-    fly: 520,
+    fly: 460,
     reflect: 220,
     split: 320,
     reverse: 360,
@@ -58,9 +66,25 @@ export const BEAT_MS: Record<Beat["kind"], number> = {
     "gate-break": 480,
     "gate-mend": 480,
     hit: 300,
-    seal: 520,
+    seal: 480,
     fizzle: 420
 };
+
+/** How long a beat plays: its table time, or the long version when it decides the match. */
+export function beatDuration(beat: Beat): number {
+    const base = BEAT_MS[beat.kind];
+    if (!("emphasis" in beat) || beat.emphasis !== "decisive") return base;
+    switch (beat.kind) {
+        case "fly":
+            return base * 2;
+        case "hit":
+            return base * 2;
+        case "seal":
+            return 1400;
+        default:
+            return base;
+    }
+}
 
 const COLORS: Record<string, string> = {
     fire: "#ff7a3d",
@@ -225,7 +249,22 @@ export function contributionBeats(c: Contribution): Beat[] {
         }
     });
     beats.push(...sealBeats(c.result, c.casterId, c.defenderId));
-    return beats;
+    return decisive(c) ? beats.map(emphasise) : beats;
+}
+
+/** Does this contribution decide the match, or land an amplified / split seal? */
+function decisive(c: Contribution): boolean {
+    const codes = stepCodes(c.result);
+    const scorer = c.result.sealAwardedTo;
+    const state = c.result.state;
+    const winsMatch = scorer !== undefined && state.players[scorer].seals >= 3;
+    const knockout = state.rules.resolve > 0 && codes.has("RESOLVE_DAMAGE") && Object.values(state.players).some(p => p.resolve === 0);
+    const bigSeal = scorer !== undefined && codes.has("SEEK_HIT") && ((c.result.effect?.magnitude ?? 1) >= 2 || codes.has("SPLIT_APPLIED"));
+    return winsMatch || knockout || bigSeal;
+}
+
+function emphasise(beat: Beat): Beat {
+    return beat.kind === "fly" || beat.kind === "hit" || beat.kind === "seal" ? { ...beat, emphasis: "decisive" } : beat;
 }
 
 export function buildTimeline(incoming: Contribution, outgoing?: Contribution): Beat[] {
@@ -254,6 +293,8 @@ export type Stage = {
     setIdle(state: StageState): void;
     /** Play beats in order; resolves when done. A second call skips the current run. */
     play(beats: Beat[], state: StageState): Promise<void>;
+    /** Forget the floor marks (a new match). */
+    clearMarks(): void;
     reducedMotion(): boolean;
 };
 
@@ -273,8 +314,52 @@ export function createStage(root: SVGSVGElement, hooks: StageHooks = {}, motion:
     const orb = q<SVGCircleElement>("#stage-orb");
     const flash = q<SVGRectElement>("#stage-flash");
     const caption = q<SVGTextElement>("#stage-caption");
+    const world = q<SVGGElement>("#stage-world");
+    const marks = q<SVGGElement>("#stage-marks");
 
     let generation = 0;
+
+    // --- Trauma (juice.ts): one number, decayed every frame, drives the shake.
+    let trauma = 0;
+    let shaking = false;
+    let lastFrame = 0;
+    const frame = (now: number): void => {
+        trauma = decayTrauma(trauma, now - lastFrame);
+        lastFrame = now;
+        const o = shakeOffset(trauma, now);
+        world.setAttribute("transform", `translate(${o.x.toFixed(2)} ${o.y.toFixed(2)}) rotate(${o.rot.toFixed(2)} 180 85)`);
+        if (trauma > 0) requestAnimationFrame(frame);
+        else {
+            world.removeAttribute("transform");
+            shaking = false;
+        }
+    };
+    function addTrauma(amount: number): void {
+        if (amount <= 0 || motion.reduced() || typeof requestAnimationFrame !== "function") return;
+        trauma = Math.min(1, trauma + amount);
+        if (!shaking) {
+            shaking = true;
+            lastFrame = performance.now();
+            requestAnimationFrame(frame);
+        }
+    }
+
+    // --- Permanence: a hit scorches the floor for the rest of the match.
+    const MAX_MARKS_PER_SIDE = 8;
+    function addMark(mark: FloorMark): void {
+        const own = [...marks.querySelectorAll<SVGEllipseElement>(`[data-side="${mark.side}"]`)];
+        if (own.length >= MAX_MARKS_PER_SIDE) own[0]?.remove();
+        const el = document.createElementNS("http://www.w3.org/2000/svg", "ellipse");
+        const jitter = ((own.length * 7919) % 17) - 8;
+        el.setAttribute("cx", String(X[mark.side] + jitter));
+        el.setAttribute("cy", String(Y + 30 + (own.length % 3)));
+        el.setAttribute("rx", "13");
+        el.setAttribute("ry", "3.2");
+        el.setAttribute("fill", essenceColor(mark.essence));
+        el.setAttribute("opacity", "0.32");
+        el.dataset.side = mark.side;
+        marks.append(el);
+    }
     const dur = (ms: number): number => (motion.reduced() ? 1 : ms);
     const wait = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, dur(ms)));
 
@@ -349,15 +434,14 @@ export function createStage(root: SVGSVGElement, hooks: StageHooks = {}, motion:
         trail.setAttribute("opacity", "0");
     }
 
+    /** Trauma replaces the old fixed shake; kept as a name for the call sites. */
     async function shake(): Promise<void> {
-        if (motion.reduced()) return;
-        root.classList.add("shake");
-        await wait(260);
-        root.classList.remove("shake");
+        return Promise.resolve();
     }
 
-    async function playBeat(beat: Beat, state: StageState): Promise<void> {
+    async function playBeat(beat: Beat, state: StageState, essence: string | undefined): Promise<void> {
         hooks.onBeat?.(beat);
+        addTrauma(traumaFor(beat));
         switch (beat.kind) {
             case "cast": {
                 mage[beat.side].classList.add("casting");
@@ -367,7 +451,7 @@ export function createStage(root: SVGSVGElement, hooks: StageHooks = {}, motion:
                 return;
             }
             case "fly":
-                return fly(beat.from, beat.to, beat.essence, beat.magnitude, BEAT_MS.fly);
+                return fly(beat.from, beat.to, beat.essence, beat.magnitude, beatDuration(beat));
             case "reflect": {
                 say("REFLECT");
                 await animate(bolt, [{ transform: bolt.style.transform || "none" }, { transform: `${bolt.style.transform || ""} scale(1.6)` }], BEAT_MS.reflect / 2);
@@ -467,23 +551,33 @@ export function createStage(root: SVGSVGElement, hooks: StageHooks = {}, motion:
                 return;
             }
             case "hit": {
-                say(beat.damage ? `HIT −${beat.damage} RESOLVE` : "HIT");
-                bolt.setAttribute("opacity", "0");
+                const long = beat.emphasis === "decisive";
+                say(beat.damage ? `HIT −${beat.damage} RESOLVE` : long ? "HIT!" : "HIT");
+                // Hit-stop: the bolt hangs at the point of impact, everything
+                // freezes for a beat, then the flash and the kick land together.
                 mage[beat.side].classList.add("hit");
+                await wait(long ? HIT_STOP_MS * 2 : HIT_STOP_MS);
+                bolt.setAttribute("opacity", "0");
                 flash.setAttribute("opacity", "0.35");
+                const ms = beatDuration(beat);
+                const kick = (beat.side === "player" ? -8 : 8) * (beat.magnitude >= 2 ? 1.5 : 1);
                 await Promise.all([
-                    animate(flash, [{ opacity: 0.35 }, { opacity: 0 }], BEAT_MS.hit),
-                    animate(mage[beat.side], [{ transform: "translateX(0)" }, { transform: `translateX(${beat.side === "player" ? -8 : 8}px)` }, { transform: "translateX(0)" }], BEAT_MS.hit)
+                    animate(flash, [{ opacity: 0.35 }, { opacity: 0 }], ms),
+                    animate(mage[beat.side], [{ transform: "translateX(0)" }, { transform: `translateX(${kick}px)` }, { transform: "translateX(0)" }], ms)
                 ]);
                 mage[beat.side].classList.remove("hit");
+                const mark = markFor(beat, essence);
+                if (mark) addMark(mark);
                 return;
             }
             case "seal": {
-                say(`SEAL → ${beat.side === "player" ? "◀" : "▶"}`);
+                const long = beat.emphasis === "decisive";
+                say(long ? `SEAL → ${beat.side === "player" ? "◀" : "▶"} · DECISIVE` : `SEAL → ${beat.side === "player" ? "◀" : "▶"}`);
                 orb.setAttribute("opacity", "1");
                 const x = X[beat.side];
-                await animate(orb, [{ transform: `translate(${GATE_X}px, ${Y - 30}px) scale(0.4)`, opacity: 1 }, { transform: `translate(${x}px, 26px) scale(1)`, opacity: 0.2 }], BEAT_MS.seal);
+                await animate(orb, [{ transform: `translate(${GATE_X}px, ${Y - 30}px) scale(0.4)`, opacity: 1 }, { transform: `translate(${x}px, 26px) scale(1)`, opacity: 0.2 }], beatDuration(beat));
                 orb.setAttribute("opacity", "0");
+                if (long) addTrauma(0.4);
                 await shake();
                 return;
             }
@@ -498,9 +592,13 @@ export function createStage(root: SVGSVGElement, hooks: StageHooks = {}, motion:
 
     async function play(beats: Beat[], state: StageState): Promise<void> {
         const mine = ++generation;
+        // The bolt's essence colours the floor mark of the hit that follows it.
+        let essence: string | undefined;
         for (const beat of beats) {
             if (mine !== generation) return; // skipped by a newer run
-            await playBeat(beat, state);
+            if (beat.kind === "fly") essence = beat.essence;
+            if (beat.kind === "cast") essence = beat.essence;
+            await playBeat(beat, state, essence);
         }
         if (mine === generation) {
             await wait(300);
@@ -508,5 +606,5 @@ export function createStage(root: SVGSVGElement, hooks: StageHooks = {}, motion:
         }
     }
 
-    return { setIdle, play, reducedMotion: () => motion.reduced() };
+    return { setIdle, play, clearMarks: () => marks.replaceChildren(), reducedMotion: () => motion.reduced() };
 }

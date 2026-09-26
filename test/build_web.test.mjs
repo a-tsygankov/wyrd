@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 // The build assembles apps/web/dist from the tsc output that `pnpm test`
@@ -17,6 +17,15 @@ test("build_web stamps the web version into index.html and sw.js", () => {
     assert.ok(!html.includes("__WEB_VERSION__"), "placeholder left in index.html");
     assert.ok(sw.includes(`wyrd-web-v${version}`), "sw.js cache name not versioned");
     assert.ok(!sw.includes("__WEB_VERSION__"), "placeholder left in sw.js");
+});
+
+test("build_web ships every compiled client module, not a hand-kept list", () => {
+    // A module missing from dist is served as the HTML fallback by Pages and
+    // the whole client fails to load (juice.js and meter.js, 2026-09-26).
+    const compiled = readdirSync("dist/apps/web/src").filter(f => f.endsWith(".js"));
+    const shipped = new Set(readdirSync("apps/web/dist/apps/web/src"));
+    for (const file of compiled) assert.ok(shipped.has(file), `${file} compiled but not shipped`);
+    assert.ok(compiled.includes("juice.js") && compiled.includes("meter.js"));
 });
 
 test("build_web ships the PWA icon set the manifest points at", () => {

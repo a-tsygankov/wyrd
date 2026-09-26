@@ -90,6 +90,31 @@ h2 {
     font-weight: 750;
 }
 
+/* The Focus meter (apps/web/src/meter.ts): spell from the left, reaction and
+   anything already spent from the right. */
+.focus { display: flex; flex-direction: column; gap: 5px; min-width: 118px; border-radius: 12px; padding: 6px 10px 7px; }
+.focus-meter { position: relative; height: 8px; border-radius: 4px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.focus-fill { position: absolute; top: 0; bottom: 0; width: 0; transition: width 0.2s ease-out; }
+.focus-fill.spell { left: 0; background: linear-gradient(90deg, #4fb3ff, #744eff); }
+.focus-fill.react { right: 0; background: #a56bff; }
+.focus-fill.spent { right: 0; background: rgba(255, 255, 255, 0.18); }
+.focus[data-state="over"] .focus-fill.spell { background: #ff7a7a; }
+.focus[data-state="full"] .focus-meter { box-shadow: 0 0 10px rgba(173, 99, 255, 0.55); animation: meter-shimmer 1.8s ease-in-out infinite; }
+.focus-text { font-size: 0.74rem; line-height: 1; }
+@keyframes meter-shimmer { 50% { box-shadow: 0 0 4px rgba(173, 99, 255, 0.25); } }
+
+/* Cost pips on tray glyphs: one dot per Focus. */
+.glyph-button .pips { display: block; margin-top: 3px; font-size: 0.42rem; line-height: 1; letter-spacing: 2px; color: #ffc457; opacity: 0.9; }
+
+/* The last three seconds of the reaction window (timers.ts URGENT_MS). */
+.reaction.urgent { box-shadow: inset 0 0 0 2px #ffba76; animation: edge-pulse 0.8s ease-in-out infinite; }
+.timer.urgent .timer-fill { background: linear-gradient(90deg, #ffba76, #ff7a3d); }
+.timer.urgent .timer-text { color: #ffba76; }
+@keyframes edge-pulse { 50% { box-shadow: inset 0 0 0 4px rgba(255, 186, 118, 0.95), 0 0 18px rgba(255, 186, 118, 0.45); } }
+
+#stage-marks ellipse { pointer-events: none; }
+#stage-world { transform-box: view-box; transform-origin: 0 0; }
+
 .glyph-tray {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -444,18 +469,10 @@ h2 {
 .stage .mage { animation: stage-sway 3.2s ease-in-out infinite; }
 #stage-mage-opponent { animation-delay: -1.6s; }
 
-@keyframes stage-shake {
-    0%, 100% { transform: translate(0, 0); }
-    20% { transform: translate(-3px, 1px); }
-    40% { transform: translate(3px, -1px); }
-    60% { transform: translate(-2px, 0); }
-    80% { transform: translate(2px, 1px); }
-}
-#stage.shake { animation: stage-shake 0.26s linear; }
-
 @media (prefers-reduced-motion: reduce) {
     .stage .mage { animation: none; }
-    #stage.shake { animation: none; }
+    .focus[data-state="full"] .focus-meter { animation: none; }
+    .reaction.urgent { animation: none; }
     .stage .mage .arm, .stage .mage .palm { transition: none; }
 }
 

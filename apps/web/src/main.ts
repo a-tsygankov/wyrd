@@ -46,7 +46,9 @@ import { loadStats, recordMatchEnd, recordRematch, recordRound, saveStats, summa
 import { QUICK_CAST_MS, REACTION_WINDOW_MS, timerState } from "./timers.js";
 import { buildTimeline, createStage, type StageState } from "./stage.js";
 import { hiddenCount, revealSchedule, revealedSlots, scrySlot, type Reveal } from "./reveal.js";
-import { createSound, cueFor } from "./sound.js";
+import { createSound, cueFor, extraCueFor, urgencyCue } from "./sound.js";
+import { focusMeter } from "./meter.js";
+import { glyphRegistryByDisplayName } from "../../../packages/wyrd-content/src/glyphs.js";
 import {
     REACTION_COSTS,
     ROUND_FOCUS,
@@ -126,6 +128,10 @@ const telegraph = byId<HTMLElement>("telegraph");
 const matchStatus = byId<HTMLElement>("match-status");
 const spellPreview = byId<HTMLElement>("spell-preview");
 const focusCost = byId<HTMLElement>("focus-cost");
+const focusPill = byId<HTMLElement>("focus-pill");
+const focusSpellFill = byId<HTMLElement>("focus-spell-fill");
+const focusReactionFill = byId<HTMLElement>("focus-reaction-fill");
+const focusSpentFill = byId<HTMLElement>("focus-spent-fill");
 const diagnostic = byId<HTMLElement>("spell-diagnostic");
 const glyphTray = byId<HTMLElement>("glyph-tray");
 const reactionTray = byId<HTMLElement>("reaction-tray");
@@ -185,6 +191,8 @@ const stage = createStage(
             stageRoot.dataset.lastBeat = beat.kind;
             const cue = cueFor(beat);
             if (cue) sound.play(cue);
+            const layer = extraCueFor(beat);
+            if (layer) sound.play(layer);
         }
     },
     { reduced: () => !settings.animations || reducedMotionQuery.matches }
@@ -407,6 +415,15 @@ function renderGlyphTray(): void {
         button.dataset.family = choice.family;
         button.dataset.fit = fits[choice.token] ?? "open";
         button.textContent = choice.token;
+        // Cost pips (ideas doc §E): one dot per Focus, outside the accessible name.
+        const cost = glyphRegistryByDisplayName.get(choice.token)?.baseFocusCost ?? 0;
+        if (cost > 0) {
+            const pips = document.createElement("span");
+            pips.className = "pips";
+            pips.setAttribute("aria-hidden", "true");
+            pips.textContent = "●".repeat(cost);
+            button.append(pips);
+        }
         button.disabled = roundResolved || playerSpell.length >= 4;
         button.addEventListener("click", () => {
             if (playerSpell.length >= 4 || roundResolved) {
@@ -495,6 +512,17 @@ function renderValidation(): void {
 
     focusCost.textContent = String(spellCost);
     focusBudget.textContent = String(Math.max(0, budget));
+    // The meter: the composer's Focus this round, the spell from the left,
+    // the reaction and what is already spent from the right.
+    const meter = focusMeter({
+        focus: state.rules.reactionCosts ? state.players[composerId()].focus : ROUND_FOCUS,
+        spellCost,
+        reactionCost
+    });
+    focusSpellFill.style.width = `${meter.spellPct}%`;
+    focusReactionFill.style.width = `${meter.reactionPct}%`;
+    focusSpentFill.style.width = `${meter.spentPct}%`;
+    focusPill.dataset.state = meter.state;
     spellPreview.textContent = formatSpell(playerSpell);
     diagnostic.classList.toggle("valid", valid);
 
@@ -961,6 +989,7 @@ function resetMatch(): void {
         saveStats(deviceStorage, stats);
     }
     state = createInitialDuelState(ruleset.rules);
+    stage.clearMarks();
     history = [];
     playerSpell = [];
     selectedReaction = undefined;
@@ -1089,6 +1118,7 @@ nextRoundButton.addEventListener("click", startNextRound);
 resetButton.addEventListener("click", resetMatch);
 
 // --- Tempo (Pulse / Resolve): reaction ring and quick-cast badge.
+let lastTickSecond = -1;
 function renderTimer(): void {
     const active = timersActive();
     timerBox.classList.toggle("hidden", !active);
@@ -1103,6 +1133,16 @@ function renderTimer(): void {
         renderReactionButtons();
     }
     const showsReactions = mode === "solo" || hotseat.phase === "p1-turn" || hotseat.phase === "p2-react";
+    // The last three seconds: the card edge pulses and a rising tick sounds once a second.
+    const urgent = showsReactions && t.urgent && !reactionLocked;
+    reactionCard.classList.toggle("urgent", urgent);
+    timerBox.classList.toggle("urgent", urgent);
+    const second = urgent ? Math.ceil(t.reactionRemainingMs / 1000) : -1;
+    if (second !== lastTickSecond) {
+        lastTickSecond = second;
+        const tick = urgent ? urgencyCue(t.reactionRemainingMs) : null;
+        if (tick) sound.play(tick);
+    }
     if (showsReactions) {
         const seen = formatTelegraph(visibleTelegraph());
         if (telegraph.textContent !== seen) {

@@ -1,6 +1,6 @@
 # Wyrd — making the duel look and feel exciting: UX and graphics ideas
 
-Status: proposal, 2026-09-26. Companion to `docs/duel-engagement-options.md` (rules) — this document is about presentation and interaction only; nothing here changes what a spell does. Visual mockups of every idea: see the "Wyrd Stagecraft" artifact linked from `handoff.md`.
+Status: proposal, 2026-09-26. **D, I and E shipped 2026-09-26** (`apps/web/src/juice.ts`, `meter.ts`, `stage.ts` emphasis, `timers.ts` URGENT_MS): one trauma dial drives the stage shake, hits stop for 80 ms and scorch the floor for the match, every beat is at or under 500 ms with the long version reserved for match-deciding or amplified/split seals, the Focus fraction is a two-sided meter, tray glyphs carry cost pips, and the last three seconds of the reaction window pulse the card edge with a rising tick. A–C, F–J remain proposals. Companion to `docs/duel-engagement-options.md` (rules) — this document is about presentation and interaction only; nothing here changes what a spell does. Visual mockups of every idea: see the "Wyrd Stagecraft" artifact linked from `handoff.md`.
 
 ## 0. Where we start
 
