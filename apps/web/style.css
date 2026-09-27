@@ -116,8 +116,13 @@ h2 {
 
 /* Layout A: the stage stays pinned while the round's cards scroll beneath it;
    cards scroll into view below it, the active card is lit. */
-.stage.card { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 6px); z-index: 5; display: flex; flex-direction: column; gap: 8px; }
-.card { scroll-margin-top: calc(env(safe-area-inset-top, 0px) + 236px); }
+.stage.card { display: flex; flex-direction: column; gap: 8px; }
+/* Pin the stage only where a phone's height is not the constraint: under it, a
+   tap would land on the stage instead of the card scrolled beneath. */
+@media (min-height: 960px) {
+    .stage.card { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 6px); z-index: 5; }
+    .card { scroll-margin-top: calc(env(safe-area-inset-top, 0px) + 236px); }
+}
 .phase-strip { display: flex; gap: 4px; margin: 0; padding: 0; list-style: none; order: -1; }
 .phase-strip li { flex: 1; }
 .phase-strip button { width: 100%; border: 0; border-radius: 8px; padding: 6px 2px; background: rgba(255, 255, 255, 0.05); color: #7f7499; font-size: 0.68rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; -webkit-tap-highlight-color: transparent; }
@@ -126,7 +131,6 @@ h2 {
 .phase-strip button:focus-visible { outline: 2px solid #ffc457; outline-offset: 1px; }
 .phase-hint { margin: 0; font-size: 0.78rem; color: #a99cc7; min-height: 18px; }
 body[data-phase] .card.phase-target { box-shadow: 0 0 0 2px rgba(173, 99, 255, 0.55), 0 8px 24px rgba(116, 78, 255, 0.18); }
-@media (max-height: 640px) { .stage.card { position: static; } .card { scroll-margin-top: 12px; } }
 
 /* The commit ritual overlay (ritual.ts), over the stage or the arena. */
 .commit-ritual { position: absolute; left: 0; right: 0; bottom: 0; top: 36px; z-index: 3; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 10px; background: rgba(13, 7, 22, 0.86); border-radius: 12px; padding: 12px; }

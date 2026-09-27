@@ -5,7 +5,7 @@ import { expect, test } from "@playwright/test";
 
 test("the floating Next round button appears after a round and advances it", async ({ page }) => {
     await page.goto("/?seed=smoke&animations=off");
-    const fab = page.locator("#next-round-fab");
+    const fab = page.locator("#next-round");
     await expect(fab).toBeHidden();
     const tray = page.locator("#glyph-tray");
     for (const glyph of ["FIRE", "SEEK", "ENEMY"]) await tray.getByRole("button", { name: glyph, exact: true }).click();
@@ -15,7 +15,8 @@ test("the floating Next round button appears after a round and advances it", asy
     const box = await fab.boundingBox();
     const viewport = page.viewportSize()!;
     expect(box!.x + box!.width).toBeGreaterThan(viewport.width * 0.6);
-    expect(box!.y + box!.height).toBeGreaterThan(viewport.height * 0.75, "bottom right, clear of the pinned stage");
+    // Bottom right, clear of the pinned stage.
+    expect(box!.y + box!.height).toBeGreaterThan(viewport.height * 0.75);
     await fab.click();
     await expect(page.locator("#round-number")).toHaveText("2");
     await expect(fab).toBeHidden();

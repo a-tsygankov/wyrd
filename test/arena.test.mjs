@@ -54,12 +54,12 @@ test("the bolt arcs from the caster's hand to the target and never below the flo
     assert.ok(MARKS.player.x < 0 && MARKS.opponent.x > 0 && MARKS.gate.x === 0);
 });
 
-test("the 3D arena is a setting, off by default, with a ?stage=3d override", () => {
+test("the 3D arena is a setting, on by default, with ?stage=2d and ?stage=3d overrides", () => {
     const store = { getItem: () => null, setItem: () => undefined };
-    assert.equal(DEFAULT_SETTINGS.arena3d, false);
-    assert.equal(loadSettings(store, new URLSearchParams("")).arena3d, false);
+    assert.equal(DEFAULT_SETTINGS.arena3d, true);
+    assert.equal(loadSettings(store, new URLSearchParams("")).arena3d, true);
     assert.equal(loadSettings(store, new URLSearchParams("stage=3d")).arena3d, true);
     assert.equal(loadSettings(store, new URLSearchParams("stage=2d")).arena3d, false);
-    const saved = { getItem: () => JSON.stringify({ arena3d: true }), setItem: () => undefined };
-    assert.equal(loadSettings(saved, new URLSearchParams("")).arena3d, true);
+    const saved = { getItem: () => JSON.stringify({ arena3d: false }), setItem: () => undefined };
+    assert.equal(loadSettings(saved, new URLSearchParams("")).arena3d, false, "a saved choice is kept");
 });

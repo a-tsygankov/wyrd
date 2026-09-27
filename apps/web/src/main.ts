@@ -151,7 +151,7 @@ const reactionTray = byId<HTMLElement>("reaction-tray");
 const combatLog = byId<HTMLOListElement>("combat-log");
 const resolveRoundButton = byId<HTMLButtonElement>("resolve-round");
 const nextRoundButton = byId<HTMLButtonElement>("next-round");
-const nextRoundFab = byId<HTMLButtonElement>("next-round-fab");
+const rematchFab = byId<HTMLButtonElement>("rematch-fab");
 const undoButton = byId<HTMLButtonElement>("undo-glyph");
 const clearButton = byId<HTMLButtonElement>("clear-spell");
 const resetButton = byId<HTMLButtonElement>("reset-match");
@@ -262,9 +262,39 @@ const stageHooks: StageHooks = {
 };
 const motion = { reduced: () => !settings.animations || reducedMotionQuery.matches };
 const svgStage = createStage(stageRoot, stageHooks, motion);
-/** The active renderer: the SVG stage, or the Three.js arena when the setting is on and WebGL is there. */
+/** The active renderer: the SVG stage, or the arena paired with the (hidden) SVG stage when the setting is on and WebGL is there. */
 let stage: Stage = svgStage;
 let arena: Arena | undefined;
+
+/** Drive both renderers with one call; the SVG keeps its state true while hidden. */
+function pairStages(svg: Stage, three: Stage): Stage {
+    return {
+        setIdle: s => {
+            svg.setIdle(s);
+            three.setIdle(s);
+        },
+        setPhase: p => {
+            svg.setPhase?.(p);
+            three.setPhase?.(p);
+        },
+        setPersona: (side, persona) => {
+            svg.setPersona?.(side, persona);
+            three.setPersona?.(side, persona);
+        },
+        setPriority: side => {
+            svg.setPriority?.(side);
+            three.setPriority?.(side);
+        },
+        play: async (beats, s) => {
+            await Promise.all([svg.play(beats, s), three.play(beats, s)]);
+        },
+        clearMarks: () => {
+            svg.clearMarks();
+            three.clearMarks();
+        },
+        reducedMotion: () => three.reducedMotion()
+    };
+}
 
 async function mountStage(): Promise<void> {
     if (settings.arena3d) {
@@ -272,15 +302,15 @@ async function mountStage(): Promise<void> {
             const module = await import("./arena.js");
             if (!module.supportsWebGL()) throw new Error("WebGL unavailable");
             if (!arena) {
+                // Sound and the last-beat marker come from the SVG stage's hooks, which keeps playing hidden.
                 arena = module.createArena(arenaRoot, {
                     assetBase: "./assets/arena/",
                     motion,
-                    hooks: stageHooks,
                     models: { player: modelFor("player"), opponent: modelFor("opponent", personality?.id) }
                 });
                 await arena.ready;
             }
-            stage = arena;
+            stage = pairStages(svgStage, arena);
             if (personality) applyPersonas();
             if (currentPhase) arena.setPhase?.(currentPhase);
             arenaRoot.classList.remove("hidden");
@@ -889,13 +919,12 @@ function render(): void {
     renderPhase();
     if (stageRoot.dataset.playing !== "1") stage.setIdle(stageState());
 
-    nextRoundButton.classList.toggle("hidden", !roundResolved || matchOutcome().over);
-    // The floating action mirrors it and, once the duel is decided, offers the rematch.
+    // The floating Next round shows while a round is resolved; once the duel
+    // is decided the Rematch button takes its place.
     const decided = matchOutcome().over;
-    nextRoundFab.classList.toggle("hidden", !roundResolved);
+    nextRoundButton.classList.toggle("hidden", !roundResolved || decided);
+    rematchFab.classList.toggle("hidden", !(roundResolved && decided));
     document.body.classList.toggle("fab-shown", roundResolved);
-    nextRoundFab.textContent = decided ? "Rematch ↻" : "Next round →";
-    nextRoundFab.setAttribute("aria-label", decided ? "Rematch" : "Next round");
 }
 
 function appendSteps(prefix: string, steps: ResolutionStep[]): void {
@@ -1274,10 +1303,7 @@ modeToggle.addEventListener("click", () => {
     resetMatch();
 });
 nextRoundButton.addEventListener("click", startNextRound);
-nextRoundFab.addEventListener("click", () => {
-    if (matchOutcome().over) resetMatch();
-    else startNextRound();
-});
+rematchFab.addEventListener("click", resetMatch);
 resetButton.addEventListener("click", resetMatch);
 
 // --- Tempo (Pulse / Resolve): reaction ring and quick-cast badge.
