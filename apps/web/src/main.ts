@@ -347,7 +347,8 @@ function stageState(): StageState {
         wards: { player: state.players.player.ward, opponent: state.players.opponent.ward },
         bound: { player: state.players.player.bound === true, opponent: state.players.opponent.bound === true },
         gate: state.gate,
-        gateWard: state.gateWard
+        gateWard: state.gateWard,
+        seals: { player: state.players.player.seals, opponent: state.players.opponent.seals }
     };
 }
 document.addEventListener("pointerdown", () => sound.unlock(), { passive: true });
@@ -1133,7 +1134,8 @@ function resolveRound(): void {
             wards: { player: roundStart.players.player.ward, opponent: roundStart.players.opponent.ward },
             bound: { player: roundStart.players.player.bound === true, opponent: roundStart.players.opponent.bound === true },
             gate: roundStart.gate,
-            gateWard: roundStart.gateWard
+            gateWard: roundStart.gateWard,
+            seals: { player: roundStart.players.player.seals, opponent: roundStart.players.opponent.seals }
         });
         const contributions: Contribution[] = [];
         for (const id of round.order) {

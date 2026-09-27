@@ -516,7 +516,8 @@ body[data-phase] .card.phase-target { box-shadow: 0 0 0 2px rgba(173, 99, 255, 0
     .stage .mage .arm, .stage .mage .palm { transition: none; }
 }
 
-#stage-gate { transform-box: fill-box; transform-origin: center; }
+#stage-gate { transform-box: fill-box; transform-origin: 50% 100%; transition: transform 0.45s ease-out; }
+#stage-notch-player-1, #stage-notch-player-2, #stage-notch-player-3, #stage-notch-opponent-1, #stage-notch-opponent-2, #stage-notch-opponent-3 { transition: opacity 0.4s; }
 #stage-gate.broken rect:first-of-type { stroke-dasharray: 5 4; opacity: 0.45; }
 #stage-gate.broken circle { opacity: 0.15; }
 #stage-gate.closed circle { fill: #ffc457; opacity: 0.9; }

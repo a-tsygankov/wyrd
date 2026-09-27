@@ -141,3 +141,71 @@ export function boltArc(from: Side, to: Side, t: number): { x: number; y: number
     const x1 = POSITIONS[to].x - dir * 0.55;
     return { x: x0 + (x1 - x0) * t, y: HAND_Y + 0.9 * Math.sin(Math.PI * t), z: 0 };
 }
+
+/**
+ * The gate as the scoreboard (docs/duel-ux-ideas.md §C): a chain runs from
+ * the gate toward each mage with three notches; a seal lights the next notch
+ * on its owner's chain and the gate leans toward the leader; the third
+ * seal swings it. Shared by the SVG stage and the arena.
+ */
+export const NOTCHES = 3;
+
+export type SealNotch = { side: Side; index: number; lit: boolean };
+
+export function sealNotches(seals: Record<Side, number>): SealNotch[] {
+    const out: SealNotch[] = [];
+    for (const side of ["player", "opponent"] as const) {
+        for (let index = 0; index < NOTCHES; index++) out.push({ side, index, lit: index < Math.min(NOTCHES, seals[side]) });
+    }
+    return out;
+}
+
+/** World position of a notch (metres): along the chain at chest height, the first nearest the gate. */
+export function notchPosition(side: Side, index: number): { x: number; y: number; z: number } {
+    const dir = side === "player" ? -1 : 1;
+    return { x: dir * (1.15 + index * 0.42), y: 1.9, z: 0 };
+}
+
+/** The gate's lean (radians, negative toward the player): a notch per seal of difference, a swing at three. */
+export function gateLean(seals: Record<Side, number>): number {
+    const diff = Math.min(NOTCHES, seals.opponent) - Math.min(NOTCHES, seals.player);
+    const swing = Math.abs(seals.player) >= NOTCHES || Math.abs(seals.opponent) >= NOTCHES ? 0.24 : 0;
+    return Math.max(-0.6, Math.min(0.6, diff * 0.1 + Math.sign(diff) * swing));
+}
+
+/** Deterministic pseudo-random in [0, 1) from an index, for shards and bursts. */
+function hash(i: number, salt: number): number {
+    const x = Math.sin(i * 12.9898 + salt * 78.233) * 43758.5453;
+    return x - Math.floor(x);
+}
+
+export type ShardOffset = { x: number; y: number; z: number; spin: number };
+
+/** Where each shard of the gate slab is at `t` in [0, 1] of the shatter: out, down, spinning. */
+export function shardOffsets(count: number, t: number): ShardOffset[] {
+    const out: ShardOffset[] = [];
+    for (let i = 0; i < count; i++) {
+        const angle = hash(i, 1) * Math.PI * 2;
+        const reach = 0.4 + hash(i, 2) * 1.1;
+        const ease = t * t;
+        out.push({
+            x: Math.cos(angle) * reach * t,
+            y: -1.6 * ease + 0.5 * t * (1 - t) * hash(i, 3),
+            z: Math.sin(angle) * 0.9 * t,
+            spin: (hash(i, 4) - 0.5) * Math.PI * 2 * t
+        });
+    }
+    return out;
+}
+
+/** An impact burst: `count` points flying out from the origin, radius up to 1.2 at t = 1. */
+export function burstOffsets(count: number, t: number): { x: number; y: number; z: number }[] {
+    const out: { x: number; y: number; z: number }[] = [];
+    for (let i = 0; i < count; i++) {
+        const theta = hash(i, 5) * Math.PI * 2;
+        const phi = hash(i, 6) * Math.PI;
+        const r = (0.5 + 0.7 * hash(i, 7)) * t;
+        out.push({ x: Math.sin(phi) * Math.cos(theta) * r, y: Math.abs(Math.cos(phi)) * r, z: Math.sin(phi) * Math.sin(theta) * r });
+    }
+    return out;
+}

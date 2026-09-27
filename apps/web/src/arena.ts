@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { ARENA_CLIPS, ARENA_MODELS, MARKS, POSITIONS, boltArc, clipFor, isBodyPart } from "./arenaMap.js";
+import { ARENA_CLIPS, ARENA_MODELS, MARKS, NOTCHES, POSITIONS, boltArc, burstOffsets, clipFor, gateLean, isBodyPart, notchPosition, sealNotches, shardOffsets } from "./arenaMap.js";
 import { HIT_STOP_MS, decayTrauma, markFor, shakeOffset, traumaFor, type FloorMark } from "./juice.js";
 import { beatDuration, essenceColor, type Beat, type Side, type Stage, type StageHooks, type StageState } from "./stage.js";
 
@@ -163,9 +163,52 @@ export function createArena(container: HTMLElement, options: ArenaOptions): Aren
     gate.add(keystone);
     scene.add(gate);
 
-    // Wards: hex prisms around a mage or the gate.
-    const wardMaterial = (): THREE.MeshBasicMaterial =>
-        new THREE.MeshBasicMaterial({ color: 0xf4f0ff, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false });
+    // Wards: hex prisms around a mage or the gate, shaded as a hex-tiled
+    // shell with a fresnel glow (VFX pass); `uCrack` draws the fissures of a
+    // ward at integrity 1, `uFlash` the flare of a block.
+    const HEX_VERTEX = `
+        varying vec2 vUv; varying vec3 vNormal; varying vec3 vView;
+        void main() {
+            vUv = uv; vNormal = normalize(normalMatrix * normal);
+            vec4 mv = modelViewMatrix * vec4(position, 1.0); vView = -mv.xyz;
+            gl_Position = projectionMatrix * mv;
+        }`;
+    const HEX_FRAGMENT = `
+        uniform vec3 uColor; uniform float uOpacity; uniform float uCrack; uniform float uFlash; uniform float uTime;
+        varying vec2 vUv; varying vec3 vNormal; varying vec3 vView;
+        // Distance to the nearest hex edge on a tiled plane (axial coordinates).
+        float hexEdge(vec2 p) {
+            const vec2 s = vec2(1.0, 1.7320508);
+            vec4 hc = floor(vec4(p, p - vec2(0.5, 1.0)) / s.xyxy) + 0.5;
+            vec4 h = vec4(p - hc.xy * s, p - (hc.zw + 0.5) * s);
+            vec2 q = dot(h.xy, h.xy) < dot(h.zw, h.zw) ? abs(h.xy) : abs(h.zw);
+            return max(dot(q, s * 0.5), q.x);
+        }
+        void main() {
+            vec2 p = vec2(vUv.x * 14.0, vUv.y * 4.0);
+            float edge = hexEdge(p);
+            float line = smoothstep(0.42, 0.5, edge);
+            float fresnel = pow(1.0 - abs(dot(normalize(vNormal), normalize(vView))), 2.0);
+            float crack = uCrack * step(0.985, fract(sin(floor(p.x * 2.0) * 7.1 + floor(p.y * 2.0) * 3.3) * 43758.5)) ;
+            float pulse = 0.85 + 0.15 * sin(uTime * 3.0 + vUv.y * 6.0);
+            float alpha = uOpacity * (0.35 + 0.65 * line) * pulse + fresnel * 0.35 + uFlash * 0.5 + crack * 0.6;
+            vec3 color = mix(uColor, vec3(1.0), uFlash * 0.6 + crack * 0.4);
+            gl_FragColor = vec4(color, clamp(alpha, 0.0, 0.95));
+        }`;
+    type HexMaterial = THREE.ShaderMaterial & { uniforms: { uColor: { value: THREE.Color }; uOpacity: { value: number }; uCrack: { value: number }; uFlash: { value: number }; uTime: { value: number } } };
+    const hexMaterials: HexMaterial[] = [];
+    const wardMaterial = (): HexMaterial => {
+        const material = new THREE.ShaderMaterial({
+            vertexShader: HEX_VERTEX,
+            fragmentShader: HEX_FRAGMENT,
+            uniforms: { uColor: { value: new THREE.Color(0xf4f0ff) }, uOpacity: { value: 0.35 }, uCrack: { value: 0 }, uFlash: { value: 0 }, uTime: { value: 0 } },
+            transparent: true,
+            side: THREE.DoubleSide,
+            depthWrite: false
+        }) as HexMaterial;
+        hexMaterials.push(material);
+        return material;
+    };
     const wards: Record<Side, THREE.Mesh> = { player: new THREE.Mesh(), opponent: new THREE.Mesh() };
     for (const side of SIDES) {
         const mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 0.95, 2.3, 6, 1, true), wardMaterial());
@@ -302,6 +345,20 @@ export function createArena(container: HTMLElement, options: ArenaOptions): Aren
         frame = requestAnimationFrame(tick);
         const delta = clock.getDelta();
         const now = performance.now();
+        for (const material of hexMaterials) material.uniforms.uTime.value = now / 1000;
+        // The trail follows the bolt while it flies and fades when it stops.
+        if (bolt.visible) {
+            trailHistory.unshift(bolt.position.clone());
+            if (trailHistory.length > trail.length) trailHistory.length = trail.length;
+        } else if (trailHistory.length > 0) {
+            trailHistory.shift();
+        }
+        trail.forEach((ghost, i) => {
+            const p = trailHistory[i];
+            ghost.visible = p !== undefined;
+            if (p) ghost.position.copy(p);
+            (ghost.material as THREE.MeshBasicMaterial).color.copy(boltMaterial.color);
+        });
         for (const side of SIDES) mages[side].mixer?.update(delta);
         for (let i = tweens.length - 1; i >= 0; i--) {
             const tween = tweens[i] as Tween;
@@ -319,7 +376,6 @@ export function createArena(container: HTMLElement, options: ArenaOptions): Aren
         camera.rotation.z = (shake.rot * Math.PI) / 180;
         renderer.render(scene, camera);
     }
-    tick();
 
     let cameraPhase: keyof typeof POSES = "cast";
     function setPhase(phase: keyof typeof POSES): void {
@@ -370,16 +426,107 @@ export function createArena(container: HTMLElement, options: ArenaOptions): Aren
         const mesh = wards[side];
         mesh.visible = ward !== undefined;
         if (!ward) return;
-        const material = mesh.material as THREE.MeshBasicMaterial;
-        material.color.set(essenceColor(ward.essence));
-        material.opacity = ward.integrity === 1 ? 0.12 : 0.22;
+        const material = mesh.material as HexMaterial;
+        material.uniforms.uColor.value.set(essenceColor(ward.essence));
+        material.uniforms.uOpacity.value = ward.integrity === 1 ? 0.22 : 0.35;
+        material.uniforms.uCrack.value = ward.integrity === 1 ? 1 : 0;
     }
     function drawGateWard(ward: StageState["gateWard"]): void {
         gateWard.visible = ward !== undefined;
         if (!ward) return;
-        const material = gateWard.material as THREE.MeshBasicMaterial;
-        material.color.set(ward.ownerId === "player" ? 0xad63ff : 0xff7a3d);
-        material.opacity = ward.integrity === 1 ? 0.12 : 0.22;
+        const material = gateWard.material as HexMaterial;
+        material.uniforms.uColor.value.set(ward.ownerId === "player" ? 0xad63ff : 0xff7a3d);
+        material.uniforms.uOpacity.value = ward.integrity === 1 ? 0.22 : 0.35;
+        material.uniforms.uCrack.value = ward.integrity === 1 ? 1 : 0;
+    }
+    /** A block flares the shell; `t` in [0, 1] over the beat. */
+    function flareWard(mesh: THREE.Mesh, t: number): void {
+        (mesh.material as HexMaterial).uniforms.uFlash.value = Math.sin(Math.PI * t);
+    }
+    function fadeWard(mesh: THREE.Mesh, t: number): void {
+        (mesh.material as HexMaterial).uniforms.uOpacity.value = 0.35 * (1 - t);
+    }
+
+    // --- Scoreboard: chains with notches, the gate's lean.
+    const chainMaterial = new THREE.MeshStandardMaterial({ color: 0x8a7db0, metalness: 0.5, roughness: 0.5 });
+    const notchMeshes: Record<Side, THREE.Mesh[]> = { player: [], opponent: [] };
+    for (const side of SIDES) {
+        for (let i = 0; i < 7; i++) {
+            const link = new THREE.Mesh(new THREE.TorusGeometry(0.09, 0.022, 6, 12), chainMaterial);
+            const dir = side === "player" ? -1 : 1;
+            link.position.set(dir * (0.95 + i * 0.2), 1.9, 0);
+            link.rotation.y = i % 2 ? Math.PI / 2 : 0;
+            scene.add(link);
+        }
+        for (let i = 0; i < NOTCHES; i++) {
+            const notch = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 12), new THREE.MeshStandardMaterial({ color: 0x3a2f55, emissive: 0xf2c46b, emissiveIntensity: 0 }));
+            const p = notchPosition(side, i);
+            notch.position.set(p.x, p.y, p.z);
+            scene.add(notch);
+            notchMeshes[side].push(notch);
+        }
+    }
+    let shownSeals: Record<Side, number> = { player: 0, opponent: 0 };
+    function drawSeals(seals: Record<Side, number>): void {
+        shownSeals = { ...seals };
+        container.dataset.seals = `${seals.player}-${seals.opponent}`;
+        for (const notch of sealNotches(seals)) {
+            const mesh = notchMeshes[notch.side][notch.index];
+            if (mesh) (mesh.material as THREE.MeshStandardMaterial).emissiveIntensity = notch.lit ? 1.6 : 0;
+        }
+        gate.rotation.z = gateLean(seals);
+    }
+
+    // --- Bolt trail, impact bursts, gate shards.
+    const trail: THREE.Mesh[] = [];
+    for (let i = 0; i < 8; i++) {
+        const ghost = new THREE.Mesh(new THREE.SphereGeometry(0.11 - i * 0.01, 10, 10), new THREE.MeshBasicMaterial({ color: 0xff7a3d, transparent: true, opacity: 0.35 - i * 0.04, depthWrite: false }));
+        ghost.visible = false;
+        scene.add(ghost);
+        trail.push(ghost);
+    }
+    const trailHistory: THREE.Vector3[] = [];
+    const burstGeometry = new THREE.BufferGeometry();
+    burstGeometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(16 * 3), 3));
+    const burstMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 0.09, transparent: true, opacity: 0.9, depthWrite: false });
+    const burst = new THREE.Points(burstGeometry, burstMaterial);
+    burst.visible = false;
+    scene.add(burst);
+    async function playBurst(at: THREE.Vector3, color: string, ms: number): Promise<void> {
+        burstMaterial.color.set(color);
+        burst.position.copy(at);
+        burst.visible = true;
+        await tween(ms, t => {
+            const positions = burstGeometry.getAttribute("position") as THREE.BufferAttribute;
+            burstOffsets(16, t).forEach((o, i) => positions.setXYZ(i, o.x, o.y, o.z));
+            positions.needsUpdate = true;
+            burstMaterial.opacity = 0.9 * (1 - t);
+        });
+        burst.visible = false;
+    }
+    const shards: THREE.Mesh[] = [];
+    for (let i = 0; i < 6; i++) {
+        const shard = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.75, 0.12), slabMaterial);
+        shard.visible = false;
+        scene.add(shard);
+        shards.push(shard);
+    }
+    const SHARD_HOME = [
+        [-0.3, 2.1], [0.3, 2.1], [-0.3, 1.3], [0.3, 1.3], [-0.3, 0.55], [0.3, 0.55]
+    ] as const;
+    function placeShards(t: number): void {
+        shardOffsets(shards.length, t).forEach((o, i) => {
+            const shard = shards[i] as THREE.Mesh;
+            const home = SHARD_HOME[i] as readonly [number, number];
+            shard.position.set(home[0] + o.x, Math.max(0.06, home[1] + o.y), o.z);
+            shard.rotation.set(o.spin * 0.6, o.spin, o.spin * 0.3);
+        });
+    }
+    let shardsOut = false;
+    function showShards(out: boolean): void {
+        shardsOut = out;
+        for (const shard of shards) shard.visible = out;
+        if (out) placeShards(1);
     }
     function drawGate(state: StageState["gate"]): void {
         slab.position.y = state === "closed" ? 1.3 : 3.55;
@@ -399,11 +546,15 @@ export function createArena(container: HTMLElement, options: ArenaOptions): Aren
     }
 
     function setIdle(state: StageState): void {
+        drawSeals(state.seals ?? { player: 0, opponent: 0 });
         for (const side of SIDES) {
             drawWard(side, state.wards[side]);
+            (wards[side].material as HexMaterial).uniforms.uFlash.value = 0;
             chains[side].visible = state.bound[side];
         }
         drawGate(state.gate);
+        showShards(state.gate === "broken");
+        slab.visible = state.gate !== "broken";
         drawGateWard(state.gateWard);
         bolt.visible = false;
         orb.visible = false;
@@ -460,15 +611,16 @@ export function createArena(container: HTMLElement, options: ArenaOptions): Aren
             case "ward-block": {
                 say(beat.broken ? "WARD SHATTERS" : "WARDED");
                 bolt.visible = false;
+                void playBurst(new THREE.Vector3(POSITIONS[beat.side].x + (beat.side === "player" ? 0.9 : -0.9), 1.3, 0), essenceColor(essence), ms);
                 if (beat.broken) {
                     await tween(ms, t => {
                         wards[beat.side].scale.setScalar(1 + t * 0.5);
-                        (wards[beat.side].material as THREE.MeshBasicMaterial).opacity = 0.22 * (1 - t);
+                        fadeWard(wards[beat.side], t);
                     });
                     wards[beat.side].visible = false;
                     wards[beat.side].scale.setScalar(1);
                 } else {
-                    await tween(ms, t => ((wards[beat.side].material as THREE.MeshBasicMaterial).opacity = 0.22 + Math.sin(Math.PI * t) * 0.4));
+                    await tween(ms, t => flareWard(wards[beat.side], t));
                     drawWard(beat.side, { ...state.wards[beat.side], ...(beat.integrity !== undefined ? { integrity: beat.integrity } : {}) });
                 }
                 return;
@@ -476,9 +628,10 @@ export function createArena(container: HTMLElement, options: ArenaOptions): Aren
             case "ward-break":
                 say("WARD BROKEN");
                 bolt.visible = false;
+                void playBurst(new THREE.Vector3(POSITIONS[beat.side].x, 1.3, 0), "#f4f0ff", ms);
                 await tween(ms, t => {
                     wards[beat.side].scale.setScalar(1 + t * 0.6);
-                    (wards[beat.side].material as THREE.MeshBasicMaterial).opacity = 0.22 * (1 - t);
+                    fadeWard(wards[beat.side], t);
                 });
                 wards[beat.side].visible = false;
                 wards[beat.side].scale.setScalar(1);
@@ -503,16 +656,30 @@ export function createArena(container: HTMLElement, options: ArenaOptions): Aren
                 await tween(ms, t => (slab.position.y = 1.3 + 2.25 * t));
                 drawGate("open");
                 return;
-            case "gate-break":
+            case "gate-break": {
                 say("GATE SHATTERS");
                 pulseFlash(0.2, ms);
-                await tween(ms, t => (gate.rotation.z = Math.sin(t * Math.PI * 3) * 0.06));
+                // The slab breaks into shards that fall and scatter; they stay while the gate is broken.
+                slab.visible = false;
+                showShards(true);
+                void playBurst(new THREE.Vector3(0, 1.4, 0.2), "#c3aeff", ms);
+                const lean = gate.rotation.z;
+                await tween(ms, t => {
+                    placeShards(t);
+                    gate.rotation.z = lean + Math.sin(t * Math.PI * 3) * 0.06;
+                });
+                gate.rotation.z = lean;
                 drawGate("broken");
                 return;
+            }
             case "gate-mend":
                 say("GATE MENDED");
+                // The shards fly home and the slab is whole again.
+                if (shardsOut) await tween(ms, t => placeShards(1 - t));
+                showShards(false);
+                slab.visible = true;
                 drawGate("open");
-                return wait(ms);
+                return;
             case "gate-ward-up":
                 say("GATE WARDED");
                 drawGateWard({ ownerId: beat.side, ...(beat.integrity !== undefined ? { integrity: beat.integrity } : {}) });
@@ -520,13 +687,14 @@ export function createArena(container: HTMLElement, options: ArenaOptions): Aren
             case "gate-ward-block":
                 say(beat.broken ? "GATE WARD SHATTERS" : "GATE WARD HOLDS");
                 bolt.visible = false;
-                await tween(ms, t => ((gateWard.material as THREE.MeshBasicMaterial).opacity = beat.broken ? 0.22 * (1 - t) : 0.22 + Math.sin(Math.PI * t) * 0.4));
+                await tween(ms, t => (beat.broken ? fadeWard(gateWard, t) : flareWard(gateWard, t)));
                 if (beat.broken) gateWard.visible = false;
                 else if (state.gateWard) drawGateWard({ ...state.gateWard, ...(beat.integrity !== undefined ? { integrity: beat.integrity } : {}) });
+                (gateWard.material as HexMaterial).uniforms.uFlash.value = 0;
                 return;
             case "gate-ward-break":
                 say("GATE WARD BROKEN");
-                await tween(ms, t => ((gateWard.material as THREE.MeshBasicMaterial).opacity = 0.22 * (1 - t)));
+                await tween(ms, t => fadeWard(gateWard, t));
                 gateWard.visible = false;
                 return;
             case "hit": {
@@ -536,6 +704,7 @@ export function createArena(container: HTMLElement, options: ArenaOptions): Aren
                 await wait(long ? HIT_STOP_MS * 2 : HIT_STOP_MS);
                 bolt.visible = false;
                 pulseFlash(0.35, ms);
+                void playBurst(new THREE.Vector3(POSITIONS[beat.side].x, 1.25, 0.2), essenceColor(essence), ms);
                 const root = mages[beat.side].root;
                 const kick = (beat.side === "player" ? -1 : 1) * (beat.magnitude >= 2 ? 0.35 : 0.22);
                 await tween(ms, t => (root.position.x = POSITIONS[beat.side].x + Math.sin(Math.PI * t) * kick));
@@ -548,12 +717,14 @@ export function createArena(container: HTMLElement, options: ArenaOptions): Aren
                 const long = beat.emphasis === "decisive";
                 say(long ? `SEAL → ${beat.side === "player" ? "◀" : "▶"} · DECISIVE` : `SEAL → ${beat.side === "player" ? "◀" : "▶"}`);
                 orb.visible = true;
-                const target = POSITIONS[beat.side];
+                // To the next notch on the scorer's chain; it lights and the gate leans.
+                const notch = notchPosition(beat.side, Math.min(NOTCHES - 1, shownSeals[beat.side]));
                 await tween(ms, t => {
-                    orb.position.set(target.x * t, 2.15 + Math.sin(Math.PI * t) * 1.2 + t * 0.3, 0.2);
-                    orb.scale.setScalar(0.6 + 0.6 * t);
+                    orb.position.set(notch.x * t, 2.15 + Math.sin(Math.PI * t) * 0.9 - (2.15 - notch.y) * t, 0.2);
+                    orb.scale.setScalar(0.6 + 0.4 * t);
                 });
                 orb.visible = false;
+                drawSeals({ ...shownSeals, [beat.side]: shownSeals[beat.side] + 1 });
                 if (long) addTrauma(0.4);
                 return;
             }
@@ -604,6 +775,9 @@ export function createArena(container: HTMLElement, options: ArenaOptions): Aren
         renderer.dispose();
         container.replaceChildren();
     }
+
+    // Start the frame loop once everything it touches exists.
+    tick();
 
     return {
         setIdle,
