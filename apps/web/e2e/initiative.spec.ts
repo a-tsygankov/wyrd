@@ -11,7 +11,7 @@ test("the cheaper spell resolves first and the verdict says so", async ({ page }
     await expect(page.locator("#combat-log .reason").first()).toContainText(/resolved first/);
     await expect(page.locator("#combat-log .reason").first()).toContainText(/2 Focus/);
     // The log itself is in resolution order: the player's spell heads it.
-    await expect(page.locator("#combat-log li:not(.verdict):not(.reason)").first()).toContainText(/^You:/);
+    await expect(page.locator("#combat-log li:not(.verdict):not(.reason):not(.quip)").first()).toContainText(/^You:/);
 });
 
 test("two gate spells in one hot-seat round leave the gate where it was", async ({ page }) => {

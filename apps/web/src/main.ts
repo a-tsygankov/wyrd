@@ -6,7 +6,7 @@ import {
     adviseReaction,
     adviseSpell,
     chooseBotReaction,
-    chooseBotSpell,
+    chooseBotSpellDetailed,
     choosePersonality,
     choosePlan,
     type Personality,
@@ -49,6 +49,7 @@ import { buildTimeline, createStage, type Contribution, type Stage, type StageHo
 import type { Arena } from "./arena.js";
 import { PHASES, derivePhase, phaseTarget, type RoundPhase } from "./phase.js";
 import { modelFor, personaFor } from "./arenaMap.js";
+import { quipFor } from "../../../packages/wyrd-content/src/quips.js";
 import { playRitual, ritualCopy, type RitualHandle } from "./ritual.js";
 import { hiddenCount, revealSchedule, revealedSlots, scrySlot, type Reveal } from "./reveal.js";
 import { createSound, cueFor, extraCueFor, urgencyCue } from "./sound.js";
@@ -475,14 +476,15 @@ function planRound(): RoundPlan {
         };
     }
     roundPlan = choosePlan(botView(), rng);
-    const spell = chooseBotSpell(spellPool, botView(), rng);
-    log.info(`round ${state.round} planned: heuristic bot`, { personality: personality.id, plan: roundPlan, opponentSpell: spell.join(" ") });
+    const choice = chooseBotSpellDetailed(spellPool, botView(), rng);
+    const spell = choice.tokens;
+    log.info(`round ${state.round} planned: heuristic bot`, { personality: personality.id, plan: roundPlan, whim: choice.whim, opponentSpell: spell.join(" ") });
     return {
         opponentSpell: spell,
         telegraph: projectTelegraph(spell, "high", rng, { extraReveals: leak("opponent") }),
         reaction: playerCast => chooseBotReaction(playerCast, botView(), rng),
         reactionModel: playerCast => reactionProbabilities(playerCast, botView()),
-        reactionPolicy: `heuristic bot table · ${personality.title} · plan: ${roundPlan}`,
+        reactionPolicy: `heuristic bot table · ${personality.title} · plan: ${roundPlan}${choice.whim ? " · cast on a whim" : ""}`,
         reveal: []
     };
 }
@@ -1021,6 +1023,14 @@ function resolveRound(): void {
         li.textContent = text;
         return li;
     });
+    // The opponent has a word about it, in character; the seed picks the line.
+    if (mode === "solo") {
+        const quip = document.createElement("li");
+        quip.className = "quip";
+        const outcome = explained.theirSeals > explained.yourSeals ? "won" : explained.theirSeals < explained.yourSeals ? "lost" : "even";
+        quip.textContent = quipFor(personality.id, outcome, rng);
+        verdictItems.push(quip);
+    }
     combatLog.prepend(...verdictItems);
     const outcome = matchOutcome();
     if (outcome.over) {

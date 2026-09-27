@@ -546,6 +546,8 @@ body[data-phase] .card.phase-target { box-shadow: 0 0 0 2px rgba(173, 99, 255, 0
 
 /* Floating next-round action: bottom right, in thumb reach and clear of the
    pinned stage's phase strip (it sat over the strip when it was top right). */
+.quip { font-style: italic; color: #d8caff; }
+
 .fab {
     position: fixed;
     bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
