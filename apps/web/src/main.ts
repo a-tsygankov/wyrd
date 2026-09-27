@@ -5,6 +5,8 @@ import { parseSpell } from "../../../packages/wyrd-grammar/src/parser.js";
 import {
     adviseReaction,
     adviseSpell,
+    botPresses,
+    botRetreats,
     chooseBotReaction,
     chooseBotSpellDetailed,
     choosePersonality,
@@ -28,8 +30,11 @@ import {
     type ReactionModel,
     type Rng,
     type RoundHistory,
+    type TelegraphPreset,
     type TelegraphSlot
 } from "../../../packages/wyrd-simulation/src/index.js";
+import { weatherAnnouncedFor, weatherById, weatherForRound } from "../../../packages/wyrd-content/src/weather.js";
+import { applyStake, isSuddenDeath, pressResult, stakeLines, suddenDeathWinner, type Stake } from "./stakes.js";
 import { installHint } from "./install.js";
 import { createLog } from "./log.js";
 import {
@@ -58,9 +63,9 @@ import { focusMeter } from "./meter.js";
 import { GLOSSARY_GROUPS, glossaryFor } from "../../../packages/wyrd-content/src/glossary.js";
 import { glyphRegistryByDisplayName } from "../../../packages/wyrd-content/src/glyphs.js";
 import {
-    REACTION_COSTS,
     ROUND_FOCUS,
     beginNextRound,
+    reactionPrice,
     resolveRound as resolveBothSpells,
     createInitialDuelState,
     resolveEncounter,
@@ -127,6 +132,14 @@ const settingsAnimations = byId<HTMLInputElement>("settings-animations");
 const settingsArena3d = byId<HTMLInputElement>("settings-arena3d");
 const settingsSound = byId<HTMLInputElement>("settings-sound");
 const settingsTelemetry = byId<HTMLInputElement>("settings-telemetry");
+const settingsWeather = byId<HTMLInputElement>("settings-weather");
+const settingsSudden = byId<HTMLInputElement>("settings-sudden");
+const settingsPress = byId<HTMLInputElement>("settings-press");
+const weatherBanner = byId<HTMLElement>("weather-banner");
+const stakesRoot = byId<HTMLElement>("stakes");
+const stakeNote = byId<HTMLElement>("stake-note");
+const pressButton = byId<HTMLButtonElement>("press-round");
+const retreatButton = byId<HTMLButtonElement>("retreat-round");
 const statsToggle = byId<HTMLButtonElement>("stats-toggle");
 const helpToggle = byId<HTMLButtonElement>("help-toggle");
 const helpPanel = byId<HTMLElement>("help");
@@ -393,10 +406,16 @@ type RoundPlan = {
     reactionPolicy: string;
     /** Progressive reveal of the hidden slots across the reaction window (timers only). */
     reveal: Reveal[];
+    /** The telegraph preset in force (medium in sudden death). */
+    preset: TelegraphPreset;
+    /** The opponent pressed this round (ideas doc §J); decided with its spell, shown before you cast. */
+    presses: boolean;
 };
 let p1Reveal: Reveal[] = [];
 /** Scries bought this round, for telemetry. */
 let scries = 0;
+/** Press the round (ideas doc §J): who pressed, who retreated, what each side took. */
+let stake: Stake = { pressed: {}, yours: 0, theirs: 0 };
 
 const log = createLog();
 
@@ -452,7 +471,9 @@ function planRound(): RoundPlan {
             reaction: () => hotseat.p2Reaction,
             reactionModel: () => ({ none: 0.25, null: 0.25, reflect: 0.25, silence: 0.25 }),
             reactionPolicy: "Player 2 decides",
-            reveal: []
+            reveal: [],
+            preset: telegraphPreset(),
+            presses: false
         };
     }
     const scenario = scenarios[state.round - 1];
@@ -482,24 +503,58 @@ function planRound(): RoundPlan {
                 fixed === "bot" ? chooseBotReaction(spell, botView(), rng) : fixed === "none" ? undefined : fixed,
             reactionModel: fixed === "bot" ? spell => reactionProbabilities(spell, botView()) : fixedReactionModel(fixed),
             reactionPolicy: fixed === "bot" ? `heuristic bot table · ${personality.title}` : fixed === "none" ? "no reaction (teaching round)" : `always ${fixed.toUpperCase()}`,
-            reveal: []
+            reveal: [],
+            preset: scenario.telegraph,
+            presses: false
         };
     }
     roundPlan = choosePlan(botView(), rng);
     const choice = chooseBotSpellDetailed(spellPool, botView(), rng);
     const spell = choice.tokens;
-    log.info(`round ${state.round} planned: heuristic bot`, { personality: personality.id, plan: roundPlan, whim: choice.whim, opponentSpell: spell.join(" ") });
+    // The press is decided with the spell so the player sees it before casting.
+    const presses = settings.press && mode === "solo" ? botPresses(botView(), spell, rng) : false;
+    const preset = telegraphPreset();
+    log.info(`round ${state.round} planned: heuristic bot`, { personality: personality.id, plan: roundPlan, whim: choice.whim, opponentSpell: spell.join(" "), preset, presses });
     return {
         opponentSpell: spell,
-        telegraph: projectTelegraph(spell, "high", rng, { extraReveals: leak("opponent") }),
+        telegraph: projectTelegraph(spell, preset, rng, { extraReveals: leak("opponent") }),
         reaction: playerCast => chooseBotReaction(playerCast, botView(), rng),
         reactionModel: playerCast => reactionProbabilities(playerCast, botView()),
-        reactionPolicy: `heuristic bot table · ${personality.title} · plan: ${roundPlan}${choice.whim ? " · cast on a whim" : ""}`,
-        reveal: []
+        reactionPolicy: `heuristic bot table · ${personality.title} · plan: ${roundPlan}${choice.whim ? " · cast on a whim" : ""}${presses ? " · presses the round" : ""}`,
+        reveal: [],
+        preset,
+        presses
     };
 }
 
+/** Sudden death dims the telegraph to the medium preset (options doc §H). */
+function telegraphPreset(): TelegraphPreset {
+    return state.suddenDeath ? "medium" : "high";
+}
+
+/** The weather of a round, from its own seeded stream so the main one - and old seeds' telegraphs - stay where they were. */
+function weatherAt(round: number): ReturnType<typeof weatherForRound> {
+    return weatherForRound(round, createRng(seedFromString(`${matchSeedLabel}:weather:${round}`)));
+}
+
+/** Weather and sudden death for the round about to be played; both read from the settings, both explained on the stage banner. */
+function applyRoundOptions(): void {
+    const weather = settings.weather ? weatherAt(state.round) : undefined;
+    if (weather) state.weather = weather;
+    else delete state.weather;
+    if (isSuddenDeath(state, settings.suddenDeath)) state.suddenDeath = true;
+    else delete state.suddenDeath;
+    if (state.weather || state.suddenDeath) log.info(`round ${state.round} options`, { weather: state.weather, suddenDeath: state.suddenDeath === true });
+}
+
+/** A new round: fresh stake, this round's weather and sudden death. Before the plan, which reads both. */
+function beginRoundOptions(): void {
+    stake = { pressed: {}, yours: 0, theirs: 0 };
+    applyRoundOptions();
+}
+
 newMatchSeed();
+beginRoundOptions();
 plan = planRound();
 plan.reveal = revealSchedule(plan.telegraph, rng, REACTION_WINDOW_MS);
 
@@ -635,7 +690,7 @@ function renderReactionButtons(): void {
         element.classList.toggle("selected", selected);
         element.disabled = roundResolved || reactionLocked;
         const label = element.dataset.label ?? (element.dataset.label = element.textContent ?? "");
-        const cost = value && state.rules.reactionCosts ? REACTION_COSTS[value] : 0;
+        const cost = value ? reactionPrice(state, value) : 0;
         element.textContent = cost > 0 ? `${label} · ${cost}` : label;
     }
     const slots = visibleTelegraph();
@@ -656,7 +711,7 @@ function composeBudget(): { budget: number; spellCost: number; reactionCost: num
     if (!state.rules.reactionCosts) return { budget: ROUND_FOCUS, spellCost: parsed.focusCost, reactionCost: 0 };
     const id = composerId();
     // Player 2's reaction is chosen later (p2-react) and paid after their spell.
-    const reactionCost = id === "player" && selectedReaction ? REACTION_COSTS[selectedReaction] : 0;
+    const reactionCost = id === "player" && selectedReaction ? reactionPrice(state, selectedReaction) : 0;
     return { budget: state.players[id].focus - reactionCost, spellCost: spellFocusCost(state, id, parsed.focusCost), reactionCost };
 }
 
@@ -933,6 +988,8 @@ function render(): void {
     renderTimer();
     renderAdmin();
     renderPhase();
+    renderWeather();
+    renderStakes();
     if (stageRoot.dataset.playing !== "1") stage.setIdle(stageState());
 
     // The floating Next round shows while a round is resolved; once the duel
@@ -941,6 +998,54 @@ function render(): void {
     nextRoundButton.classList.toggle("hidden", !roundResolved || decided);
     rematchFab.classList.toggle("hidden", !(roundResolved && decided));
     document.body.classList.toggle("fab-shown", roundResolved);
+}
+
+/** The weather banner on the stage: sudden death, this round's card, or next round's card announced (options doc §H). */
+function renderWeather(): void {
+    const parts: HTMLElement[] = [];
+    const part = (title: string, text: string): void => {
+        const strong = document.createElement("strong");
+        strong.textContent = title;
+        const span = document.createElement("span");
+        span.textContent = text;
+        parts.push(strong, span);
+    };
+    const upcomingRound = settings.weather ? weatherAnnouncedFor(state.round) : undefined;
+    const upcoming = upcomingRound !== undefined ? weatherAt(upcomingRound) : undefined;
+    if (state.suddenDeath) part("Sudden death", "2–2. The telegraph dims to medium, reactions cost double, the first seal to land decides.");
+    if (state.weather) part(weatherById(state.weather).title, weatherById(state.weather).text);
+    else if (upcoming && !state.suddenDeath) part(`Next round: ${weatherById(upcoming).title}`, weatherById(upcoming).text);
+    weatherBanner.classList.toggle("hidden", parts.length === 0);
+    weatherBanner.classList.toggle("sudden", state.suddenDeath === true);
+    weatherBanner.classList.toggle("upcoming", !state.suddenDeath && !state.weather && upcoming !== undefined);
+    const shown = state.weather ?? upcoming;
+    if (state.suddenDeath && !state.weather) weatherBanner.dataset.weather = "sudden";
+    else if (shown) weatherBanner.dataset.weather = shown;
+    else delete weatherBanner.dataset.weather;
+    weatherBanner.replaceChildren(...parts);
+}
+
+/** Press the round (ideas doc §J): the stake row above Cast, solo only, behind its setting. */
+function renderStakes(): void {
+    const on = settings.press && mode === "solo";
+    stakesRoot.classList.toggle("hidden", !on);
+    if (!on) return;
+    const theyPress = plan.presses;
+    const pressed = stake.pressed.player === true;
+    const retreated = stake.retreated === "player";
+    stakesRoot.classList.toggle("pressed-by-them", theyPress);
+    pressButton.setAttribute("aria-pressed", String(pressed));
+    pressButton.disabled = roundResolved;
+    retreatButton.classList.toggle("hidden", !theyPress);
+    retreatButton.setAttribute("aria-pressed", String(retreated));
+    retreatButton.disabled = roundResolved;
+    stakeNote.textContent = roundResolved
+        ? ""
+        : theyPress
+            ? "The opponent presses the round: its seal counts double. Press back for four, retreat to concede one seal at single stake, or play it as it stands."
+            : pressed
+                ? "You press the round: this seal counts double, whoever takes it."
+                : "Press to stake a double seal on this round. It cuts both ways.";
 }
 
 function appendSteps(prefix: string, steps: ResolutionStep[]): void {
@@ -993,6 +1098,12 @@ function resolveRound(): void {
         { stopWhen: s => matchOutcome(s).over }
     );
     state = round.state;
+    // Press the round: the opponent may retreat from your press once it knows
+    // its own spell cannot win the round (it decided its own press with its spell).
+    if (settings.press && mode === "solo") {
+        stake.pressed.opponent = plan.presses;
+        if (stake.pressed.player && !plan.presses && botRetreats({ ...botView(), state: roundStart }, opponentSpell)) stake.retreated = "opponent";
+    }
     const incoming = round.results.opponent;
     const outgoing = round.results.player;
     for (const id of round.order) {
@@ -1045,6 +1156,23 @@ function resolveRound(): void {
         quip.textContent = quipFor(personality.id, outcome, rng);
         verdictItems.push(quip);
     }
+    // The stakes beyond the resolver: sudden death's first seal, and the
+    // pressed round's extra or conceded seals, applied to the state here.
+    const reasonItem = (text: string): HTMLLIElement => {
+        const li = document.createElement("li");
+        li.className = "reason stake";
+        li.textContent = text;
+        return li;
+    };
+    if (roundStart.suddenDeath) {
+        const first = suddenDeathWinner(round);
+        verdictItems.push(reasonItem(first ? `Sudden death: ${first === "player" ? who.you : who.them}'s seal landed first and decides the duel.` : "Sudden death: no seal landed. The duel goes another round at 2–2."));
+    }
+    stake.yours = Math.max(0, state.players.player.seals - sealsBefore.player);
+    stake.theirs = Math.max(0, state.players.opponent.seals - sealsBefore.opponent);
+    const stakeOutcome = settings.press && mode === "solo" ? pressResult(stake) : {};
+    state = applyStake(state, stakeOutcome);
+    for (const text of stakeLines(stake, stakeOutcome, who)) verdictItems.push(reasonItem(text));
     combatLog.prepend(...verdictItems);
     const outcome = matchOutcome();
     if (outcome.over) {
@@ -1089,7 +1217,7 @@ function resolveRound(): void {
             webVersion: WEB_VERSION,
             round: state.round,
             scenarioId: plan.scenario?.id,
-            telegraphPreset: plan.scenario?.telegraph ?? "high",
+            telegraphPreset: plan.preset,
             telegraph: formatTelegraph(plan.telegraph),
             opponentSpell,
             playerSpell,
@@ -1103,7 +1231,11 @@ function resolveRound(): void {
             committedAt,
             mode,
             rules: ruleset.id,
-            scries
+            scries,
+            weather: roundStart.weather,
+            suddenDeath: roundStart.suddenDeath === true,
+            pressedBy: stake.pressed.player && stake.pressed.opponent ? "both" : stake.pressed.player ? "player" : stake.pressed.opponent ? "opponent" : undefined,
+            retreatedBy: stake.retreated
         })
     );
     if (outcome.over) {
@@ -1174,6 +1306,7 @@ function startNextRound(): void {
     selectedReaction = undefined;
     roundResolved = false;
     reactionLocked = false;
+    beginRoundOptions();
     plan = planRound();
     plan.reveal = revealSchedule(plan.telegraph, rng, REACTION_WINDOW_MS);
     scries = 0;
@@ -1212,6 +1345,7 @@ function resetMatch(): void {
     p2QuickCast = false;
     // A seeded URL replays the same match; otherwise every reset is a new one.
     newMatchSeed();
+    beginRoundOptions();
     plan = planRound();
     plan.reveal = revealSchedule(plan.telegraph, rng, REACTION_WINDOW_MS);
     scries = 0;
@@ -1260,7 +1394,7 @@ function onPrimaryAction(): void {
             plan = {
                 ...plan,
                 opponentSpell: [...playerSpell],
-                telegraph: projectTelegraph(playerSpell, "high", rng, { extraReveals: leak("opponent") })
+                telegraph: projectTelegraph(playerSpell, telegraphPreset(), rng, { extraReveals: leak("opponent") })
             };
             plan.reveal = revealSchedule(plan.telegraph, rng, REACTION_WINDOW_MS);
             log.info(`round ${state.round}: player 2 locked in`, { glyphs: playerSpell.length });
@@ -1272,7 +1406,7 @@ function onPrimaryAction(): void {
             if (!spellIsCastable()) return;
             playerQuickCast = timerState(performance.now() - roundStartedAt, timersActive()).quickCast;
             hotseat = commitP1(hotseat, playerSpell, selectedReaction);
-            p1Telegraph = projectTelegraph(playerSpell, "high", rng, { extraReveals: leak("player") });
+            p1Telegraph = projectTelegraph(playerSpell, telegraphPreset(), rng, { extraReveals: leak("player") });
             p1Reveal = revealSchedule(p1Telegraph, rng, REACTION_WINDOW_MS);
             log.info(`round ${state.round}: player 1 committed`, { glyphs: playerSpell.length, reaction: selectedReaction ?? "none" });
             playerSpell = [];
@@ -1416,6 +1550,18 @@ function renderSettings(): void {
     settingsAnimations.checked = settings.animations;
     settingsArena3d.checked = settings.arena3d;
     settingsSound.checked = settings.sound;
+    settingsWeather.checked = settings.weather;
+    settingsSudden.checked = settings.suddenDeath;
+    settingsPress.checked = settings.press;
+}
+
+/** The playtest options: saved, logged, and applied to the round in hand when it has not resolved yet. */
+function applyPlaytestOption(patch: Partial<Pick<Settings, "weather" | "suddenDeath" | "press">>): void {
+    settings = { ...settings, ...patch };
+    saveSettings(deviceStorage, settings);
+    log.info("playtest options", { weather: settings.weather, suddenDeath: settings.suddenDeath, press: settings.press });
+    if (!roundResolved) applyRoundOptions();
+    render();
 }
 
 function applyRuleset(id: RulesetId): void {
@@ -1453,6 +1599,27 @@ settingsArena3d.addEventListener("change", () => {
     saveSettings(deviceStorage, settings);
     log.info(`3D arena: ${settings.arena3d ? "on" : "off"}`);
     void mountStage().then(() => renderSettings());
+});
+settingsWeather.addEventListener("change", () => applyPlaytestOption({ weather: settingsWeather.checked }));
+settingsSudden.addEventListener("change", () => applyPlaytestOption({ suddenDeath: settingsSudden.checked }));
+settingsPress.addEventListener("change", () => applyPlaytestOption({ press: settingsPress.checked }));
+pressButton.addEventListener("click", () => {
+    if (roundResolved) return;
+    if (stake.pressed.player) delete stake.pressed.player;
+    else {
+        stake.pressed.player = true;
+        delete stake.retreated;
+    }
+    render();
+});
+retreatButton.addEventListener("click", () => {
+    if (roundResolved || !plan.presses) return;
+    if (stake.retreated === "player") delete stake.retreated;
+    else {
+        stake.retreated = "player";
+        delete stake.pressed.player;
+    }
+    render();
 });
 settingsAnimations.addEventListener("change", () => {
     settings = { ...settings, animations: settingsAnimations.checked };

@@ -150,6 +150,24 @@ export function spendFocus(state: DuelState, id: PlayerId, amount: number): Duel
     return next;
 }
 
+/**
+ * What a reaction costs the reactor under this state: nothing when the rules
+ * do not price reactions, double in sudden death, and SILENCE is free in the
+ * hush (both from docs/duel-engagement-options.md §H).
+ */
+export function reactionPrice(state: DuelState, reaction: ReactionGlyph): number {
+    const rules = state.rules ?? CLASSIC_RULES;
+    if (!rules.reactionCosts) return 0;
+    if (reaction === "silence" && state.weather === "hush") return 0;
+    return REACTION_COSTS[reaction] * (state.suddenDeath ? 2 : 1);
+}
+
+/** The rules as the weather bends them for this round: ironbound makes every ward integrity 1. */
+export function weatherRules(state: DuelState): RuleOptions {
+    const rules = state.rules ?? CLASSIC_RULES;
+    return state.weather === "ironbound" ? { ...rules, wardIntegrity: 1 } : rules;
+}
+
 function updateFaltering(player: PlayerState, rules: RuleOptions): void {
     if (rules.resolve > 0 && player.resolve !== undefined) player.faltering = player.resolve <= FALTERING_AT;
 }
@@ -348,7 +366,9 @@ function applyBranch(effect: ResolvedEffect, e: Encounter): PlayerId | undefined
             // Ward integrity: the blocked spell still wears the ward down by
             // its magnitude; at 0 it shatters and the NEXT hit gets through.
             if (rules.wardIntegrity > 0 && effect.magnitude > 0) {
-                const remaining = (ward.integrity ?? rules.wardIntegrity) - effect.magnitude;
+                // Capped at the maximum in force: an ironbound round makes a
+                // ward raised at 2 as brittle as one raised at 1.
+                const remaining = Math.min(ward.integrity ?? rules.wardIntegrity, rules.wardIntegrity) - effect.magnitude;
                 if (remaining <= 0) {
                     delete targetPlayer.ward;
                     addStep(steps, "boundary", "applied", "WARD_BROKEN", "The WARD shattered under the blow; it is gone.");
@@ -432,8 +452,10 @@ export function resolveEncounter(
     context: ResolutionContext
 ): ResolutionResult {
     const next = cloneState(state);
-    const rules: RuleOptions = next.rules ?? CLASSIC_RULES;
-    next.rules = rules;
+    next.rules ??= CLASSIC_RULES;
+    // The weather bends the rules for this round only; the state keeps the
+    // match's own rules so the next round is played straight.
+    const rules: RuleOptions = weatherRules(next);
     next.gate ??= "open";
     const steps: ResolutionStep[] = [];
     const caster = next.players[context.casterId];
@@ -507,19 +529,32 @@ export function resolveEncounter(
         return { state: next, steps };
     }
 
+    // --- Weather: open sky. No ward may be raised, on a mage or on the gate;
+    // the spell fizzles before it costs anything, like a shape the resolver
+    // refuses.
+    if (next.weather === "opensky" && flat.action === "ward") {
+        addStep(steps, "validation", "failed", "WEATHER_OPENSKY", "Open sky: no WARD can be raised this round. The spell fizzles.");
+        return { state: next, steps };
+    }
+
     // --- Focus accounting (rules.reactionCosts). The caster pays the spell;
     // a bound caster under the resolve rule pays the BIND tax on top and is
     // freed by it. The defender pays for the reaction or does not get it.
     let reaction = context.reaction;
     if (rules.reactionCosts) {
         const tax = rules.resolve > 0 && caster.bound ? BOUND_TAX : 0;
-        caster.focus = Math.max(0, caster.focus - parsed.focusCost - tax);
+        // Storm: AMPLIFY costs nothing this round (§H).
+        const stormRebate = next.weather === "storm" && flat.modifiers.includes("amplify") ? 1 : 0;
+        caster.focus = Math.max(0, caster.focus - parsed.focusCost - tax + stormRebate);
+        if (stormRebate > 0) addStep(steps, "cost", "info", "WEATHER_STORM", "Storm: the AMPLIFY cost no Focus.");
         if (tax > 0) {
             caster.bound = false;
             addStep(steps, "cost", "applied", "BOUND_TAX", `Being BOUND cost ${tax} extra Focus for this spell.`);
         }
         if (reaction) {
-            const price = REACTION_COSTS[reaction];
+            const price = reactionPrice(next, reaction);
+            if (next.suddenDeath && price > 0) addStep(steps, "cost", "info", "SUDDEN_DEATH_PRICES", "Sudden death: reactions cost double.");
+            if (reaction === "silence" && next.weather === "hush") addStep(steps, "cost", "info", "WEATHER_HUSH", "Hush: SILENCE costs nothing and strips the essence too.");
             if (defender.focus < price) {
                 addStep(
                     steps,
@@ -626,6 +661,12 @@ export function resolveEncounter(
     if (reaction === "silence") {
         const stripped = [...active].filter(m => STRIPPABLE.includes(m));
         effect.silenced = true;
+        // Hush: the essence goes with the modifiers, so an untyped spell
+        // meets the ward and any ward catches it.
+        if (next.weather === "hush" && effect.essence) {
+            addStep(steps, "suppression", "applied", "HUSH_STRIPPED_ESSENCE", `The hush swallowed the ${effect.essence.toUpperCase()}: the spell flies untyped.`);
+            delete effect.essence;
+        }
         if (stripped.length > 0) {
             for (const m of stripped) active.delete(m);
             effect.anchored = false;

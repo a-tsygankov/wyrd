@@ -33,6 +33,11 @@ export type TelemetryEvent = {
     rules?: "classic" | "teeth" | "pulse" | "resolve";
     endReason?: "seals" | "resolve";
     scries?: number;
+    /** Playtest options (options doc §H, ideas doc §J): the round's weather card, whether it was sudden death, who pressed and who retreated. */
+    weather?: "storm" | "hush" | "ironbound" | "opensky" | null;
+    suddenDeath?: boolean;
+    pressedBy?: "player" | "opponent" | "both" | null;
+    retreatedBy?: "player" | "opponent" | null;
 };
 
 type StorageLike = { getItem(key: string): string | null; setItem(key: string, value: string): void };
@@ -76,6 +81,10 @@ export type RoundFacts = {
     mode: "solo" | "hotseat";
     rules: "classic" | "teeth" | "pulse" | "resolve";
     scries: number;
+    weather?: "storm" | "hush" | "ironbound" | "opensky" | undefined;
+    suddenDeath?: boolean | undefined;
+    pressedBy?: "player" | "opponent" | "both" | undefined;
+    retreatedBy?: "player" | "opponent" | undefined;
 };
 
 export function buildRoundEvent(facts: RoundFacts): TelemetryEvent {
@@ -99,7 +108,11 @@ export function buildRoundEvent(facts: RoundFacts): TelemetryEvent {
         timeToCommitMs: Math.max(0, Math.round(facts.committedAt - facts.roundStartedAt)),
         mode: facts.mode,
         rules: facts.rules,
-        scries: facts.scries
+        scries: facts.scries,
+        weather: facts.weather ?? null,
+        suddenDeath: facts.suddenDeath === true,
+        pressedBy: facts.pressedBy ?? null,
+        retreatedBy: facts.retreatedBy ?? null
     };
 }
 
