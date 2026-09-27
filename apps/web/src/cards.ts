@@ -132,7 +132,7 @@ export function renderTelegraphCards(container: HTMLElement, cards: readonly Tel
     container.replaceChildren(
         ...cards.map((card, index) => {
             const el = document.createElement("div");
-            el.className = `rune-card ${card.kind}`;
+            el.className = `rune-card ${card.kind === "hidden" ? "face-down" : card.kind}`;
             if (card.family) el.dataset.family = card.family;
             const was = previous[index];
             // A slot that just turned face-up flips.

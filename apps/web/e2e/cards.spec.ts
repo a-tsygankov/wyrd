@@ -9,7 +9,8 @@ test("the telegraph shows rune cards: face-up glyphs and a face-down target", as
     await expect(cards.nth(0)).toHaveAttribute("data-family", "essence");
     await expect(cards.nth(0)).toContainText("FIRE");
     await expect(cards.nth(1)).toHaveAttribute("data-family", "action");
-    await expect(cards.nth(2)).toHaveClass(/hidden/);
+    await expect(cards.nth(2)).toHaveClass(/face-down/);
+    await expect(cards.nth(2)).toBeVisible();
     await expect(page.locator("#telegraph")).toHaveText("FIRE → SEEK → ?");
 });
 
