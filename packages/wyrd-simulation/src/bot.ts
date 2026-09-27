@@ -43,6 +43,11 @@ export type Personality = {
     /** Softmax temperature for reactions. */
     reactionTemperature: number;
     /**
+     * Share of rounds where the bot casts a random reasonable spell instead of
+     * its best - a whim, so its play cannot be fully read off the table.
+     */
+    whim: number;
+    /**
      * Share of reaction choices drawn uniformly from the sensible options
      * instead of the table, so the best answer is never a certainty a player
      * can farm (always ANCHOR against a bot that always REFLECTs). Reactions
@@ -62,6 +67,7 @@ export const PERSONALITIES: readonly Personality[] = [
         blurb: "Plays the table straight: scores when it can, wards when it must.",
         temperature: 1.5,
         reactionTemperature: 1.2,
+        whim: 0.12,
         unpredictability: 0.15,
         planWeights: { strike: 3, shield: 1.5, gate: 2, trick: 1.5, probe: 1 },
         reactionBias: {}
@@ -72,6 +78,7 @@ export const PERSONALITIES: readonly Personality[] = [
         blurb: "Hits every round, amplified when it can; saves its Focus for its own spell rather than answers.",
         temperature: 1.8,
         reactionTemperature: 1.2,
+        whim: 0.1,
         unpredictability: 0.15,
         planWeights: { strike: 5, shield: 0.5, gate: 1.5, trick: 1, probe: 0.5 },
         reactionBias: { none: 1.5, null: -1, reflect: -0.5, silence: -1 }
@@ -82,6 +89,7 @@ export const PERSONALITIES: readonly Personality[] = [
         blurb: "Wards first, mends what dents, breaks yours; answers with SILENCE and REFLECT.",
         temperature: 1.5,
         reactionTemperature: 1.1,
+        whim: 0.08,
         unpredictability: 0.2,
         planWeights: { strike: 1.5, shield: 4, gate: 1.5, trick: 0.5, probe: 1 },
         reactionBias: { none: -1, reflect: 1, silence: 1.5 }
@@ -92,6 +100,7 @@ export const PERSONALITIES: readonly Personality[] = [
         blurb: "REVERSEs gates, SPLITs bolts, bluffs with AMPLIFY; its reactions are hard to read.",
         temperature: 2.2,
         reactionTemperature: 2.5,
+        whim: 0.25,
         unpredictability: 0.3,
         planWeights: { strike: 1.5, shield: 1, gate: 1.5, trick: 4, probe: 1.5 },
         reactionBias: { silence: 0.5 }
@@ -102,6 +111,7 @@ export const PERSONALITIES: readonly Personality[] = [
         blurb: "Fights over the GATE: closes, opens, shatters and mends it; NULLs a gate spell that would score.",
         temperature: 1.5,
         reactionTemperature: 1.2,
+        whim: 0.1,
         unpredictability: 0.12,
         planWeights: { strike: 1.5, shield: 1, gate: 5, trick: 1, probe: 0.5 },
         reactionBias: {}
@@ -264,17 +274,42 @@ export function scoreSpell(spell: LegalSpell, view: BotView): number {
     return score;
 }
 
-/** Pick a spell from the pool: weighted by score, never one of the last three. */
-export function chooseBotSpell(pool: readonly LegalSpell[], view: BotView, rng: Rng): string[] {
+/**
+ * Temper: the softmax temperature for spells this round. Behind on seals the
+ * bot runs hotter (more erratic, more willing to gamble); ahead, cooler.
+ * Never below 1, so the table still means something.
+ */
+export function spellTemperature(view: BotView): number {
+    const personality = view.personality ?? BALANCED;
+    const me = view.state.players[view.botId].seals;
+    const them = view.state.players[opponentOf(view.botId)].seals;
+    return Math.max(1, personality.temperature * (1 + 0.25 * (them - me)));
+}
+
+export type SpellChoice = { tokens: string[]; whim: boolean };
+
+/** Pick a spell from the pool: on a whim a random reasonable one, otherwise weighted by score; never one of the last three. */
+export function chooseBotSpellDetailed(pool: readonly LegalSpell[], view: BotView, rng: Rng): SpellChoice {
     const recent = view.recentBotSpells ?? (view.lastBotSpell ? [view.lastBotSpell] : []);
     const banned = new Set(recent.slice(-3).map(s => s.join(" ")));
     const candidates = pool.filter(s => !banned.has(s.tokens.join(" ")));
     const source = candidates.length > 0 ? candidates : pool;
+    const personality = view.personality ?? BALANCED;
+    const scored = source.map(s => ({ s, score: scoreSpell(s, view) }));
+    // The whim: a uniform draw over what is not plainly bad (a self-hit, a
+    // walk into a ward). The randomness players feel, kept honest.
+    if (rng.next() < personality.whim) {
+        const reasonable = scored.filter(x => x.score > -3);
+        if (reasonable.length > 0) return { tokens: rng.pick(reasonable).s.tokens, whim: true };
+    }
     // Softmax-ish: exponentiate so good spells dominate but the tail still
     // shows up - a bot that always casts the top spell teaches nothing.
-    const temperature = (view.personality ?? BALANCED).temperature;
-    const scored = source.map(s => ({ s, w: Math.exp(scoreSpell(s, view) / temperature) }));
-    return rng.weighted(scored, x => x.w).s.tokens;
+    const temperature = spellTemperature(view);
+    return { tokens: rng.weighted(scored, x => Math.exp(x.score / temperature)).s.tokens, whim: false };
+}
+
+export function chooseBotSpell(pool: readonly LegalSpell[], view: BotView, rng: Rng): string[] {
+    return chooseBotSpellDetailed(pool, view, rng).tokens;
 }
 
 /**

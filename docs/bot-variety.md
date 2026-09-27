@@ -1,26 +1,26 @@
 # Bot variety report
 
-Generated 2026-09-26 by `node scripts/bot_variety.mjs 40 12` (regenerate after any change to `packages/wyrd-simulation/src/bot.ts`). Bot vs bot: the personality under test as the opponent, the Adept as the player, 40 seeds, up to 12 rounds or 3 seals. "Repeat within 6" is the share of spells already cast in the previous six rounds; the reaction table is the probability of each answer on a fresh Teeth board. Reads: spells stay varied (dozens of distinct spells, the top one well under a fifth), and no reaction is a certainty (the best answer stays below 85%, except where only one option is sensible).
+Generated 2026-09-27 by `node scripts/bot_variety.mjs 40 12` (regenerate after any change to `packages/wyrd-simulation/src/bot.ts`). Bot vs bot: the personality under test as the opponent, the Adept as the player, 40 seeds, up to 12 rounds or 3 seals. "Repeat within 6" is the share of spells already cast in the previous six rounds; the reaction table is the probability of each answer on a fresh Teeth board. Since this run the bot also has a whim (a random reasonable spell in 8-25% of rounds by personality), a temper (hotter when behind) and quips; whims raise the distinct-spell counts below.
 
 ## 40 seeds × up to 12 rounds per personality and ruleset
 
 | Ruleset | Personality | Rounds | Distinct spells | Top spell (share) | Entropy bits | Repeat within 6 | Plans used |
 |---|---|---:|---:|---|---:|---:|---|
-| classic | balanced | 235 | 88 | SEEK ENEMY AMPLIFY SPLIT (6%) | 5.98 | 0.0% | strike 35%, gate 23%, shield 15%, trick 14%, probe 13% |
-| classic | aggressor | 197 | 59 | SEEK ENEMY AMPLIFY SPLIT (8%) | 5.23 | 0.5% | strike 62%, gate 15%, trick 11%, probe 8%, shield 4% |
-| classic | warden | 302 | 108 | ENEMY BIND AMPLIFY SPLIT (5%) | 6.35 | 0.3% | shield 30%, strike 26%, gate 22%, probe 17%, trick 5% |
-| classic | trickster | 216 | 90 | SEEK ENEMY AMPLIFY SPLIT (7%) | 6.03 | 0.0% | trick 42%, probe 19%, strike 18%, shield 11%, gate 10% |
-| classic | gatekeeper | 251 | 85 | GATE CLOSE SPLIT (5%) | 5.97 | 0.4% | gate 48%, strike 20%, trick 12%, shield 12%, probe 8% |
-| teeth | balanced | 144 | 64 | SEEK ENEMY AMPLIFY SPLIT (6%) | 5.59 | 0.0% | strike 35%, gate 22%, trick 17%, shield 15%, probe 12% |
-| teeth | aggressor | 117 | 49 | SEEK ENEMY AMPLIFY SPLIT (12%) | 5.11 | 0.0% | strike 63%, trick 14%, gate 14%, probe 5%, shield 4% |
-| teeth | warden | 213 | 89 | SEEK ENEMY SPLIT (5%) | 6.12 | 0.0% | shield 36%, strike 21%, gate 21%, probe 14%, trick 8% |
-| teeth | trickster | 135 | 64 | ENEMY BIND WEAKEN REVERSE (5%) | 5.67 | 0.0% | trick 41%, probe 19%, gate 16%, strike 16%, shield 7% |
-| teeth | gatekeeper | 189 | 77 | GATE CLOSE AMPLIFY SPLIT (6%) | 5.78 | 1.1% | gate 49%, strike 19%, shield 15%, trick 10%, probe 7% |
-| resolve | balanced | 156 | 63 | ENEMY BIND SPLIT (6%) | 5.58 | 0.0% | strike 34%, gate 24%, shield 17%, probe 13%, trick 12% |
-| resolve | aggressor | 122 | 46 | SEEK ENEMY AMPLIFY SPLIT (10%) | 5.10 | 0.0% | strike 60%, gate 16%, probe 12%, trick 7%, shield 5% |
-| resolve | warden | 217 | 87 | SEEK ENEMY AMPLIFY SPLIT (6%) | 6.06 | 0.0% | shield 29%, gate 25%, strike 22%, probe 18%, trick 6% |
-| resolve | trickster | 167 | 78 | ENEMY BIND AMPLIFY SPLIT (7%) | 5.86 | 0.0% | trick 47%, probe 16%, strike 16%, gate 12%, shield 10% |
-| resolve | gatekeeper | 184 | 78 | GATE CLOSE AMPLIFY ANCHOR (6%) | 5.90 | 0.5% | gate 51%, strike 20%, probe 11%, shield 10%, trick 8% |
+| classic | balanced | 275 | 111 | ENEMY BIND SPLIT ANCHOR (4%) | 6.34 | 0.7% | strike 40%, gate 25%, trick 13%, shield 12%, probe 10% |
+| classic | aggressor | 193 | 68 | ENEMY BIND AMPLIFY SPLIT (8%) | 5.48 | 1.0% | strike 64%, gate 16%, trick 7%, shield 7%, probe 6% |
+| classic | warden | 328 | 114 | GATE CLOSE AMPLIFY SPLIT (4%) | 6.36 | 0.9% | shield 35%, gate 24%, strike 24%, probe 13%, trick 5% |
+| classic | trickster | 224 | 115 | SEEK ENEMY WEAKEN REVERSE (4%) | 6.43 | 0.0% | trick 49%, gate 16%, strike 15%, probe 12%, shield 9% |
+| classic | gatekeeper | 293 | 99 | GATE CLOSE AMPLIFY SPLIT (6%) | 6.15 | 0.7% | gate 50%, strike 24%, shield 11%, trick 10%, probe 5% |
+| teeth | balanced | 200 | 87 | ENEMY BIND SPLIT (5%) | 6.05 | 0.0% | strike 34%, trick 20%, gate 18%, shield 16%, probe 13% |
+| teeth | aggressor | 160 | 60 | SEEK ENEMY AMPLIFY SPLIT (9%) | 5.34 | 0.0% | strike 61%, trick 14%, gate 14%, shield 7%, probe 4% |
+| teeth | warden | 295 | 114 | ENEMY BIND SPLIT (3%) | 6.48 | 0.3% | shield 28%, gate 24%, strike 23%, probe 16%, trick 9% |
+| teeth | trickster | 187 | 108 | SEEK ENEMY WEAKEN REVERSE (3%) | 6.53 | 0.5% | trick 40%, probe 20%, strike 16%, gate 15%, shield 10% |
+| teeth | gatekeeper | 197 | 82 | GATE CLOSE AMPLIFY SPLIT (8%) | 5.89 | 0.0% | gate 49%, strike 18%, trick 15%, shield 12%, probe 6% |
+| resolve | balanced | 187 | 90 | SEEK ENEMY AMPLIFY SPLIT (4%) | 6.20 | 0.5% | strike 35%, gate 29%, trick 13%, shield 13%, probe 10% |
+| resolve | aggressor | 156 | 66 | SEEK ENEMY AMPLIFY SPLIT (11%) | 5.46 | 0.0% | strike 62%, gate 17%, trick 9%, shield 7%, probe 6% |
+| resolve | warden | 265 | 119 | GATE WARD AMPLIFY SPLIT (5%) | 6.60 | 0.0% | shield 34%, strike 25%, gate 21%, probe 14%, trick 6% |
+| resolve | trickster | 179 | 110 | ENEMY BIND WEAKEN REVERSE (4%) | 6.53 | 0.0% | trick 49%, gate 16%, probe 14%, strike 13%, shield 8% |
+| resolve | gatekeeper | 205 | 91 | GATE CLOSE AMPLIFY SPLIT (7%) | 6.04 | 0.5% | gate 52%, strike 18%, shield 13%, trick 11%, probe 6% |
 
 ## Reactions against fixed incoming spells (Teeth, fresh board)
 
