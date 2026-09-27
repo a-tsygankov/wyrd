@@ -16,11 +16,11 @@ export type Settings = {
     animations: boolean;
     /** Synthesised sound cues on stage beats. */
     sound: boolean;
-    /** Render the duel in the Three.js arena (experimental) instead of the SVG stage. `?stage=3d`. */
+    /** Render the duel in the Three.js arena instead of the SVG stage; on by default, `?stage=2d` opts out. */
     arena3d: boolean;
 };
 
-export const DEFAULT_SETTINGS: Settings = { ruleset: "classic", timers: true, telemetry: true, glyphHelpOpen: false, animations: true, sound: false, arena3d: false };
+export const DEFAULT_SETTINGS: Settings = { ruleset: "classic", timers: true, telemetry: true, glyphHelpOpen: false, animations: true, sound: false, arena3d: true };
 
 type StorageLike = { getItem(key: string): string | null; setItem(key: string, value: string): void };
 

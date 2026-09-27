@@ -29,10 +29,10 @@ test("the 3D arena mounts, plays a round and can be switched back", async ({ pag
     expect(errors, errors.join("\n")).toEqual([]);
 });
 
-test("without the setting the flat stage renders and no 3D module is fetched", async ({ page }) => {
+test("with ?stage=2d the flat stage renders and no 3D module is fetched", async ({ page }) => {
     const requests: string[] = [];
     page.on("request", request => requests.push(request.url()));
-    await page.goto("/?seed=smoke&animations=off");
+    await page.goto("/?seed=smoke&stage=2d&animations=off");
     await expect(page.locator("#stage")).toBeVisible();
     await expect(page.locator("#arena")).toBeHidden();
     expect(requests.some(url => url.includes("/vendor/three/") || url.includes("/assets/arena/"))).toBe(false);

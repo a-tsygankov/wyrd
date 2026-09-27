@@ -43,7 +43,8 @@
         <!-- Floating "Next round" (or "Rematch" once the duel is decided): the
              one action a resolved round asks for, kept in thumb reach at the top
              right instead of buried under the log. Hidden while a round is open. -->
-        <button id="next-round-fab" class="fab hidden" type="button" aria-label="Next round">Next round →</button>
+        <button id="next-round" class="fab hidden" type="button" aria-label="Next round">Next round →</button>
+        <button id="rematch-fab" class="fab hidden" type="button" aria-label="Rematch">Rematch ↻</button>
 
         <section class="scoreboard card">
             <div>
@@ -214,7 +215,7 @@
         <section class="log card">
             <div class="section-heading">
                 <span class="label">Resolution</span>
-                <button id="next-round" class="ghost-button hidden" type="button">Next round</button>
+
             </div>
             <ol id="combat-log" class="combat-log">
                 <li>Opponent spell is waiting.</li>
@@ -258,7 +259,7 @@
                 </label>
                 <label class="settings-switch">
                     <input id="settings-arena3d" type="checkbox">
-                    <span><strong>3D arena</strong><span class="settings-summary">Experimental: two KayKit mages and the gate in a small Three.js scene, playing the same beats. Loads about 4 MB once; falls back to the flat stage without WebGL. <code>?stage=3d</code></span></span>
+                    <span><strong>3D arena</strong><span class="settings-summary">Two KayKit mages and the gate in a small Three.js scene, playing the same beats as the flat stage. On by default; loads about 2 MB once and falls back to the flat stage without WebGL. <code>?stage=2d</code> turns it off for a visit.</span></span>
                 </label>
                 <label class="settings-switch">
                     <input id="settings-sound" type="checkbox">

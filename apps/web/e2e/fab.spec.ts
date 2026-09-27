@@ -5,7 +5,7 @@ import { expect, test } from "@playwright/test";
 
 test("the floating Next round button appears after a round and advances it", async ({ page }) => {
     await page.goto("/?seed=smoke&animations=off");
-    const fab = page.locator("#next-round-fab");
+    const fab = page.locator("#next-round");
     await expect(fab).toBeHidden();
     const tray = page.locator("#glyph-tray");
     for (const glyph of ["FIRE", "SEEK", "ENEMY"]) await tray.getByRole("button", { name: glyph, exact: true }).click();
