@@ -59,9 +59,10 @@ test("a spell can be cast and scores a seal", async ({ page }) => {
 test("a full match through the scenario deck is won by reading the telegraph", async ({ page }) => {
     const errors: string[] = [];
     page.on("pageerror", error => errors.push(error.message));
-    // A fixed seed pins the medium-information telegraphs and the bot's
-    // rolls, so the walkthrough below is deterministic.
-    await page.goto("/?seed=smoke");
+    // A fixed seed pins the deck order (the opener, then the REFLECT lesson
+    // for this seed), the telegraphs and the bot's rolls, so the walkthrough
+    // below is deterministic.
+    await page.goto("/?seed=quill");
     const tray = page.locator("#glyph-tray");
     const cast = async (glyphs: string[], reaction?: string) => {
         for (const glyph of glyphs) await tray.getByRole("button", { name: glyph, exact: true }).click();
@@ -79,7 +80,7 @@ test("a full match through the scenario deck is won by reading the telegraph", a
     expect(body.events).toHaveLength(1);
     expect(body.events[0]).toMatchObject({
         event: "round",
-        matchSeed: "smoke",
+        matchSeed: "quill",
         round: 1,
         scenarioId: "direct-threat",
         telegraph: "FIRE → SEEK → ?",
@@ -110,7 +111,7 @@ test("a full match through the scenario deck is won by reading the telegraph", a
     await page.locator("#reset-match").click();
     await expect(page.locator("#telegraph")).not.toHaveText("FIRE → SEEK → ?");
     await expect(page.locator("#scenario-note")).toContainText("Opponent: the");
-    await expect(page.locator("#scenario-note")).toContainText("seed smoke");
+    await expect(page.locator("#scenario-note")).toContainText("seed quill");
     expect(errors).toEqual([]);
 });
 

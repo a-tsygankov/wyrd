@@ -175,3 +175,18 @@ scenarios.push({
 export function scenarioById(id: string): Scenario | undefined {
     return scenarios.find(s => s.id === id);
 }
+
+/**
+ * The deck in the order a match plays it: the opener that needs no reaction
+ * stays first, the other scenarios shuffle from the match seed (Fisher-Yates
+ * on the seeded stream), so two devices with the same seed learn in the same
+ * order and two matches with different seeds do not.
+ */
+export function shuffleDeck(rng: { next(): number }): Scenario[] {
+    const [opener, ...rest] = scenarios;
+    for (let i = rest.length - 1; i > 0; i--) {
+        const j = Math.floor(rng.next() * (i + 1));
+        [rest[i], rest[j]] = [rest[j] as Scenario, rest[i] as Scenario];
+    }
+    return opener ? [opener, ...rest] : rest;
+}

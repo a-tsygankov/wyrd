@@ -1,6 +1,6 @@
 import { rulesets, type Ruleset, type RulesetId } from "../../../packages/wyrd-content/src/rulesets.js";
 import { POC_TRAY, TRAY_FAMILY, type TrayFamily } from "../../../packages/wyrd-content/src/tray.js";
-import { scenarios, type Scenario } from "../../../packages/wyrd-content/src/scenarios.js";
+import { shuffleDeck, type Scenario } from "../../../packages/wyrd-content/src/scenarios.js";
 import { parseSpell } from "../../../packages/wyrd-grammar/src/parser.js";
 import {
     adviseReaction,
@@ -430,6 +430,8 @@ let recentBotSpells: string[][] = [];
 /** Who the bot is this match and what it is after this round (options doc §I). */
 let personality: Personality;
 let roundPlan: Plan | undefined;
+/** The teaching deck in this match's order: the opener first, the rest shuffled from the seed. */
+let deck: Scenario[] = [];
 let plan: RoundPlan;
 
 function newMatchSeed(): void {
@@ -438,6 +440,7 @@ function newMatchSeed(): void {
     // A separate stream for the personality keeps the main one - and so the
     // telegraphs of old seeds - exactly where they were.
     personality = choosePersonality(createRng(seedFromString(matchSeedLabel + ":bot")));
+    deck = shuffleDeck(createRng(seedFromString(matchSeedLabel + ":deck")));
     applyPersonas();
     lastBotSpell = undefined;
     recentBotSpells = [];
@@ -481,7 +484,7 @@ function planRound(): RoundPlan {
     }
     // The teaching deck plays for the device's first solo match only (the
     // setting flips off when that match ends); after that the bot from round 1.
-    const scenario = settings.deck ? scenarios[state.round - 1] : undefined;
+    const scenario = settings.deck ? deck[state.round - 1] : undefined;
     if (scenario) {
         // Scenario setup (an existing ward) is applied as the round opens so
         // the situation matches the lesson regardless of earlier rounds.
@@ -827,7 +830,7 @@ function renderScoreboard(): void {
 
     showTelegraph(visibleTelegraph());
     scenarioNote.textContent = (plan.scenario
-        ? "Scenario " + state.round + "/" + scenarios.length + " · " + plan.scenario.title + " · seed " + matchSeedLabel
+        ? "Scenario " + state.round + "/" + deck.length + " · " + plan.scenario.title + " · seed " + matchSeedLabel
         : `Opponent: ${personality.title} · seed ${matchSeedLabel} · some glyphs are hidden; infer the threat before reacting.`) + rulesNote;
 
     matchStatus.textContent = outcome.over

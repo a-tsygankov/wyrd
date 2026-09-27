@@ -72,3 +72,16 @@ test("the first scenario is a teaching round: the opponent does not react", () =
     // brand-new player equally.
     assert.equal(scenarios[0].opponentReaction, "none");
 });
+
+test("the deck shuffles per seed behind a fixed opener, keeps every scenario, and replays from the same seed", async () => {
+    const { shuffleDeck } = await import("../dist/packages/wyrd-content/src/scenarios.js");
+    const { createRng } = await import("../dist/packages/wyrd-simulation/src/rng.js");
+    const a = shuffleDeck(createRng(1));
+    assert.equal(a.length, scenarios.length);
+    assert.deepEqual(new Set(a.map(s => s.id)), new Set(scenarios.map(s => s.id)), "every scenario, once");
+    assert.equal(a[0].id, "direct-threat", "the opener that needs no reaction stays first");
+    assert.deepEqual(shuffleDeck(createRng(1)).map(s => s.id), a.map(s => s.id), "seeded");
+    const orders = new Set(Array.from({ length: 20 }, (_, i) => shuffleDeck(createRng(i)).map(s => s.id).join(">")));
+    assert.ok(orders.size >= 15, `20 seeds gave ${orders.size} orders`);
+    assert.deepEqual(scenarios.map(s => s.id), scenarios.map(s => s.id), "the source deck is untouched");
+});
