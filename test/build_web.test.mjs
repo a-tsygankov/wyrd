@@ -43,3 +43,13 @@ test("the service worker never caches /api/ responses", () => {
     const sw = readFileSync("apps/web/sw.js", "utf8");
     assert.match(sw, /\/api\//, "sw.js has no /api/ bypass");
 });
+
+test("build_web vendors the bloom chain the arena imports through the import map", () => {
+    // The arena's graphics pass imports three/addons/postprocessing/*; each
+    // file and the shaders they import must ship or the arena silently falls
+    // back to the flat stage.
+    const shipped = new Set(readdirSync("apps/web/dist/vendor/three/addons/postprocessing"));
+    for (const file of ["EffectComposer.js", "RenderPass.js", "UnrealBloomPass.js", "OutputPass.js", "ShaderPass.js", "MaskPass.js", "Pass.js"]) assert.ok(shipped.has(file), `${file} not vendored`);
+    const shaders = new Set(readdirSync("apps/web/dist/vendor/three/addons/shaders"));
+    for (const file of ["CopyShader.js", "LuminosityHighPassShader.js", "OutputShader.js"]) assert.ok(shaders.has(file), `${file} not vendored`);
+});
