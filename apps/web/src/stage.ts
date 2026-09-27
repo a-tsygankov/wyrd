@@ -1,5 +1,6 @@
 import type { GateState, PlayerId, ReactionGlyph, ResolutionResult } from "../../../packages/wyrd-resolver/src/index.js";
 import { HIT_STOP_MS, decayTrauma, markFor, shakeOffset, traumaFor, type FloorMark } from "./juice.js";
+import { NOTCHES, gateLean, sealNotches } from "./arenaMap.js";
 
 /**
  * The duel stage (docs/duel-engagement-options.md §F): two mages, a gate,
@@ -298,6 +299,8 @@ export type StageState = {
     bound: Record<Side, boolean>;
     gate: GateState;
     gateWard?: { ownerId: Side; integrity?: number } | undefined;
+    /** Seals so far: the chains' notches and the gate's lean (absent in older callers: no scoreboard). */
+    seals?: Record<Side, number> | undefined;
 };
 
 export type StageHooks = {
@@ -428,7 +431,19 @@ export function createStage(root: SVGSVGElement, hooks: StageHooks = {}, motion:
         gateDoor.setAttribute("opacity", state === "closed" ? "1" : state === "broken" ? "0.08" : "0.25");
     }
 
+    // The scoreboard on the gate: notches on the chains, the gate's lean.
+    let shownSeals: Record<Side, number> = { player: 0, opponent: 0 };
+    const NOTCH_X: Record<Side, number[]> = { player: [148, 130, 112], opponent: [212, 230, 248] };
+    function drawSeals(seals: Record<Side, number>): void {
+        shownSeals = { ...seals };
+        for (const notch of sealNotches(seals)) {
+            root.querySelector<SVGElement>(`#stage-notch-${notch.side}-${notch.index + 1}`)?.setAttribute("opacity", notch.lit ? "1" : "0.25");
+        }
+        gate.style.transform = `rotate(${(gateLean(seals) * 180) / Math.PI}deg)`;
+    }
+
     function setIdle(state: StageState): void {
+        drawSeals(state.seals ?? { player: 0, opponent: 0 });
         for (const side of ["player", "opponent"] as const) {
             drawWard(side, state.wards[side]);
             chains[side].setAttribute("opacity", state.bound[side] ? "1" : "0");
@@ -640,9 +655,12 @@ export function createStage(root: SVGSVGElement, hooks: StageHooks = {}, motion:
                 const long = beat.emphasis === "decisive";
                 say(long ? `SEAL → ${beat.side === "player" ? "◀" : "▶"} · DECISIVE` : `SEAL → ${beat.side === "player" ? "◀" : "▶"}`);
                 orb.setAttribute("opacity", "1");
-                const x = X[beat.side];
-                await animate(orb, [{ transform: `translate(${GATE_X}px, ${Y - 30}px) scale(0.4)`, opacity: 1 }, { transform: `translate(${x}px, 26px) scale(1)`, opacity: 0.2 }], beatDuration(beat));
+                // The orb flies to the next notch on the scorer's chain, which lights; the gate leans.
+                const next = Math.min(NOTCHES - 1, shownSeals[beat.side]);
+                const nx = NOTCH_X[beat.side][next] ?? X[beat.side];
+                await animate(orb, [{ transform: `translate(${GATE_X}px, ${Y - 30}px) scale(0.4)`, opacity: 1 }, { transform: `translate(${nx}px, 92px) scale(0.8)`, opacity: 0.6 }], beatDuration(beat));
                 orb.setAttribute("opacity", "0");
+                drawSeals({ ...shownSeals, [beat.side]: shownSeals[beat.side] + 1 });
                 if (long) addTrauma(0.4);
                 await shake();
                 return;
