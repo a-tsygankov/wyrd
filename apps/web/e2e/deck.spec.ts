@@ -6,7 +6,8 @@ import { expect, test } from "@playwright/test";
 const DECK_OPENER = "FIRE → SEEK → ?";
 
 test("after the first match ends, the rematch meets the bot from round 1 and Settings can bring the deck back", async ({ page }) => {
-    await page.goto("/?seed=smoke&stage=2d&animations=off");
+    // The quill seed's deck order keeps the REFLECT lesson second, so the win path below holds.
+    await page.goto("/?seed=quill&stage=2d&animations=off");
     const note = page.locator("#scenario-note");
     await expect(note).toContainText("Scenario 1/");
     await expect(page.locator("#telegraph")).toHaveText(DECK_OPENER);
