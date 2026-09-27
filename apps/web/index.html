@@ -156,6 +156,8 @@
             <div class="section-heading">
                 <div>
                     <span id="telegraph-label" class="label">Opponent telegraph</span>
+                    <!-- The telegraph as rune cards (apps/web/src/cards.ts); the line below is its caption. -->
+                    <div id="telegraph-cards" class="rune-strip" aria-hidden="true"></div>
                     <h2 id="telegraph">—</h2>
                 </div>
                 <span id="match-status" class="status-pill">Your move</span>
@@ -172,6 +174,8 @@
             <div class="section-heading">
                 <div>
                     <span class="label">Your spell</span>
+                    <!-- The spell as a sentence of cards that lights up when it parses; tap a card to remove it. -->
+                    <div id="spell-cards" class="rune-strip sentence" data-lit="false" aria-label="Your spell, glyph by glyph"></div>
                     <h2 id="spell-preview">Choose glyphs</h2>
                 </div>
                 <div id="focus-pill" class="focus" data-state="full">
