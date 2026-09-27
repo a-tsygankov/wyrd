@@ -105,9 +105,11 @@ test("a full match through the scenario deck is won by reading the telegraph", a
     await expect(page.locator("#combat-log .verdict").first()).toContainText(/REFLECT/);
     await expect(page.locator("#next-round")).toBeHidden();
 
-    // Reset with the same seed replays the same opening telegraph.
+    // The deck has taught its lesson: a reset keeps the seed but meets the
+    // heuristic opponent from round 1 (deck.spec.ts covers the switch back).
     await page.locator("#reset-match").click();
-    await expect(page.locator("#telegraph")).toHaveText("FIRE → SEEK → ?");
+    await expect(page.locator("#telegraph")).not.toHaveText("FIRE → SEEK → ?");
+    await expect(page.locator("#scenario-note")).toContainText("Opponent: the");
     await expect(page.locator("#scenario-note")).toContainText("seed smoke");
     expect(errors).toEqual([]);
 });

@@ -1,3 +1,5 @@
+> 2026-09-27: the report below was never what players saw. Solo matches started with the nine-scenario teaching deck and ended inside it, so the bot only appeared from round 10. The deck now plays for a device's first match only (`settings.deck`), after which the bot meets the player from round 1.
+
 # Bot variety report
 
 Generated 2026-09-27 by `node scripts/bot_variety.mjs 40 12` (regenerate after any change to `packages/wyrd-simulation/src/bot.ts`). Bot vs bot: the personality under test as the opponent, the Adept as the player, 40 seeds, up to 12 rounds or 3 seals. "Repeat within 6" is the share of spells already cast in the previous six rounds; the reaction table is the probability of each answer on a fresh Teeth board. Since this run the bot also has a whim (a random reasonable spell in 8-25% of rounds by personality), a temper (hotter when behind) and quips; whims raise the distinct-spell counts below.

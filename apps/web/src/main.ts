@@ -135,6 +135,9 @@ const settingsTelemetry = byId<HTMLInputElement>("settings-telemetry");
 const settingsWeather = byId<HTMLInputElement>("settings-weather");
 const settingsSudden = byId<HTMLInputElement>("settings-sudden");
 const settingsPress = byId<HTMLInputElement>("settings-press");
+const settingsDeck = byId<HTMLInputElement>("settings-deck");
+/** `?deck=` in the URL pins the deck for this visit: the end-of-match flip leaves the saved setting alone. */
+const deckPinned = new URLSearchParams(location.search).get("deck") !== null;
 const weatherBanner = byId<HTMLElement>("weather-banner");
 const stakesRoot = byId<HTMLElement>("stakes");
 const stakeNote = byId<HTMLElement>("stake-note");
@@ -476,7 +479,9 @@ function planRound(): RoundPlan {
             presses: false
         };
     }
-    const scenario = scenarios[state.round - 1];
+    // The teaching deck plays for the device's first solo match only (the
+    // setting flips off when that match ends); after that the bot from round 1.
+    const scenario = settings.deck ? scenarios[state.round - 1] : undefined;
     if (scenario) {
         // Scenario setup (an existing ward) is applied as the round opens so
         // the situation matches the lesson regardless of earlier rounds.
@@ -1207,6 +1212,13 @@ function resolveRound(): void {
     });
     if (outcome.over) {
         stats = recordMatchEnd(stats, { ruleset: ruleset.id, mode, won: outcome.winner === "player", reason: outcome.reason ?? "seals" });
+        // The deck has done its teaching: from the next match the opponent is
+        // the bot from round 1. Settings keeps the switch to turn it back on.
+        if (mode === "solo" && settings.deck && !deckPinned) {
+            settings = { ...settings, deck: false };
+            saveSettings(deviceStorage, settings);
+            log.info("teaching deck done: off for the next matches");
+        }
     }
     saveStats(deviceStorage, stats);
 
@@ -1553,6 +1565,7 @@ function renderSettings(): void {
     settingsWeather.checked = settings.weather;
     settingsSudden.checked = settings.suddenDeath;
     settingsPress.checked = settings.press;
+    settingsDeck.checked = settings.deck;
 }
 
 /** The playtest options: saved, logged, and applied to the round in hand when it has not resolved yet. */
@@ -1599,6 +1612,14 @@ settingsArena3d.addEventListener("change", () => {
     saveSettings(deviceStorage, settings);
     log.info(`3D arena: ${settings.arena3d ? "on" : "off"}`);
     void mountStage().then(() => renderSettings());
+});
+settingsDeck.addEventListener("change", () => {
+    settings = { ...settings, deck: settingsDeck.checked };
+    saveSettings(deviceStorage, settings);
+    log.info(`teaching deck: ${settings.deck ? "on" : "off"}`);
+    // The deck is a different round 1, so the switch starts a new match.
+    resetMatch();
+    renderSettings();
 });
 settingsWeather.addEventListener("change", () => applyPlaytestOption({ weather: settingsWeather.checked }));
 settingsSudden.addEventListener("change", () => applyPlaytestOption({ suddenDeath: settingsSudden.checked }));

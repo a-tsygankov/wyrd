@@ -22,6 +22,13 @@ export type Settings = {
     weather: boolean;
     suddenDeath: boolean;
     press: boolean;
+    /**
+     * Play the nine-scenario teaching deck at the start of a solo match. On
+     * for a device's first match; the client turns it off when that match
+     * ends, so every match after meets the heuristic opponent from round 1.
+     * `?deck=on|off` pins it for a visit.
+     */
+    deck: boolean;
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -34,7 +41,8 @@ export const DEFAULT_SETTINGS: Settings = {
     arena3d: true,
     weather: false,
     suddenDeath: false,
-    press: false
+    press: false,
+    deck: true
 };
 
 type StorageLike = { getItem(key: string): string | null; setItem(key: string, value: string): void };
@@ -67,6 +75,7 @@ export function loadSettings(storage: StorageLike, params: URLSearchParams): Set
             if (typeof saved.weather === "boolean") settings.weather = saved.weather;
             if (typeof saved.suddenDeath === "boolean") settings.suddenDeath = saved.suddenDeath;
             if (typeof saved.press === "boolean") settings.press = saved.press;
+            if (typeof saved.deck === "boolean") settings.deck = saved.deck;
         }
     } catch {
         // Unreadable storage or corrupt JSON: defaults.
@@ -87,6 +96,8 @@ export function loadSettings(storage: StorageLike, params: URLSearchParams): Set
     if (sudden !== undefined) settings.suddenDeath = sudden;
     const press = parseSwitch(params.get("press"));
     if (press !== undefined) settings.press = press;
+    const deck = parseSwitch(params.get("deck"));
+    if (deck !== undefined) settings.deck = deck;
     const stage = params.get("stage");
     if (stage === "3d") settings.arena3d = true;
     if (stage === "2d") settings.arena3d = false;

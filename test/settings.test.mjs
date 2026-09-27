@@ -8,14 +8,14 @@ function memory(initial = {}) {
 }
 
 test("defaults: classic rules, timers on, telemetry on", () => {
-    assert.deepEqual(DEFAULT_SETTINGS, { ruleset: "classic", timers: true, telemetry: true, glyphHelpOpen: false, animations: true, sound: false, arena3d: true, weather: false, suddenDeath: false, press: false });
+    assert.deepEqual(DEFAULT_SETTINGS, { ruleset: "classic", timers: true, telemetry: true, glyphHelpOpen: false, animations: true, sound: false, arena3d: true, weather: false, suddenDeath: false, press: false, deck: true });
     assert.deepEqual(loadSettings(memory(), new URLSearchParams()), DEFAULT_SETTINGS);
 });
 
 test("saved settings are restored and unknown values fall back", () => {
     const storage = memory();
-    saveSettings(storage, { ruleset: "teeth", timers: false, telemetry: true, glyphHelpOpen: true, animations: false, sound: true, arena3d: true, weather: false, suddenDeath: false, press: false });
-    assert.deepEqual(loadSettings(storage, new URLSearchParams()), { ruleset: "teeth", timers: false, telemetry: true, glyphHelpOpen: true, animations: false, sound: true, arena3d: true, weather: false, suddenDeath: false, press: false });
+    saveSettings(storage, { ruleset: "teeth", timers: false, telemetry: true, glyphHelpOpen: true, animations: false, sound: true, arena3d: true, weather: false, suddenDeath: false, press: false, deck: true });
+    assert.deepEqual(loadSettings(storage, new URLSearchParams()), { ruleset: "teeth", timers: false, telemetry: true, glyphHelpOpen: true, animations: false, sound: true, arena3d: true, weather: false, suddenDeath: false, press: false, deck: true });
     storage.setItem("wyrd.settings", JSON.stringify({ ruleset: "lightning", timers: "maybe" }));
     assert.deepEqual(loadSettings(storage, new URLSearchParams()), DEFAULT_SETTINGS);
     storage.setItem("wyrd.settings", "not json");
@@ -24,10 +24,10 @@ test("saved settings are restored and unknown values fall back", () => {
 
 test("URL parameters override storage for this visit only", () => {
     const storage = memory();
-    saveSettings(storage, { ruleset: "teeth", timers: true, telemetry: true, glyphHelpOpen: false, animations: true, sound: false, arena3d: true, weather: false, suddenDeath: false, press: false });
+    saveSettings(storage, { ruleset: "teeth", timers: true, telemetry: true, glyphHelpOpen: false, animations: true, sound: false, arena3d: true, weather: false, suddenDeath: false, press: false, deck: true });
     const fromUrl = loadSettings(storage, new URLSearchParams("rules=resolve&timers=off&telemetry=off&animations=off&sound=on"));
-    assert.deepEqual(fromUrl, { ruleset: "resolve", timers: false, telemetry: false, glyphHelpOpen: false, animations: false, sound: true, arena3d: true, weather: false, suddenDeath: false, press: false });
-    assert.deepEqual(loadSettings(storage, new URLSearchParams()), { ruleset: "teeth", timers: true, telemetry: true, glyphHelpOpen: false, animations: true, sound: false, arena3d: true, weather: false, suddenDeath: false, press: false }, "storage untouched");
+    assert.deepEqual(fromUrl, { ruleset: "resolve", timers: false, telemetry: false, glyphHelpOpen: false, animations: false, sound: true, arena3d: true, weather: false, suddenDeath: false, press: false, deck: true });
+    assert.deepEqual(loadSettings(storage, new URLSearchParams()), { ruleset: "teeth", timers: true, telemetry: true, glyphHelpOpen: false, animations: true, sound: false, arena3d: true, weather: false, suddenDeath: false, press: false, deck: true }, "storage untouched");
     assert.equal(loadSettings(storage, new URLSearchParams("rules=bogus")).ruleset, "teeth", "an unknown rules= is ignored");
 });
 
@@ -35,4 +35,13 @@ test("a throwing storage never breaks settings", () => {
     const broken = { getItem: () => { throw new Error("denied"); }, setItem: () => { throw new Error("denied"); } };
     assert.deepEqual(loadSettings(broken, new URLSearchParams()), DEFAULT_SETTINGS);
     assert.doesNotThrow(() => saveSettings(broken, DEFAULT_SETTINGS));
+});
+
+test("the teaching deck is on by default, remembered off after the first match, and ?deck= pins it for a visit", () => {
+    assert.equal(DEFAULT_SETTINGS.deck, true);
+    const store = memory();
+    saveSettings(store, { ...DEFAULT_SETTINGS, deck: false });
+    assert.equal(loadSettings(store, new URLSearchParams()).deck, false, "the flip after the first match is remembered");
+    assert.equal(loadSettings(store, new URLSearchParams("deck=on")).deck, true);
+    assert.equal(loadSettings(memory(), new URLSearchParams("deck=off")).deck, false);
 });
