@@ -50,6 +50,7 @@ import type { Arena } from "./arena.js";
 import { PHASES, derivePhase, phaseTarget, type RoundPhase } from "./phase.js";
 import { modelFor, personaFor } from "./arenaMap.js";
 import { quipFor } from "../../../packages/wyrd-content/src/quips.js";
+import { renderSpellCards, renderTelegraphCards, spellCards, telegraphCards } from "./cards.js";
 import { playRitual, ritualCopy, type RitualHandle } from "./ritual.js";
 import { hiddenCount, revealSchedule, revealedSlots, scrySlot, type Reveal } from "./reveal.js";
 import { createSound, cueFor, extraCueFor, urgencyCue } from "./sound.js";
@@ -139,6 +140,14 @@ const statsStreak = byId<HTMLElement>("stats-streak");
 const opponentSeals = byId<HTMLElement>("opponent-seals");
 const roundNumber = byId<HTMLElement>("round-number");
 const telegraph = byId<HTMLElement>("telegraph");
+const telegraphCardsRoot = byId<HTMLElement>("telegraph-cards");
+const spellCardsRoot = byId<HTMLElement>("spell-cards");
+/** The telegraph strip: cards above, the text line as caption; the cards flip when a slot turns face-up. */
+function showTelegraph(slots: TelegraphSlot[] | undefined): void {
+    const text = slots ? formatTelegraph(slots) : "—";
+    if (telegraph.textContent !== text) telegraph.textContent = text;
+    renderTelegraphCards(telegraphCardsRoot, slots ? telegraphCards(slots) : []);
+}
 const matchStatus = byId<HTMLElement>("match-status");
 const spellPreview = byId<HTMLElement>("spell-preview");
 const focusCost = byId<HTMLElement>("focus-cost");
@@ -677,6 +686,11 @@ function renderValidation(): void {
     focusSpentFill.style.width = `${meter.spentPct}%`;
     focusPill.dataset.state = meter.state;
     spellPreview.textContent = formatSpell(playerSpell);
+    renderSpellCards(spellCardsRoot, spellCards(playerSpell, parsed, valid), index => {
+        if (roundResolved) return;
+        playerSpell = [...playerSpell.slice(0, index), ...playerSpell.slice(index + 1)];
+        render();
+    });
     diagnostic.classList.toggle("valid", valid);
 
     if (playerSpell.length < 2) {
@@ -742,8 +756,7 @@ function renderScoreboard(): void {
     const rulesNote = ` · ${ruleset.title}`;
     if (mode === "hotseat") {
         const shown = presentation(hotseat.phase);
-        telegraph.textContent =
-            shown.telegraphOf === "p2" || shown.telegraphOf === "p1" ? formatTelegraph(visibleTelegraph()) : "—";
+        showTelegraph(shown.telegraphOf === "p2" || shown.telegraphOf === "p1" ? visibleTelegraph() : undefined);
         scenarioNote.textContent = "Hot-seat · two players on this phone · seed " + matchSeedLabel + rulesNote;
         matchStatus.textContent = outcome.over
             ? `${outcome.winner === "player" ? "Player 1" : "Player 2"} wins the duel${outcome.reason === "resolve" ? " on Resolve" : ""}`
@@ -751,7 +764,7 @@ function renderScoreboard(): void {
         return;
     }
 
-    telegraph.textContent = formatTelegraph(visibleTelegraph());
+    showTelegraph(visibleTelegraph());
     scenarioNote.textContent = (plan.scenario
         ? "Scenario " + state.round + "/" + scenarios.length + " · " + plan.scenario.title + " · seed " + matchSeedLabel
         : `Opponent: ${personality.title} · seed ${matchSeedLabel} · some glyphs are hidden; infer the threat before reacting.`) + rulesNote;
@@ -1345,7 +1358,7 @@ function renderTimer(): void {
     if (showsReactions) {
         const seen = formatTelegraph(visibleTelegraph());
         if (telegraph.textContent !== seen) {
-            telegraph.textContent = seen;
+            showTelegraph(visibleTelegraph());
             reactionExplain.textContent = explainReaction(selectedReaction, visibleTelegraph(), state.rules, state.rules.reactionCosts ? reactor().focus : undefined);
             renderScry();
         }
