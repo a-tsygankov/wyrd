@@ -18,9 +18,24 @@ export type Settings = {
     sound: boolean;
     /** Render the duel in the Three.js arena instead of the SVG stage; on by default, `?stage=2d` opts out. */
     arena3d: boolean;
+    /** Playtest options (docs/duel-engagement-options.md §H, ideas doc §J), off by default: weather every third round, sudden death at 2-2, press the round. */
+    weather: boolean;
+    suddenDeath: boolean;
+    press: boolean;
 };
 
-export const DEFAULT_SETTINGS: Settings = { ruleset: "classic", timers: true, telemetry: true, glyphHelpOpen: false, animations: true, sound: false, arena3d: true };
+export const DEFAULT_SETTINGS: Settings = {
+    ruleset: "classic",
+    timers: true,
+    telemetry: true,
+    glyphHelpOpen: false,
+    animations: true,
+    sound: false,
+    arena3d: true,
+    weather: false,
+    suddenDeath: false,
+    press: false
+};
 
 type StorageLike = { getItem(key: string): string | null; setItem(key: string, value: string): void };
 
@@ -49,6 +64,9 @@ export function loadSettings(storage: StorageLike, params: URLSearchParams): Set
             if (typeof saved.animations === "boolean") settings.animations = saved.animations;
             if (typeof saved.sound === "boolean") settings.sound = saved.sound;
             if (typeof saved.arena3d === "boolean") settings.arena3d = saved.arena3d;
+            if (typeof saved.weather === "boolean") settings.weather = saved.weather;
+            if (typeof saved.suddenDeath === "boolean") settings.suddenDeath = saved.suddenDeath;
+            if (typeof saved.press === "boolean") settings.press = saved.press;
         }
     } catch {
         // Unreadable storage or corrupt JSON: defaults.
@@ -63,6 +81,12 @@ export function loadSettings(storage: StorageLike, params: URLSearchParams): Set
     if (animations !== undefined) settings.animations = animations;
     const sound = parseSwitch(params.get("sound"));
     if (sound !== undefined) settings.sound = sound;
+    const weather = parseSwitch(params.get("weather"));
+    if (weather !== undefined) settings.weather = weather;
+    const sudden = parseSwitch(params.get("sudden"));
+    if (sudden !== undefined) settings.suddenDeath = sudden;
+    const press = parseSwitch(params.get("press"));
+    if (press !== undefined) settings.press = press;
     const stage = params.get("stage");
     if (stage === "3d") settings.arena3d = true;
     if (stage === "2d") settings.arena3d = false;

@@ -58,6 +58,11 @@ export type Personality = {
     planWeights: Record<Plan, number>;
     /** Extra reaction scores. */
     reactionBias: Partial<Record<ReactionChoice, number>>;
+    /**
+     * Press the round (ideas doc §J): the share of rounds it presses when its
+     * own spell would score, and whether it ever retreats from a press.
+     */
+    stakes: { press: number; retreats: boolean };
 };
 
 export const PERSONALITIES: readonly Personality[] = [
@@ -70,7 +75,8 @@ export const PERSONALITIES: readonly Personality[] = [
         whim: 0.12,
         unpredictability: 0.15,
         planWeights: { strike: 3, shield: 1.5, gate: 2, trick: 1.5, probe: 1 },
-        reactionBias: {}
+        reactionBias: {},
+        stakes: { press: 0.2, retreats: true }
     },
     {
         id: "aggressor",
@@ -81,7 +87,8 @@ export const PERSONALITIES: readonly Personality[] = [
         whim: 0.1,
         unpredictability: 0.15,
         planWeights: { strike: 5, shield: 0.5, gate: 1.5, trick: 1, probe: 0.5 },
-        reactionBias: { none: 1.5, null: -1, reflect: -0.5, silence: -1 }
+        reactionBias: { none: 1.5, null: -1, reflect: -0.5, silence: -1 },
+        stakes: { press: 0.4, retreats: false },
     },
     {
         id: "warden",
@@ -92,7 +99,8 @@ export const PERSONALITIES: readonly Personality[] = [
         whim: 0.08,
         unpredictability: 0.2,
         planWeights: { strike: 1.5, shield: 4, gate: 1.5, trick: 0.5, probe: 1 },
-        reactionBias: { none: -1, reflect: 1, silence: 1.5 }
+        reactionBias: { none: -1, reflect: 1, silence: 1.5 },
+        stakes: { press: 0.1, retreats: true },
     },
     {
         id: "trickster",
@@ -103,7 +111,8 @@ export const PERSONALITIES: readonly Personality[] = [
         whim: 0.25,
         unpredictability: 0.3,
         planWeights: { strike: 1.5, shield: 1, gate: 1.5, trick: 4, probe: 1.5 },
-        reactionBias: { silence: 0.5 }
+        reactionBias: { silence: 0.5 },
+        stakes: { press: 0.35, retreats: false },
     },
     {
         id: "gatekeeper",
@@ -114,7 +123,8 @@ export const PERSONALITIES: readonly Personality[] = [
         whim: 0.1,
         unpredictability: 0.12,
         planWeights: { strike: 1.5, shield: 1, gate: 5, trick: 1, probe: 0.5 },
-        reactionBias: {}
+        reactionBias: {},
+        stakes: { press: 0.25, retreats: true },
     }
 ];
 
@@ -310,6 +320,50 @@ export function chooseBotSpellDetailed(pool: readonly LegalSpell[], view: BotVie
 
 export function chooseBotSpell(pool: readonly LegalSpell[], view: BotView, rng: Rng): string[] {
     return chooseBotSpellDetailed(pool, view, rng).tokens;
+}
+
+/** Would this spell score a seal on the board as it stands (a hostile SEEK or BIND, a gate spell in the direction the gate can move)? */
+function scoresNow(spell: LegalSpell, state: DuelState): boolean {
+    if ((spell.action === "seek" || spell.action === "bind") && spell.target === "enemy") return true;
+    const gate = state.gate ?? "open";
+    if (spell.action === "close") return gate === "open";
+    if (spell.action === "open") return gate === "closed";
+    return false;
+}
+
+/**
+ * Press the round (ideas doc §J): stake a double seal on a spell that would
+ * score. Personality sets the appetite; the board bends it - free when the
+ * opponent is at match point (a loss loses anyway), cautious when a double
+ * loss would hand them match point.
+ */
+export function botPresses(view: BotView, spell: readonly string[], rng: Rng): boolean {
+    const legal = classifySpell(spell);
+    if (!legal || !scoresNow(legal, view.state)) return false;
+    const personality = view.personality ?? BALANCED;
+    const me = view.state.players[view.botId].seals;
+    const them = view.state.players[opponentOf(view.botId)].seals;
+    let odds = personality.stakes.press;
+    if (them >= 2) odds *= 1.6;
+    else if (them === 1 && me === 0) odds *= 0.6;
+    if (me >= 2) odds *= 1.3;
+    return rng.next() < Math.min(0.9, odds);
+}
+
+/**
+ * Retreat from the opponent's press: concede one seal rather than play for
+ * two. Only when the bot's own spell cannot win the round, when the double
+ * would matter (it would put the opponent at match point or beyond) and when
+ * the conceded seal does not itself end the match. Aggressors and tricksters
+ * never retreat.
+ */
+export function botRetreats(view: BotView, spell: readonly string[]): boolean {
+    const personality = view.personality ?? BALANCED;
+    if (!personality.stakes.retreats) return false;
+    const legal = classifySpell(spell);
+    if (legal && scoresNow(legal, view.state)) return false;
+    const them = view.state.players[opponentOf(view.botId)].seals;
+    return them + 2 >= 3 && them + 1 < 3;
 }
 
 /**

@@ -100,6 +100,24 @@ describe("POST /api/telemetry", () => {
         expect(row).toEqual({ scries: 2 });
     });
 
+    it("stores the weather, sudden death and who pressed or retreated (0005), defaulting to none", async () => {
+        const plain = await post({ ...roundEvent, round: 50 });
+        expect(plain.status).toBe(202);
+        const staked = await post({ ...roundEvent, round: 51, weather: "hush", suddenDeath: true, pressedBy: "both", retreatedBy: null });
+        expect(staked.status).toBe(202);
+        const retreat = await post({ ...roundEvent, round: 52, pressedBy: "opponent", retreatedBy: "player" });
+        expect(retreat.status).toBe(202);
+        const rows = (await env.DB.prepare("SELECT weather, sudden_death, pressed_by, retreated_by FROM telemetry_events WHERE round IN (50, 51, 52) ORDER BY round").all<Record<string, unknown>>()).results;
+        expect(rows).toEqual([
+            { weather: null, sudden_death: 0, pressed_by: null, retreated_by: null },
+            { weather: "hush", sudden_death: 1, pressed_by: "both", retreated_by: null },
+            { weather: null, sudden_death: 0, pressed_by: "opponent", retreated_by: "player" }
+        ]);
+        expect((await post({ ...roundEvent, weather: "blizzard" })).status).toBe(400);
+        expect((await post({ ...roundEvent, pressedBy: "referee" })).status).toBe(400);
+        expect((await post({ ...roundEvent, suddenDeath: "yes" })).status).toBe(400);
+    });
+
     it("rejects malformed input without writing anything", async () => {
         const before = await count();
         expect((await post("nope")).status).toBe(400);

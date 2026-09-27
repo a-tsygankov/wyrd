@@ -73,6 +73,8 @@
             <div id="arena" class="arena hidden" aria-label="Duel arena"></div>
             <!-- Layout A: where you are in the round; a tap scrolls to that card. -->
             <ol id="phase-strip" class="phase-strip" aria-label="Round phases"></ol>
+            <!-- Weather rounds and sudden death (options doc §H): the card both mages see. -->
+            <div id="weather-banner" class="weather hidden" role="status" aria-live="polite"></div>
             <!-- The commit ritual (apps/web/src/ritual.ts): seals crack, spells reveal in initiative order. -->
             <div id="commit-ritual" class="commit-ritual hidden" aria-live="polite"></div>
             <svg id="stage" viewBox="0 0 360 170" role="img" aria-labelledby="stage-caption" preserveAspectRatio="xMidYMid meet">
@@ -222,6 +224,14 @@
             </div>
             <button id="scry" class="ghost-button scry hidden" type="button" title="Reveal one hidden glyph of the telegraph for 1 Focus">Scry · 1 Focus</button>
             <p id="reaction-explain" class="explain" aria-live="polite"></p>
+            <!-- Press the round (ideas doc §J), behind Settings → Rules; solo only. -->
+            <div id="stakes" class="stakes hidden">
+                <p id="stake-note" class="explain"></p>
+                <div class="stake-actions">
+                    <button id="press-round" class="ghost-button stake-button" type="button" aria-pressed="false">Press the round · seal ×2</button>
+                    <button id="retreat-round" class="ghost-button stake-button hidden" type="button" aria-pressed="false">Retreat · concede 1</button>
+                </div>
+            </div>
             <button id="resolve-round" class="cast-button" type="button" disabled>CAST ROUND</button>
         </section>
 
@@ -246,6 +256,19 @@
                 <legend class="label">Rules</legend>
                 <p class="muted settings-hint">Each ruleset adds to the one before it. Changing rules starts a new match.</p>
                 <div id="settings-rules" class="settings-rules" role="radiogroup" aria-label="Ruleset"></div>
+                <p class="muted settings-hint">Playtest options, off by default. They apply from the next round and work under any ruleset.</p>
+                <label class="settings-switch">
+                    <input id="settings-weather" type="checkbox">
+                    <span><strong>Weather rounds</strong><span class="settings-summary">Every third round draws a card both mages see, announced the round before: Storm, Hush, Ironbound or Open sky bends one rule for that round. <code>?weather=on</code></span></span>
+                </label>
+                <label class="settings-switch">
+                    <input id="settings-sudden" type="checkbox">
+                    <span><strong>Sudden death at 2–2</strong><span class="settings-summary">The deciding round dims the telegraph to medium, doubles reaction prices and goes to the first seal that lands. <code>?sudden=on</code></span></span>
+                </label>
+                <label class="settings-switch">
+                    <input id="settings-press" type="checkbox">
+                    <span><strong>Press the round</strong><span class="settings-summary">Solo only. Stake a double seal on a round before you cast; the opponent may press too, or retreat and concede one. <code>?press=on</code></span></span>
+                </label>
             </fieldset>
 
             <fieldset class="settings-group">

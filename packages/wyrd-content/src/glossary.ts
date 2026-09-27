@@ -93,7 +93,10 @@ const termEntries: GlossaryEntry[] = [
     { term: "Scenario", text: "The first nine rounds of a solo match are a teaching deck: each shows one interaction and, after the round, the answers that would have worked." },
     { term: "Opponent personality", text: "After the deck the computer opponent plays as one of five personalities (the Adept, the Aggressor, the Warden, the Trickster, the Gatekeeper), chosen from the match seed, with a plan each round; it never repeats its last three spells." },
     { term: "Seed", text: "The match seed decides the opponent's spells, reactions and telegraph order. Open the same ?seed= link to replay the same opponent and share a challenge." },
-    { term: "Hot-seat", text: "Two players on one phone: Player 2 composes, hands over, Player 1 reads and reacts and casts, hands back, Player 2 reacts, both spells resolve." }
+    { term: "Hot-seat", text: "Two players on one phone: Player 2 composes, hands over, Player 1 reads and reacts and casts, hands back, Player 2 reacts, both spells resolve." },
+    { term: "Weather", text: "A playtest option (Settings → Rules). Every third round draws a card both mages see, announced the round before, that bends one rule for that round only: Storm (AMPLIFY costs no Focus), Hush (SILENCE is free and strips the essence too, so any ward catches the spell), Ironbound (every ward has integrity 1), Open sky (no ward may be raised)." },
+    { term: "Sudden death", text: "A playtest option. At 2-2 the next round is sudden death: the opponent's telegraph drops to the medium preset, reactions cost double, and the first seal to land decides the duel. A round nobody scores is played again." },
+    { term: "Press the round", text: "A playtest option, solo only. Before you cast, press: this round's seal counts double for whoever wins it, so a press cuts both ways. If the opponent presses you may retreat instead, conceding one seal and playing the round at single stake. Both pressing makes the seal count four. Seals to win stay at 3." }
 ].map(e => ({ group: "terms" as const, ...e }));
 
 const controlEntries: GlossaryEntry[] = [
@@ -104,7 +107,8 @@ const controlEntries: GlossaryEntry[] = [
     { term: "Next round", text: "Refills Focus to 7 for both mages and deals the next telegraph." },
     { term: "Rematch", text: "Starts a new duel. With a ?seed= link the same opponent returns; otherwise a new seed is drawn." },
     { term: "Hot-seat", text: "Switches between the solo duel against the computer and two players on one phone." },
-    { term: "Settings", text: "Ruleset (Classic, Teeth, Pulse, Resolve), timers, telemetry, animations, sound, whether glyph help opens by default." },
+    { term: "Settings", text: "Ruleset (Classic, Teeth, Pulse, Resolve) and the playtest options (weather, sudden death, press the round), timers, telemetry, animations, sound, whether glyph help opens by default." },
+    { term: "Press / Retreat", text: "With the press option on, the two buttons above Cast: Press stakes a double seal on this round; Retreat, offered only when the opponent pressed, concedes one seal and keeps the round at single stake." },
     { term: "Stats", text: "Your rounds, seals, reactions and time to commit on this device, and everyone's per-ruleset summary." },
     { term: "Help", text: "This section: every glyph, reaction, term and button, under the rules you play." },
     { term: "Admin console", text: "Triple-tap the title (or ?admin=1) for hidden state, the opponent's spell, best-move advice with the resolver's reasons, and the client log." }

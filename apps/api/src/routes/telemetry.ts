@@ -13,6 +13,9 @@ const PRESETS = new Set(["high", "medium"]);
 const MODES = new Set(["solo", "hotseat"]);
 const RULES = new Set(["classic", "teeth", "pulse", "resolve"]);
 const END_REASONS = new Set(["seals", "resolve"]);
+const WEATHERS = new Set(["storm", "hush", "ironbound", "opensky"]);
+const PRESSERS = new Set(["player", "opponent", "both"]);
+const SIDES = new Set(["player", "opponent"]);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_BATCH = 20;
 const MAX_TEXT = 200;
@@ -40,6 +43,10 @@ export type TelemetryEvent = {
     rules: "classic" | "teeth" | "pulse" | "resolve";
     endReason: "seals" | "resolve" | null;
     scries: number;
+    weather: "storm" | "hush" | "ironbound" | "opensky" | null;
+    suddenDeath: boolean;
+    pressedBy: "player" | "opponent" | "both" | null;
+    retreatedBy: "player" | "opponent" | null;
 };
 
 type Raw = Record<string, unknown>;
@@ -79,6 +86,12 @@ function optSpell(v: unknown, field: string): string[] | null {
     return v as string[];
 }
 
+function optBool(v: unknown, field: string): boolean | null {
+    if (v === undefined || v === null) return null;
+    if (typeof v !== "boolean") throw new Error(`${field} must be a boolean`);
+    return v;
+}
+
 export function parseEvent(raw: unknown): TelemetryEvent {
     if (typeof raw !== "object" || raw === null || Array.isArray(raw)) throw new Error("event must be an object");
     const r = raw as Raw;
@@ -107,7 +120,11 @@ export function parseEvent(raw: unknown): TelemetryEvent {
         mode: optEnum<"solo" | "hotseat">(r.mode, "mode", MODES) ?? "solo",
         rules: optEnum<"classic" | "teeth" | "pulse" | "resolve">(r.rules, "rules", RULES) ?? "classic",
         endReason: optEnum<"seals" | "resolve">(r.endReason, "endReason", END_REASONS),
-        scries: r.scries === undefined ? 0 : int(r.scries, "scries", { max: 8 })
+        scries: r.scries === undefined ? 0 : int(r.scries, "scries", { max: 8 }),
+        weather: optEnum(r.weather, "weather", WEATHERS),
+        suddenDeath: optBool(r.suddenDeath, "suddenDeath") ?? false,
+        pressedBy: optEnum(r.pressedBy, "pressedBy", PRESSERS),
+        retreatedBy: optEnum(r.retreatedBy, "retreatedBy", SIDES)
     };
 }
 
@@ -118,7 +135,7 @@ export function parseBatch(body: unknown): TelemetryEvent[] {
 }
 
 const INSERT =
-    "INSERT INTO telemetry_events (id, ts, event, session_id, match_seed, round, scenario_id, telegraph_preset, telegraph, opponent_spell, player_spell, player_reaction, opponent_reaction, player_seals, opponent_seals, player_gained, opponent_gained, time_to_commit_ms, web_version, mode, rules, end_reason, scries) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    "INSERT INTO telemetry_events (id, ts, event, session_id, match_seed, round, scenario_id, telegraph_preset, telegraph, opponent_spell, player_spell, player_reaction, opponent_reaction, player_seals, opponent_seals, player_gained, opponent_gained, time_to_commit_ms, web_version, mode, rules, end_reason, scries, weather, sudden_death, pressed_by, retreated_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
 export const telemetryRouter = new Hono<{ Bindings: Bindings }>()
     .post("/", async c => {
@@ -163,7 +180,11 @@ export const telemetryRouter = new Hono<{ Bindings: Bindings }>()
                     e.mode,
                     e.rules,
                     e.endReason,
-                    e.scries
+                    e.scries,
+                    e.weather,
+                    e.suddenDeath ? 1 : 0,
+                    e.pressedBy,
+                    e.retreatedBy
                 )
             )
         );

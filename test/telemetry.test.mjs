@@ -29,7 +29,7 @@ test("getSessionId survives a storage that throws (private mode)", () => {
 });
 
 test("buildRoundEvent captures what the plan asks for and nothing personal", () => {
-    const event = buildRoundEvent({
+    const facts = {
         sessionId: "s",
         matchSeed: "smoke",
         webVersion: "0.0.4",
@@ -50,7 +50,8 @@ test("buildRoundEvent captures what the plan asks for and nothing personal", () 
         mode: "hotseat",
         rules: "teeth",
         scries: 1
-    });
+    };
+    const event = buildRoundEvent(facts);
     assert.deepEqual(event, {
         event: "round",
         sessionId: "s",
@@ -71,9 +72,18 @@ test("buildRoundEvent captures what the plan asks for and nothing personal", () 
         timeToCommitMs: 8400,
         mode: "hotseat",
         rules: "teeth",
-        scries: 1
+        scries: 1,
+        weather: null,
+        suddenDeath: false,
+        pressedBy: null,
+        retreatedBy: null
     });
     assert.ok(!("userAgent" in event) && !("ip" in event));
+    const staked = buildRoundEvent({ ...facts, weather: "storm", suddenDeath: true, pressedBy: "both", retreatedBy: undefined });
+    assert.equal(staked.weather, "storm");
+    assert.equal(staked.suddenDeath, true);
+    assert.equal(staked.pressedBy, "both");
+    assert.equal(staked.retreatedBy, null);
 });
 
 test("createTelemetry batches, flushes on demand and never throws when the network is down", async () => {

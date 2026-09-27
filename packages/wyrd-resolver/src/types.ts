@@ -63,6 +63,13 @@ export type GateState = "open" | "closed" | "broken";
  */
 export type GateWard = { ownerId: PlayerId; integrity?: number };
 
+/**
+ * A weather card (docs/duel-engagement-options.md §H): one rule flipped for
+ * one round, drawn every third round and announced the round before. The
+ * client sets it on the state; the resolver only reads it.
+ */
+export type WeatherId = "storm" | "hush" | "ironbound" | "opensky";
+
 export type DuelState = {
     round: number;
     activePlayerId: PlayerId;
@@ -70,6 +77,10 @@ export type DuelState = {
     rules: RuleOptions;
     gate: GateState;
     gateWard?: GateWard;
+    /** The weather in force this round, if any. */
+    weather?: WeatherId;
+    /** 2-2 under the sudden-death option: reactions cost double, the first seal decides. */
+    suddenDeath?: boolean;
 };
 
 export type ReactionGlyph = "null" | "reflect" | "silence";
