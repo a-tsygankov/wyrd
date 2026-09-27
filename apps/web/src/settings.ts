@@ -29,6 +29,8 @@ export type Settings = {
      * `?deck=on|off` pins it for a visit.
      */
     deck: boolean;
+    /** The arena's full graphics pass (bloom, soft shadows, embers); off keeps the geometry and skips the post-processing. `?fx=light|full`. */
+    arenaFx: boolean;
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -42,7 +44,8 @@ export const DEFAULT_SETTINGS: Settings = {
     weather: false,
     suddenDeath: false,
     press: false,
-    deck: true
+    deck: true,
+    arenaFx: true
 };
 
 type StorageLike = { getItem(key: string): string | null; setItem(key: string, value: string): void };
@@ -76,6 +79,7 @@ export function loadSettings(storage: StorageLike, params: URLSearchParams): Set
             if (typeof saved.suddenDeath === "boolean") settings.suddenDeath = saved.suddenDeath;
             if (typeof saved.press === "boolean") settings.press = saved.press;
             if (typeof saved.deck === "boolean") settings.deck = saved.deck;
+            if (typeof saved.arenaFx === "boolean") settings.arenaFx = saved.arenaFx;
         }
     } catch {
         // Unreadable storage or corrupt JSON: defaults.
@@ -98,6 +102,9 @@ export function loadSettings(storage: StorageLike, params: URLSearchParams): Set
     if (press !== undefined) settings.press = press;
     const deck = parseSwitch(params.get("deck"));
     if (deck !== undefined) settings.deck = deck;
+    const fx = params.get("fx");
+    if (fx === "light") settings.arenaFx = false;
+    if (fx === "full") settings.arenaFx = true;
     const stage = params.get("stage");
     if (stage === "3d") settings.arena3d = true;
     if (stage === "2d") settings.arena3d = false;

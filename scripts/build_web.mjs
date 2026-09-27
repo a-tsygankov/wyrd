@@ -31,6 +31,11 @@ mkdirSync(`${out}/vendor/three/addons/utils`, { recursive: true });
 for (const file of ["three.module.js", "three.core.js"]) cpSync(`${three}/build/${file}`, `${out}/vendor/three/${file}`);
 cpSync(`${three}/examples/jsm/loaders/GLTFLoader.js`, `${out}/vendor/three/addons/loaders/GLTFLoader.js`);
 for (const file of ["BufferGeometryUtils.js", "SkeletonUtils.js"]) cpSync(`${three}/examples/jsm/utils/${file}`, `${out}/vendor/three/addons/utils/${file}`);
+// The bloom chain for the arena's graphics pass (~76 KB): EffectComposer and its passes plus the shaders they import.
+mkdirSync(`${out}/vendor/three/addons/postprocessing`, { recursive: true });
+mkdirSync(`${out}/vendor/three/addons/shaders`, { recursive: true });
+for (const file of ["EffectComposer.js", "Pass.js", "MaskPass.js", "RenderPass.js", "ShaderPass.js", "UnrealBloomPass.js", "OutputPass.js"]) cpSync(`${three}/examples/jsm/postprocessing/${file}`, `${out}/vendor/three/addons/postprocessing/${file}`);
+for (const file of ["CopyShader.js", "LuminosityHighPassShader.js", "OutputShader.js"]) cpSync(`${three}/examples/jsm/shaders/${file}`, `${out}/vendor/three/addons/shaders/${file}`);
 cpSync(`${three}/LICENSE`, `${out}/vendor/three/LICENSE`);
 if (existsSync("apps/web/assets")) cpSync("apps/web/assets", `${out}/assets`, { recursive: true });
 

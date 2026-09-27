@@ -1,6 +1,11 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { ARENA_CLIPS, ARENA_MODELS, MARKS, NOTCHES, POSITIONS, boltArc, burstOffsets, clipFor, gateLean, isBodyPart, notchPosition, sealNotches, shardOffsets } from "./arenaMap.js";
+import { EMBER_COUNT, emberPosition, gateGlow, haloScale, idleSway, runeRing, shockwave, sparkOffsets, starPositions } from "./arenaFx.js";
 import { HIT_STOP_MS, decayTrauma, markFor, shakeOffset, traumaFor, type FloorMark } from "./juice.js";
 import { beatDuration, essenceColor, type Beat, type Side, type Stage, type StageHooks, type StageState } from "./stage.js";
 
@@ -10,6 +15,14 @@ import { beatDuration, essenceColor, type Beat, type Side, type Stage, type Stag
  * KayKit mages, a gate, hex wards, a bolt, an orb, floor marks; the trauma
  * dial shakes the camera. Same `Stage` interface, same beat timings, so
  * tap-to-skip and reduced motion behave identically. Text stays HTML.
+ *
+ * Graphics pass (docs/duel-3d-assets-and-ui.md §6 step 5, second round):
+ * soft shadows and filmic tone mapping, a star dome and drifting embers, a
+ * flagstone floor with rune rings, a portal veil in the gate with glowing
+ * runes on the pillars, additive halos and sparks on the bolt, shockwaves
+ * and soft scorch decals on impact, and a bloom pass when the device can
+ * afford it (`fx: "full"`); `fx: "light"` keeps the geometry and skips the
+ * post-processing, embers and shadows.
  */
 export type ArenaOptions = {
     /** Where the prepared GLBs live (see scripts/prepare_arena_assets.mjs). */
@@ -18,6 +31,8 @@ export type ArenaOptions = {
     hooks?: StageHooks;
     /** Model files per side; the opponent's can change per match (personality). */
     models: Record<Side, string>;
+    /** Effects level: full (bloom, shadows, embers) or light (geometry only). Default full. */
+    fx?: "full" | "light";
 };
 
 export type Arena = Stage & {
@@ -53,9 +68,15 @@ export function createArena(container: HTMLElement, options: ArenaOptions): Aren
     const dur = (ms: number): number => (motion.reduced() ? 1 : ms);
 
     // --- DOM: canvas, caption and flash overlays.
+    const full = (options.fx ?? "full") === "full";
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "low-power" });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.15;
+    renderer.shadowMap.enabled = full;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    container.dataset.fx = full ? "full" : "light";
     container.replaceChildren();
     container.append(renderer.domElement);
     const caption = document.createElement("div");
@@ -85,18 +106,154 @@ export function createArena(container: HTMLElement, options: ArenaOptions): Aren
     camera.position.copy(CAMERA_AT);
     camera.lookAt(LOOK_AT);
 
-    scene.add(new THREE.HemisphereLight(0xcbbfff, 0x241a3a, 1.1));
-    const key = new THREE.DirectionalLight(0xfff1e0, 1.6);
+    scene.fog = new THREE.FogExp2(0x120b1f, 0.04);
+    scene.add(new THREE.HemisphereLight(0xcbbfff, 0x241a3a, 0.9));
+    const key = new THREE.DirectionalLight(0xfff1e0, 1.7);
     key.position.set(3, 6, 5);
+    key.castShadow = full;
+    key.shadow.mapSize.set(1024, 1024);
+    key.shadow.camera.near = 1;
+    key.shadow.camera.far = 20;
+    key.shadow.camera.left = key.shadow.camera.bottom = -6;
+    key.shadow.camera.right = key.shadow.camera.top = 6;
+    key.shadow.bias = -0.0015;
+    key.shadow.radius = 4;
     scene.add(key);
-    const rim = new THREE.DirectionalLight(0x8a6bff, 0.6);
+    const rim = new THREE.DirectionalLight(0x8a6bff, 0.7);
     rim.position.set(-4, 3, -4);
     scene.add(rim);
 
-    // Floor: a dark disc with a faint ring where the mages stand.
-    const floor = new THREE.Mesh(new THREE.CircleGeometry(5.2, 48), new THREE.MeshStandardMaterial({ color: 0x1d1430, roughness: 0.95 }));
+    // The dome: a gradient sky with a scatter of stars, well outside the fog.
+    const dome = new THREE.Mesh(
+        new THREE.SphereGeometry(26, 32, 16),
+        new THREE.ShaderMaterial({
+            side: THREE.BackSide,
+            depthWrite: false,
+            uniforms: { uTop: { value: new THREE.Color(0x07040f) }, uHorizon: { value: new THREE.Color(0x2a1d4a) } },
+            vertexShader: "varying vec3 vPos; void main() { vPos = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
+            fragmentShader: "uniform vec3 uTop; uniform vec3 uHorizon; varying vec3 vPos; void main() { float h = clamp(vPos.y / 26.0, 0.0, 1.0); gl_FragColor = vec4(mix(uHorizon, uTop, pow(h, 0.6)), 1.0); }"
+        })
+    );
+    scene.add(dome);
+    const starGeometry = new THREE.BufferGeometry();
+    const starArray = new Float32Array(160 * 3);
+    starPositions(160).forEach((p, i) => starArray.set([p.x, p.y, p.z], i * 3));
+    starGeometry.setAttribute("position", new THREE.BufferAttribute(starArray, 3));
+    scene.add(new THREE.Points(starGeometry, new THREE.PointsMaterial({ color: 0xcfc4ff, size: 0.18, transparent: true, opacity: 0.8, depthWrite: false, fog: false })));
+
+    /** A canvas texture drawn once; sRGB, so colours match the CSS palette. */
+    function canvasTexture(size: number, draw: (ctx: CanvasRenderingContext2D) => void): THREE.CanvasTexture {
+        const canvas = document.createElement("canvas");
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext("2d");
+        if (ctx) draw(ctx);
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.colorSpace = THREE.SRGBColorSpace;
+        return texture;
+    }
+    /** A soft radial glow: white centre fading to transparent, tinted by the material's colour. */
+    const glowTexture = canvasTexture(128, ctx => {
+        const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+        g.addColorStop(0, "rgba(255,255,255,1)");
+        g.addColorStop(0.35, "rgba(255,255,255,0.55)");
+        g.addColorStop(1, "rgba(255,255,255,0)");
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, 128, 128);
+    });
+    const glowSprite = (color: number | string, scale: number, opacity = 0.9): THREE.Sprite => {
+        const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture, color, transparent: true, opacity, depthWrite: false, blending: THREE.AdditiveBlending }));
+        sprite.scale.setScalar(scale);
+        return sprite;
+    };
+
+    // Floor: flagstones with a worn arena circle, drawn once onto a canvas.
+    const floorTexture = canvasTexture(1024, ctx => {
+        ctx.fillStyle = "#241a3a";
+        ctx.fillRect(0, 0, 1024, 1024);
+        // Flagstones: an offset grid with a little jitter and darker grout.
+        for (let row = 0; row < 12; row++) {
+            for (let col = 0; col < 12; col++) {
+                const jitter = ((row * 31 + col * 17) % 7) / 7;
+                const x = col * 88 + (row % 2 ? 44 : 0) - 44;
+                const y = row * 88;
+                const shade = 46 + Math.floor(jitter * 22);
+                ctx.fillStyle = `rgb(${shade}, ${shade - 8}, ${shade + 30})`;
+                ctx.fillRect(x + 3, y + 3, 82, 82);
+            }
+        }
+        // The arena circle: two rings and tick marks, faintly luminous.
+        ctx.strokeStyle = "rgba(173, 99, 255, 0.35)";
+        ctx.lineWidth = 6;
+        ctx.beginPath();
+        ctx.arc(512, 512, 470, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(512, 512, 300, 0, Math.PI * 2);
+        ctx.stroke();
+        for (let i = 0; i < 24; i++) {
+            const a = (i / 24) * Math.PI * 2;
+            ctx.beginPath();
+            ctx.moveTo(512 + Math.cos(a) * 455, 512 + Math.sin(a) * 455);
+            ctx.lineTo(512 + Math.cos(a) * 485, 512 + Math.sin(a) * 485);
+            ctx.stroke();
+        }
+        // A vignette so the edge sinks into the fog.
+        const v = ctx.createRadialGradient(512, 512, 200, 512, 512, 520);
+        v.addColorStop(0, "rgba(10, 6, 18, 0)");
+        v.addColorStop(1, "rgba(10, 6, 18, 0.85)");
+        ctx.fillStyle = v;
+        ctx.fillRect(0, 0, 1024, 1024);
+    });
+    const floor = new THREE.Mesh(new THREE.CircleGeometry(5.2, 64), new THREE.MeshStandardMaterial({ map: floorTexture, color: 0xffffff, roughness: 0.9, metalness: 0.05 }));
     floor.rotation.x = -Math.PI / 2;
+    floor.receiveShadow = true;
     scene.add(floor);
+
+    // Rune rings: small glowing slivers around each mage's mark (persona tint)
+    // and a wider ring around the gate.
+    const runeMaterials: Record<Side, THREE.MeshBasicMaterial> = {
+        player: new THREE.MeshBasicMaterial({ color: 0xad63ff, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false }),
+        opponent: new THREE.MeshBasicMaterial({ color: 0xff7a3d, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false })
+    };
+    const runeGeometry = new THREE.BoxGeometry(0.05, 0.012, 0.16);
+    for (const side of SIDES) {
+        for (const r of runeRing(12, 0.86)) {
+            const rune = new THREE.Mesh(runeGeometry, runeMaterials[side]);
+            rune.position.set(POSITIONS[side].x + r.x, 0.012, POSITIONS[side].z + r.z);
+            rune.rotation.y = -r.angle;
+            scene.add(rune);
+        }
+    }
+    const gateRuneMaterial = new THREE.MeshBasicMaterial({ color: 0x8a6bff, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false });
+    for (const r of runeRing(20, 1.55)) {
+        const rune = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.012, 0.2), gateRuneMaterial);
+        rune.position.set(r.x, 0.012, r.z);
+        rune.rotation.y = -r.angle;
+        scene.add(rune);
+    }
+
+    // Embers drifting through the volume (full effects only): additive points with per-ember glow.
+    const emberGeometry = new THREE.BufferGeometry();
+    const emberArray = new Float32Array(EMBER_COUNT * 3);
+    const emberColors = new Float32Array(EMBER_COUNT * 3);
+    emberGeometry.setAttribute("position", new THREE.BufferAttribute(emberArray, 3));
+    emberGeometry.setAttribute("color", new THREE.BufferAttribute(emberColors, 3));
+    const embers = new THREE.Points(emberGeometry, new THREE.PointsMaterial({ map: glowTexture, size: 0.09, vertexColors: true, transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending }));
+    embers.visible = full;
+    scene.add(embers);
+    const emberTint = new THREE.Color(0xffb46b);
+    function placeEmbers(t: number): void {
+        for (let i = 0; i < EMBER_COUNT; i++) {
+            const e = emberPosition(i, t);
+            emberArray.set([e.x, e.y, e.z], i * 3);
+            emberColors.set([emberTint.r * e.glow, emberTint.g * e.glow, emberTint.b * e.glow], i * 3);
+        }
+        (emberGeometry.getAttribute("position") as THREE.BufferAttribute).needsUpdate = true;
+        (emberGeometry.getAttribute("color") as THREE.BufferAttribute).needsUpdate = true;
+    }
+    placeEmbers(0);
     // The ring under each mage takes its persona's tint; the gold torus is the
     // priority rim of the mage who resolves first this round.
     const rings: Record<Side, THREE.Mesh> = { player: new THREE.Mesh(), opponent: new THREE.Mesh() };
@@ -145,21 +302,62 @@ export function createArena(container: HTMLElement, options: ArenaOptions): Aren
 
     // The gate: two pillars, a lintel, a slab that drops when closed.
     const gate = new THREE.Group();
-    const stone = new THREE.MeshStandardMaterial({ color: 0x3a2f55, roughness: 0.8 });
+    const stone = new THREE.MeshStandardMaterial({ color: 0x3a2f55, roughness: 0.85, metalness: 0.05 });
+    // Rune strips on the pillars glow with the gate's state (gateGlow).
+    const gateRuneStrip = new THREE.MeshStandardMaterial({ color: 0x2a1a6a, emissive: 0xad63ff, emissiveIntensity: 0.5, roughness: 0.4 });
     for (const x of [-0.7, 0.7]) {
-        const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.28, 2.6, 0.28), stone);
+        const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.3, 2.6, 0.3), stone);
         pillar.position.set(x, 1.3, 0);
+        pillar.castShadow = full;
         gate.add(pillar);
+        const cap = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.14, 0.4), stone);
+        cap.position.set(x, 2.55, 0);
+        gate.add(cap);
+        for (const y of [0.6, 1.1, 1.6, 2.1]) {
+            const strip = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.2, 0.02), gateRuneStrip);
+            strip.position.set(x, y, 0.16);
+            gate.add(strip);
+        }
     }
-    const lintel = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.26, 0.3), stone);
+    const lintel = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.28, 0.34), stone);
     lintel.position.set(0, 2.72, 0);
+    lintel.castShadow = full;
     gate.add(lintel);
-    const slabMaterial = new THREE.MeshStandardMaterial({ color: 0x5b3fd1, emissive: 0x2a1a6a, transparent: true, opacity: 0.3, roughness: 0.4 });
-    const slab = new THREE.Mesh(new THREE.BoxGeometry(1.14, 2.4, 0.12), slabMaterial);
+    // Shards keep the old solid look; the slab itself is a portal veil: a
+    // swirl of noise in the gate's violet, dense when closed, a shimmer when open.
+    const slabMaterial = new THREE.MeshStandardMaterial({ color: 0x5b3fd1, emissive: 0x2a1a6a, transparent: true, opacity: 0.9, roughness: 0.4 });
+    const VEIL_FRAGMENT = `
+        uniform float uTime; uniform float uDensity; uniform vec3 uColor;
+        varying vec2 vUv;
+        float n(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+        float noise(vec2 p) {
+            vec2 i = floor(p); vec2 f = fract(p); vec2 u = f * f * (3.0 - 2.0 * f);
+            return mix(mix(n(i), n(i + vec2(1.0, 0.0)), u.x), mix(n(i + vec2(0.0, 1.0)), n(i + vec2(1.0, 1.0)), u.x), u.y);
+        }
+        void main() {
+            vec2 p = vUv * vec2(3.0, 6.0);
+            float swirl = noise(p + vec2(uTime * 0.25, -uTime * 0.4)) * 0.6 + noise(p * 2.3 - vec2(0.0, uTime * 0.7)) * 0.4;
+            float edge = smoothstep(0.0, 0.12, vUv.x) * smoothstep(1.0, 0.88, vUv.x) * smoothstep(0.0, 0.08, vUv.y);
+            float alpha = uDensity * (0.35 + 0.65 * swirl) * edge;
+            vec3 color = mix(uColor, vec3(0.95, 0.9, 1.0), pow(swirl, 3.0) * 0.8);
+            gl_FragColor = vec4(color, clamp(alpha, 0.0, 0.96));
+        }`;
+    const veilMaterial = new THREE.ShaderMaterial({
+        uniforms: { uTime: { value: 0 }, uDensity: { value: 0.35 }, uColor: { value: new THREE.Color(0x6a46e6) } },
+        vertexShader: "varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
+        fragmentShader: VEIL_FRAGMENT,
+        transparent: true,
+        depthWrite: false,
+        side: THREE.DoubleSide
+    });
+    const slab = new THREE.Mesh(new THREE.PlaneGeometry(1.14, 2.4), veilMaterial);
     slab.position.set(0, 1.3, 0);
     gate.add(slab);
     const keystone = new THREE.Mesh(new THREE.SphereGeometry(0.09, 12, 12), new THREE.MeshBasicMaterial({ color: 0xf4f0ff }));
     keystone.position.set(0, 2.15, 0.2);
+    keystone.add(glowSprite(0xc3aeff, 0.45, 0.4));
+    const keystoneLight = new THREE.PointLight(0xad63ff, 1.0, 5, 1.5);
+    keystone.add(keystoneLight);
     gate.add(keystone);
     scene.add(gate);
 
@@ -221,6 +419,16 @@ export function createArena(container: HTMLElement, options: ArenaOptions): Aren
     gateWard.position.set(0, 1.55, 0);
     gateWard.visible = false;
     scene.add(gateWard);
+    // A luminous ring on the floor under each standing ward, in its colour.
+    const wardRings: Record<Side, THREE.Mesh> = { player: new THREE.Mesh(), opponent: new THREE.Mesh() };
+    for (const side of SIDES) {
+        const ring = new THREE.Mesh(new THREE.RingGeometry(0.9, 1.02, 48), new THREE.MeshBasicMaterial({ color: 0xf4f0ff, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false }));
+        ring.rotation.x = -Math.PI / 2;
+        ring.position.set(POSITIONS[side].x, 0.015, POSITIONS[side].z);
+        ring.visible = false;
+        scene.add(ring);
+        wardRings[side] = ring;
+    }
 
     // Chains (BOUND): two rings around the mage.
     const chains: Record<Side, THREE.Group> = { player: new THREE.Group(), opponent: new THREE.Group() };
@@ -238,14 +446,56 @@ export function createArena(container: HTMLElement, options: ArenaOptions): Aren
 
     // Bolt, orb, floor marks.
     const boltMaterial = new THREE.MeshBasicMaterial({ color: 0xff7a3d });
-    const bolt = new THREE.Mesh(new THREE.SphereGeometry(0.14, 16, 16), boltMaterial);
-    const boltLight = new THREE.PointLight(0xff7a3d, 6, 6);
+    const bolt = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 16), boltMaterial);
+    const boltLight = new THREE.PointLight(0xff7a3d, 8, 7, 1.6);
     bolt.add(boltLight);
+    const boltHalo = glowSprite(0xff7a3d, 1.0, 0.95);
+    bolt.add(boltHalo);
     bolt.visible = false;
     scene.add(bolt);
-    const orb = new THREE.Mesh(new THREE.SphereGeometry(0.16, 16, 16), new THREE.MeshBasicMaterial({ color: 0xf4f0ff }));
+    // Sparks shed behind the bolt in flight.
+    const sparkGeometry = new THREE.BufferGeometry();
+    const sparkArray = new Float32Array(14 * 3);
+    sparkGeometry.setAttribute("position", new THREE.BufferAttribute(sparkArray, 3));
+    const sparkMaterial = new THREE.PointsMaterial({ map: glowTexture, color: 0xff7a3d, size: 0.14, transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending });
+    const sparks = new THREE.Points(sparkGeometry, sparkMaterial);
+    sparks.visible = false;
+    scene.add(sparks);
+    // The impact: a shockwave ring facing the camera and a brief light.
+    const shockMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false });
+    const shock = new THREE.Mesh(new THREE.RingGeometry(0.82, 1, 48), shockMaterial);
+    shock.visible = false;
+    scene.add(shock);
+    const impactLight = new THREE.PointLight(0xffffff, 0, 6, 1.4);
+    scene.add(impactLight);
+    async function playShock(at: THREE.Vector3, color: string, ms: number): Promise<void> {
+        shockMaterial.color.set(color);
+        impactLight.color.set(color);
+        shock.position.copy(at);
+        impactLight.position.copy(at).add(new THREE.Vector3(0, 0.2, 0.6));
+        shock.visible = true;
+        await tween(ms, t => {
+            const w = shockwave(t);
+            shock.scale.setScalar(w.radius);
+            shockMaterial.opacity = w.opacity;
+            impactLight.intensity = 14 * (1 - t);
+        });
+        shock.visible = false;
+        impactLight.intensity = 0;
+    }
+    const orb = new THREE.Mesh(new THREE.SphereGeometry(0.14, 16, 16), new THREE.MeshBasicMaterial({ color: 0xf4f0ff }));
+    orb.add(glowSprite(0xf2c46b, 1.1, 0.9));
     orb.visible = false;
     scene.add(orb);
+    // Soft scorch decal for the floor marks (a radial fade instead of a hard disc).
+    const scorchTexture = canvasTexture(128, ctx => {
+        const g = ctx.createRadialGradient(64, 64, 4, 64, 64, 64);
+        g.addColorStop(0, "rgba(255,255,255,0.9)");
+        g.addColorStop(0.5, "rgba(255,255,255,0.35)");
+        g.addColorStop(1, "rgba(255,255,255,0)");
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, 128, 128);
+    });
     const marks = new THREE.Group();
     scene.add(marks);
 
@@ -285,6 +535,7 @@ export function createArena(container: HTMLElement, options: ArenaOptions): Aren
             // One file carries every weapon variant; show the body and the listed props only.
             const show = showOverride[side] ?? spec?.show ?? [];
             if (spec) mesh.visible = isBodyPart(mesh.name, spec) || show.includes(mesh.name);
+            mesh.castShadow = full;
             const material = mesh.material as THREE.MeshStandardMaterial;
             if (material && "emissive" in material) {
                 material.emissive = new THREE.Color(tint);
@@ -329,10 +580,28 @@ export function createArena(container: HTMLElement, options: ArenaOptions): Aren
     let trauma = 0;
     let frame = 0;
     let disposed = false;
+    // Bloom (full effects): the halos, runes and veil glow past their edges.
+    // The composer renders at the canvas size; the bloom pass works on a
+    // quarter-resolution chain, cheap enough for a phone.
+    let composer: EffectComposer | undefined;
+    let bloom: UnrealBloomPass | undefined;
+    if (full) {
+        try {
+            composer = new EffectComposer(renderer);
+            composer.addPass(new RenderPass(scene, camera));
+            bloom = new UnrealBloomPass(new THREE.Vector2(256, 128), 0.55, 0.6, 0.72);
+            composer.addPass(bloom);
+            composer.addPass(new OutputPass());
+        } catch {
+            composer = undefined;
+        }
+    }
     function resize(): void {
         const width = Math.max(1, container.clientWidth);
         const height = Math.round(width / ASPECT);
         renderer.setSize(width, height, false);
+        composer?.setSize(width, height);
+        bloom?.setSize(Math.round(width / 2), Math.round(height / 2));
         camera.aspect = width / height;
         camera.updateProjectionMatrix();
     }
@@ -345,19 +614,33 @@ export function createArena(container: HTMLElement, options: ArenaOptions): Aren
         frame = requestAnimationFrame(tick);
         const delta = clock.getDelta();
         const now = performance.now();
-        for (const material of hexMaterials) material.uniforms.uTime.value = now / 1000;
-        // The trail follows the bolt while it flies and fades when it stops.
+        const seconds = now / 1000;
+        for (const material of hexMaterials) material.uniforms.uTime.value = seconds;
+        veilMaterial.uniforms.uTime!.value = seconds;
+        const glow = gateGlow(gateState, seconds);
+        gateRuneStrip.emissiveIntensity = glow;
+        keystoneLight.intensity = 0.3 + glow * 0.6;
+        if (embers.visible && !motion.reduced()) placeEmbers(seconds);
+        // The trail follows the bolt while it flies and fades when it stops;
+        // sparks scatter behind it.
         if (bolt.visible) {
             trailHistory.unshift(bolt.position.clone());
             if (trailHistory.length > trail.length) trailHistory.length = trail.length;
-        } else if (trailHistory.length > 0) {
-            trailHistory.shift();
+            const dir: 1 | -1 = (trailHistory[1]?.x ?? bolt.position.x) <= bolt.position.x ? 1 : -1;
+            sparks.visible = true;
+            sparks.position.copy(bolt.position);
+            sparkMaterial.color.copy(boltMaterial.color);
+            sparkOffsets(14, seconds, dir).forEach((o, i) => sparkArray.set([o.x, o.y, o.z], i * 3));
+            (sparkGeometry.getAttribute("position") as THREE.BufferAttribute).needsUpdate = true;
+        } else {
+            sparks.visible = false;
+            if (trailHistory.length > 0) trailHistory.shift();
         }
         trail.forEach((ghost, i) => {
             const p = trailHistory[i];
             ghost.visible = p !== undefined;
             if (p) ghost.position.copy(p);
-            (ghost.material as THREE.MeshBasicMaterial).color.copy(boltMaterial.color);
+            (ghost.material as THREE.SpriteMaterial).color.copy(boltMaterial.color);
         });
         for (const side of SIDES) mages[side].mixer?.update(delta);
         for (let i = tweens.length - 1; i >= 0; i--) {
@@ -371,10 +654,12 @@ export function createArena(container: HTMLElement, options: ArenaOptions): Aren
         }
         trauma = decayTrauma(trauma, delta * 1000);
         const shake = shakeOffset(trauma, now);
-        camera.position.set(CAMERA_AT.x + shake.x * 0.03, CAMERA_AT.y + shake.y * 0.03, CAMERA_AT.z);
+        const sway = motion.reduced() ? { x: 0, y: 0 } : idleSway(seconds);
+        camera.position.set(CAMERA_AT.x + shake.x * 0.03 + sway.x, CAMERA_AT.y + shake.y * 0.03 + sway.y, CAMERA_AT.z);
         camera.lookAt(LOOK_AT);
         camera.rotation.z = (shake.rot * Math.PI) / 180;
-        renderer.render(scene, camera);
+        if (composer) composer.render();
+        else renderer.render(scene, camera);
     }
 
     let cameraPhase: keyof typeof POSES = "cast";
@@ -425,11 +710,13 @@ export function createArena(container: HTMLElement, options: ArenaOptions): Aren
     function drawWard(side: Side, ward: StageState["wards"][Side]): void {
         const mesh = wards[side];
         mesh.visible = ward !== undefined;
+        wardRings[side].visible = ward !== undefined;
         if (!ward) return;
         const material = mesh.material as HexMaterial;
         material.uniforms.uColor.value.set(essenceColor(ward.essence));
         material.uniforms.uOpacity.value = ward.integrity === 1 ? 0.22 : 0.35;
         material.uniforms.uCrack.value = ward.integrity === 1 ? 1 : 0;
+        (wardRings[side].material as THREE.MeshBasicMaterial).color.set(essenceColor(ward.essence));
     }
     function drawGateWard(ward: StageState["gateWard"]): void {
         gateWard.visible = ward !== undefined;
@@ -478,9 +765,9 @@ export function createArena(container: HTMLElement, options: ArenaOptions): Aren
     }
 
     // --- Bolt trail, impact bursts, gate shards.
-    const trail: THREE.Mesh[] = [];
+    const trail: THREE.Sprite[] = [];
     for (let i = 0; i < 8; i++) {
-        const ghost = new THREE.Mesh(new THREE.SphereGeometry(0.11 - i * 0.01, 10, 10), new THREE.MeshBasicMaterial({ color: 0xff7a3d, transparent: true, opacity: 0.35 - i * 0.04, depthWrite: false }));
+        const ghost = glowSprite(0xff7a3d, 0.75 - i * 0.07, 0.5 - i * 0.055);
         ghost.visible = false;
         scene.add(ghost);
         trail.push(ghost);
@@ -488,7 +775,7 @@ export function createArena(container: HTMLElement, options: ArenaOptions): Aren
     const trailHistory: THREE.Vector3[] = [];
     const burstGeometry = new THREE.BufferGeometry();
     burstGeometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(16 * 3), 3));
-    const burstMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 0.09, transparent: true, opacity: 0.9, depthWrite: false });
+    const burstMaterial = new THREE.PointsMaterial({ map: glowTexture, color: 0xffffff, size: 0.16, transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending });
     const burst = new THREE.Points(burstGeometry, burstMaterial);
     burst.visible = false;
     scene.add(burst);
@@ -523,21 +810,24 @@ export function createArena(container: HTMLElement, options: ArenaOptions): Aren
         });
     }
     let shardsOut = false;
+    let gateState: StageState["gate"] = "open";
     function showShards(out: boolean): void {
         shardsOut = out;
         for (const shard of shards) shard.visible = out;
         if (out) placeShards(1);
     }
     function drawGate(state: StageState["gate"]): void {
+        gateState = state;
         slab.position.y = state === "closed" ? 1.3 : 3.55;
-        slabMaterial.opacity = state === "closed" ? 0.92 : state === "broken" ? 0.06 : 0.3;
+        slab.visible = state === "closed";
+        veilMaterial.uniforms.uDensity!.value = state === "closed" ? 0.95 : 0;
         gate.rotation.z = state === "broken" ? 0.08 : 0;
         keystone.visible = state !== "broken";
     }
     function addMark(mark: FloorMark): void {
         const own = marks.children.filter(m => m.userData.side === mark.side);
         if (own.length >= 8) own[0]?.removeFromParent();
-        const disc = new THREE.Mesh(new THREE.CircleGeometry(0.32, 20), new THREE.MeshBasicMaterial({ color: essenceColor(mark.essence), transparent: true, opacity: 0.32, depthWrite: false }));
+        const disc = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.9), new THREE.MeshBasicMaterial({ map: scorchTexture, color: essenceColor(mark.essence), transparent: true, opacity: 0.45, depthWrite: false, blending: THREE.AdditiveBlending }));
         disc.rotation.x = -Math.PI / 2;
         const jitter = ((own.length * 7919) % 17) / 17 - 0.5;
         disc.position.set(MARKS[mark.side].x + jitter * 0.9, 0.01 + own.length * 0.001, MARKS[mark.side].z + jitter * 0.4);
@@ -554,7 +844,6 @@ export function createArena(container: HTMLElement, options: ArenaOptions): Aren
         }
         drawGate(state.gate);
         showShards(state.gate === "broken");
-        slab.visible = state.gate !== "broken";
         drawGateWard(state.gateWard);
         bolt.visible = false;
         orb.visible = false;
@@ -566,6 +855,8 @@ export function createArena(container: HTMLElement, options: ArenaOptions): Aren
         const color = new THREE.Color(essenceColor(essence));
         boltMaterial.color.copy(color);
         boltLight.color.copy(color);
+        (boltHalo.material as THREE.SpriteMaterial).color.copy(color);
+        boltHalo.scale.setScalar(haloScale(magnitude));
         bolt.scale.setScalar(0.7 + magnitude * 0.35);
         bolt.visible = true;
         await tween(ms, t => {
@@ -612,6 +903,7 @@ export function createArena(container: HTMLElement, options: ArenaOptions): Aren
                 say(beat.broken ? "WARD SHATTERS" : "WARDED");
                 bolt.visible = false;
                 void playBurst(new THREE.Vector3(POSITIONS[beat.side].x + (beat.side === "player" ? 0.9 : -0.9), 1.3, 0), essenceColor(essence), ms);
+                void playShock(new THREE.Vector3(POSITIONS[beat.side].x + (beat.side === "player" ? 0.95 : -0.95), 1.3, 0), essenceColor(essence), ms);
                 if (beat.broken) {
                     await tween(ms, t => {
                         wards[beat.side].scale.setScalar(1 + t * 0.5);
@@ -648,17 +940,25 @@ export function createArena(container: HTMLElement, options: ArenaOptions): Aren
                 return tween(ms, t => chains[beat.side].scale.setScalar(1.6 - 0.6 * t));
             case "gate-close":
                 say("GATE CLOSED");
-                await tween(ms, t => (slab.position.y = 3.55 - 2.25 * t));
+                slab.visible = true;
+                await tween(ms, t => {
+                    slab.position.y = 3.55 - 2.25 * t;
+                    veilMaterial.uniforms.uDensity!.value = 0.2 + 0.75 * t;
+                });
                 drawGate("closed");
                 return;
             case "gate-open":
                 say("GATE OPENED");
-                await tween(ms, t => (slab.position.y = 1.3 + 2.25 * t));
+                await tween(ms, t => {
+                    slab.position.y = 1.3 + 2.25 * t;
+                    veilMaterial.uniforms.uDensity!.value = 0.95 * (1 - t);
+                });
                 drawGate("open");
                 return;
             case "gate-break": {
                 say("GATE SHATTERS");
                 pulseFlash(0.2, ms);
+                void playShock(new THREE.Vector3(0, 1.4, 0.3), "#c3aeff", ms);
                 // The slab breaks into shards that fall and scatter; they stay while the gate is broken.
                 slab.visible = false;
                 showShards(true);
@@ -677,7 +977,6 @@ export function createArena(container: HTMLElement, options: ArenaOptions): Aren
                 // The shards fly home and the slab is whole again.
                 if (shardsOut) await tween(ms, t => placeShards(1 - t));
                 showShards(false);
-                slab.visible = true;
                 drawGate("open");
                 return;
             case "gate-ward-up":
@@ -705,6 +1004,7 @@ export function createArena(container: HTMLElement, options: ArenaOptions): Aren
                 bolt.visible = false;
                 pulseFlash(0.35, ms);
                 void playBurst(new THREE.Vector3(POSITIONS[beat.side].x, 1.25, 0.2), essenceColor(essence), ms);
+                void playShock(new THREE.Vector3(POSITIONS[beat.side].x, 1.25, 0.3), essenceColor(essence), ms);
                 const root = mages[beat.side].root;
                 const kick = (beat.side === "player" ? -1 : 1) * (beat.magnitude >= 2 ? 0.35 : 0.22);
                 await tween(ms, t => (root.position.x = POSITIONS[beat.side].x + Math.sin(Math.PI * t) * kick));
@@ -757,6 +1057,7 @@ export function createArena(container: HTMLElement, options: ArenaOptions): Aren
         showOverride[side] = persona.show;
         container.dataset[side === "player" ? "personaPlayer" : "personaOpponent"] = persona.title;
         (rings[side].material as THREE.MeshBasicMaterial).color.set(persona.tint);
+        runeMaterials[side].color.set(persona.tint);
         const material = plates[side].material as THREE.SpriteMaterial;
         material.map?.dispose();
         material.map = labelTexture(persona.title, persona.tint);
@@ -772,6 +1073,7 @@ export function createArena(container: HTMLElement, options: ArenaOptions): Aren
         disposed = true;
         cancelAnimationFrame(frame);
         observer?.disconnect();
+        composer?.dispose();
         renderer.dispose();
         container.replaceChildren();
     }

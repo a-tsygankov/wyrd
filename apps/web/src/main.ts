@@ -130,6 +130,7 @@ const settingsTimersNote = byId<HTMLElement>("settings-timers-note");
 const settingsHelp = byId<HTMLInputElement>("settings-help");
 const settingsAnimations = byId<HTMLInputElement>("settings-animations");
 const settingsArena3d = byId<HTMLInputElement>("settings-arena3d");
+const settingsArenaFx = byId<HTMLInputElement>("settings-arena-fx");
 const settingsSound = byId<HTMLInputElement>("settings-sound");
 const settingsTelemetry = byId<HTMLInputElement>("settings-telemetry");
 const settingsWeather = byId<HTMLInputElement>("settings-weather");
@@ -327,12 +328,19 @@ async function mountStage(): Promise<void> {
         try {
             const module = await import("./arena.js");
             if (!module.supportsWebGL()) throw new Error("WebGL unavailable");
+            const fx = settings.arenaFx ? "full" : "light";
+            if (arena && arenaRoot.dataset.fx !== fx) {
+                // The effects level is fixed at creation (shadow maps, the composer): rebuild.
+                arena.dispose();
+                arena = undefined;
+            }
             if (!arena) {
                 // Sound and the last-beat marker come from the SVG stage's hooks, which keeps playing hidden.
                 arena = module.createArena(arenaRoot, {
                     assetBase: "./assets/arena/",
                     motion,
-                    models: { player: modelFor("player"), opponent: modelFor("opponent", personality?.id) }
+                    models: { player: modelFor("player"), opponent: modelFor("opponent", personality?.id) },
+                    fx
                 });
                 await arena.ready;
             }
@@ -1564,6 +1572,9 @@ function renderSettings(): void {
     settingsHelp.checked = settings.glyphHelpOpen;
     settingsAnimations.checked = settings.animations;
     settingsArena3d.checked = settings.arena3d;
+    settingsArenaFx.checked = settings.arenaFx;
+    settingsArenaFx.disabled = !settings.arena3d;
+    settingsArenaFx.closest("label")?.classList.toggle("disabled", !settings.arena3d);
     settingsSound.checked = settings.sound;
     settingsWeather.checked = settings.weather;
     settingsSudden.checked = settings.suddenDeath;
@@ -1614,6 +1625,12 @@ settingsArena3d.addEventListener("change", () => {
     settings = { ...settings, arena3d: settingsArena3d.checked };
     saveSettings(deviceStorage, settings);
     log.info(`3D arena: ${settings.arena3d ? "on" : "off"}`);
+    void mountStage().then(() => renderSettings());
+});
+settingsArenaFx.addEventListener("change", () => {
+    settings = { ...settings, arenaFx: settingsArenaFx.checked };
+    saveSettings(deviceStorage, settings);
+    log.info(`arena effects: ${settings.arenaFx ? "full" : "light"}`);
     void mountStage().then(() => renderSettings());
 });
 settingsDeck.addEventListener("change", () => {
