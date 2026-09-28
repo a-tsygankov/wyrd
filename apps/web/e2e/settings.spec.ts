@@ -3,6 +3,8 @@ import { expect, test } from "@playwright/test";
 // Settings (one of four rulesets, timers, telemetry) and the Stats panel.
 
 test("the settings panel switches rulesets and the Focus budget follows", async ({ page }) => {
+    // Forty steps and a reload: on a slow CI runner the reload alone ran past the default budget.
+    test.slow();
     await page.goto("/?game=word&seed=smoke");
     await expect(page.locator("#settings")).toBeHidden();
     await page.locator("#settings-toggle").click();
