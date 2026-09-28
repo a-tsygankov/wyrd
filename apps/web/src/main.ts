@@ -51,6 +51,7 @@ import { loadSettings, saveSettings, type ArcadeMode, type Game, type Settings }
 import { createVolleyMode, type VolleyMode } from "./volleyMode.js";
 import { createQuickdrawMode, type QuickdrawMode } from "./quickdrawMode.js";
 import { fullscreenApi } from "./fullscreen.js";
+import { updateAvailable } from "./update.js";
 import { loadStats, recordMatchEnd, recordRematch, recordRound, saveStats, summarize, type Stats } from "./stats.js";
 import { QUICK_CAST_MS, REACTION_WINDOW_MS, timerState } from "./timers.js";
 import { buildTimeline, createStage, type Contribution, type Stage, type StageHooks, type StageState } from "./stage.js";
@@ -1966,6 +1967,57 @@ if ("serviceWorker" in navigator) {
 } else {
     log.warn("service workers unsupported: no offline shell");
 }
+
+// --- Update check (update.ts): an installed PWA can run one build for days.
+// Compare the page's stamped version with the live version.json on load,
+// on return to the foreground and every few minutes; a newer deploy gets a
+// banner with Reload. Never reload on our own: the player may be mid-game.
+const UPDATE_CHECK_MS = 5 * 60 * 1000;
+const updateBanner = byId<HTMLElement>("update-banner");
+const updateText = byId<HTMLElement>("update-text");
+const updateReload = byId<HTMLButtonElement>("update-reload");
+let dismissedVersion: string | undefined;
+let offeredVersion: string | undefined;
+
+async function checkForUpdate(): Promise<void> {
+    let served: string | undefined;
+    try {
+        const response = await fetch("./version.json", { cache: "no-store", headers: { accept: "application/json" } });
+        if (!response.ok) return;
+        served = ((await response.json()) as { web?: string }).web;
+    } catch {
+        return; // offline or a non-JSON answer: nothing to offer
+    }
+    if (!updateAvailable(WEB_VERSION, served) || served === dismissedVersion) return;
+    offeredVersion = served;
+    updateText.textContent = `A new version is available (web v${served}).`;
+    if (updateBanner.classList.contains("hidden")) log.info("update available", { running: WEB_VERSION, served });
+    updateBanner.classList.remove("hidden");
+}
+
+updateReload.addEventListener("click", async () => {
+    updateReload.disabled = true;
+    // Let the service worker fetch the new build first (it skips waiting on
+    // install), but never let a slow update hold the reload for long.
+    try {
+        const registration = await navigator.serviceWorker?.getRegistration();
+        await Promise.race([registration?.update(), new Promise(resolve => setTimeout(resolve, 3000))]);
+    } catch {
+        /* the reload itself fetches the page network-first */
+    }
+    location.reload();
+});
+byId<HTMLButtonElement>("update-dismiss").addEventListener("click", () => {
+    // Later: quiet until an even newer version appears.
+    dismissedVersion = offeredVersion;
+    updateBanner.classList.add("hidden");
+});
+document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") void checkForUpdate();
+});
+window.addEventListener("online", () => void checkForUpdate());
+window.setInterval(() => void checkForUpdate(), UPDATE_CHECK_MS);
+void checkForUpdate();
 
 // Install coaching (policy in install.ts, tested in node). The banner is
 // decoration for the product commitment "installable on iPhone and
