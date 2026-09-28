@@ -14,7 +14,8 @@ test("the arcade volley is the default game and the word duel's cards stay hidde
     await expect(page.locator("#mode-toggle")).toBeHidden();
     await expect(page.locator("#volley-hearts-player i.lit")).toHaveCount(5);
     await expect(page.locator("#volley-focus-player i.lit")).toHaveCount(7);
-    // The serve is in the air toward the player.
+    // Nothing flies until Start; then the serve is in the air toward the player.
+    await page.locator("#volley-start").click();
     await expect(page.locator("#volley")).toHaveAttribute("data-phase", "flight", { timeout: 5_000 });
     await expect(page.locator("#volley")).toHaveAttribute("data-owner", "opponent");
     await expect(page.locator("#stage-bolt")).toHaveAttribute("opacity", "1");
@@ -39,6 +40,7 @@ test("?game=word shows the word duel, and Settings switches between the two game
 test("a return inside the window sends the bolt back faster and refills Focus; a miss costs a heart", async ({ page }) => {
     await page.goto("/?seed=smoke&stage=2d&tempo=slow");
     const volley = page.locator("#volley");
+    await page.locator("#volley-start").click();
     await expect(volley).toHaveAttribute("data-phase", "flight", { timeout: 5_000 });
     // Spend two Focus on a ward first so the refill is visible, then drop the ward by swiping? No: keep it simple - the return refills to the cap, so read the speed instead.
     await expect(volley).toHaveAttribute("data-window", "open", { timeout: 10_000 });
@@ -55,6 +57,7 @@ test("a ward in a colour the bolt cannot beat blocks it, costs two Focus, and ha
     // The opponent serves fire; the player's default colour is shadow, which fire does not beat.
     await page.goto("/?seed=smoke&stage=2d&tempo=slow");
     const volley = page.locator("#volley");
+    await page.locator("#volley-start").click();
     await expect(volley).toHaveAttribute("data-phase", "flight", { timeout: 5_000 });
     await expect(volley).toHaveAttribute("data-essence", "fire");
     await page.locator("#volley-ward").click();

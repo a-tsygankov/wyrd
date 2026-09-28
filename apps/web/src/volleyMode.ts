@@ -8,6 +8,8 @@ import { ESSENCES, FOCUS, HEARTS, SMASH_COST, WARD_COST, act, botActions, create
  * and pads, the bot's decisions, and the live bolt on whichever renderer is
  * mounted (`Stage.live`). Input arrives from the pads and from gestures on
  * the stage: tap returns, a swipe picks a colour, a long press wards.
+ * The clock waits on the Start button: mounting the mode (start) shows the
+ * card, begin() sets the first serve going, reset() returns to Start.
  */
 export type VolleyDeps = {
     root: HTMLElement;
@@ -22,6 +24,7 @@ export type VolleyDeps = {
 
 export type VolleyMode = {
     start(): void;
+    begin(): void;
     stop(): void;
     reset(): void;
     act(action: Action): void;
@@ -50,11 +53,14 @@ export function createVolleyMode(deps: VolleyDeps): VolleyMode {
     const wardButton = q<HTMLButtonElement>("#volley-ward");
     const smashButton = q<HTMLButtonElement>("#volley-smash");
     const rematch = q<HTMLButtonElement>("#volley-rematch");
+    const startButton = q<HTMLButtonElement>("#volley-start");
     const verdict = q<HTMLElement>("#volley-verdict");
 
     let state: VolleyState = createVolley("opponent");
     let frame = 0;
     let running = false;
+    // Mounted is not playing: the serve waits for the player to press Start.
+    let begun = false;
     let botDecided = false;
     let lastSpeech = "";
     const tempo = Math.max(1, deps.tempo ?? 1);
@@ -94,7 +100,8 @@ export function createVolleyMode(deps: VolleyDeps): VolleyMode {
             root.dataset[side === "player" ? "heartsPlayer" : "heartsOpponent"] = String(state.hearts[side]);
             root.dataset[side === "player" ? "focusPlayer" : "focusOpponent"] = String(state.focus[side]);
         }
-        root.dataset.phase = state.phase;
+        root.dataset.phase = begun ? state.phase : "ready";
+        startButton.classList.toggle("hidden", begun);
         root.dataset.server = state.server;
         const bolt = state.bolt;
         root.dataset.speed = bolt ? String(bolt.speed) : "0";
@@ -106,7 +113,7 @@ export function createVolleyMode(deps: VolleyDeps): VolleyMode {
         for (const pad of pads) {
             const essence = pad.dataset.essence as Essence;
             pad.classList.toggle("selected", state.colour.player === essence);
-            pad.disabled = !receiving && state.phase !== "pause" && state.phase !== "serve";
+            pad.disabled = !begun || (!receiving && state.phase !== "pause" && state.phase !== "serve");
         }
         returnButton.disabled = !receiving;
         wardButton.disabled = !receiving || state.wards.player !== undefined || state.focus.player < WARD_COST;
@@ -172,6 +179,10 @@ export function createVolleyMode(deps: VolleyDeps): VolleyMode {
     function step(): void {
         if (!running) return;
         frame = requestAnimationFrame(step);
+        if (!begun) {
+            render();
+            return;
+        }
         const t = now();
         const before = state;
         const { state: next, events } = tick(state, t);
@@ -201,7 +212,7 @@ export function createVolleyMode(deps: VolleyDeps): VolleyMode {
     }
 
     function playerAct(action: Action): void {
-        if (!running) return;
+        if (!running || !begun) return;
         const r = act(state, "player", action, now());
         state = r.state;
         if (r.events.length > 0) play(r.events);
@@ -213,12 +224,16 @@ export function createVolleyMode(deps: VolleyDeps): VolleyMode {
     returnButton.addEventListener("click", () => playerAct({ kind: "tap" }));
     wardButton.addEventListener("click", () => playerAct({ kind: "ward" }));
     smashButton.addEventListener("click", () => playerAct({ kind: "smash" }));
-    rematch.addEventListener("click", () => reset());
+    rematch.addEventListener("click", () => {
+        reset();
+        begin();
+    });
+    startButton.addEventListener("click", () => begin());
 
     // Gestures on the stage: tap = return, swipe = colour, long press = ward.
     let pointer: { x: number; y: number; at: number; timer: number } | undefined;
     function onDown(e: PointerEvent): void {
-        if (!running) return;
+        if (!running || !begun) return;
         const timer = window.setTimeout(() => {
             if (pointer) {
                 pointer = undefined;
@@ -256,6 +271,11 @@ export function createVolleyMode(deps: VolleyDeps): VolleyMode {
         root.classList.remove("hidden");
         deps.stage().setIdle(stageState());
         deps.stage().setPhase?.("resolve");
+        if (!begun) {
+            // A remount may be a new renderer: its caption has not heard this yet.
+            lastSpeech = "";
+            say("Press Start");
+        }
         frame = requestAnimationFrame(step);
         render();
     }
@@ -267,16 +287,26 @@ export function createVolleyMode(deps: VolleyDeps): VolleyMode {
         deps.stage().live?.window("opponent", false);
         root.classList.add("hidden");
     }
+    function begin(): void {
+        if (begun) return;
+        // A fresh volley so the serve is timed from this press, not from mount.
+        state = createVolley("opponent", { player: state.colour.player });
+        begun = true;
+        say("");
+        render();
+    }
     function reset(): void {
         state = createVolley("opponent", { player: state.colour.player });
+        begun = false;
         botDecided = false;
         lastSpeech = "";
-        say("");
+        say("Press Start");
+        deps.stage().live?.bolt(undefined);
         deps.stage().setIdle(stageState());
         render();
     }
 
-    return { start, stop, reset, act: playerAct, state: () => state, running: () => running };
+    return { start, begin, stop, reset, act: playerAct, state: () => state, running: () => running };
 }
 
 export { ESSENCES, windowMs };

@@ -7,7 +7,9 @@ import type { Essence } from "./volley.js";
  * Quickdraw on the page (docs/arcade-duel-ideas.md §1 C): the ring, the two
  * orbs as telegraphs, the pads, Charge (hold) and Ward, the bot's plan
  * applied across the ring, and the clash replayed through the stage's beat
- * timeline so both renderers play their full effects.
+ * timeline so both renderers play their full effects. The first ring waits
+ * on the Start button: start() mounts the card, begin() opens round one,
+ * reset() returns to Start.
  */
 export type QuickdrawDeps = {
     root: HTMLElement;
@@ -21,6 +23,7 @@ export type QuickdrawDeps = {
 
 export type QuickdrawMode = {
     start(): void;
+    begin(): void;
     stop(): void;
     reset(): void;
     state(): QuickdrawState;
@@ -51,11 +54,14 @@ export function createQuickdrawMode(deps: QuickdrawDeps): QuickdrawMode {
     const chargeButton = q<HTMLButtonElement>("#quickdraw-charge");
     const wardButton = q<HTMLButtonElement>("#quickdraw-ward");
     const rematch = q<HTMLButtonElement>("#quickdraw-rematch");
+    const startButton = q<HTMLButtonElement>("#quickdraw-start");
     const verdict = q<HTMLElement>("#quickdraw-verdict");
 
     let state: QuickdrawState = createQuickdraw();
     let frame = 0;
     let running = false;
+    // Mounted is not playing: the first ring waits for the player to press Start.
+    let begun = false;
     let replaying = false;
     let schedule: Schedule | undefined;
     let lastSpeech = "";
@@ -107,13 +113,14 @@ export function createQuickdrawMode(deps: QuickdrawDeps): QuickdrawMode {
             root.dataset[side === "player" ? "essencePlayer" : "essenceOpponent"] = shown?.essence ?? (draw?.ward ? "ward" : "");
             root.dataset[side === "player" ? "chargePlayer" : "chargeOpponent"] = shown ? String(shown.magnitude) : "0";
         }
-        root.dataset.phase = state.phase;
+        root.dataset.phase = begun ? state.phase : "ready";
+        startButton.classList.toggle("hidden", begun);
         root.dataset.round = String(state.round.number);
         const ring = ringProgress(state, t);
         root.dataset.ring = String(Math.round(ring * 100));
         ringFill.style.width = `${Math.round((1 - ring) * 100)}%`;
         root.dataset.quickWindow = state.phase === "draw" && t - state.round.startedAt < 1000 ? "open" : "closed";
-        roundLabel.textContent = state.phase === "draw" ? `round ${state.round.number} · ${(Math.max(0, RING_MS - (t - state.round.startedAt)) / 1000).toFixed(1)} s` : state.phase === "over" ? "" : `round ${state.round.number}`;
+        roundLabel.textContent = !begun ? "" : state.phase === "draw" ? `round ${state.round.number} · ${(Math.max(0, RING_MS - (t - state.round.startedAt)) / 1000).toFixed(1)} s` : state.phase === "over" ? "" : `round ${state.round.number}`;
         const drawing = state.phase === "draw" && !replaying;
         const mine = state.round.draws.player;
         for (const pad of pads) {
@@ -230,6 +237,10 @@ export function createQuickdrawMode(deps: QuickdrawDeps): QuickdrawMode {
     function step(): void {
         if (!running) return;
         frame = requestAnimationFrame(step);
+        if (!begun) {
+            render();
+            return;
+        }
         const t = now();
         if (!replaying) {
             const before = state;
@@ -273,12 +284,16 @@ export function createQuickdrawMode(deps: QuickdrawDeps): QuickdrawMode {
     });
     for (const type of ["pointerup", "pointercancel", "pointerleave"] as const) chargeButton.addEventListener(type, playerRelease);
     wardButton.addEventListener("click", playerWard);
-    rematch.addEventListener("click", () => reset());
+    rematch.addEventListener("click", () => {
+        reset();
+        begin();
+    });
+    startButton.addEventListener("click", () => begin());
 
     // Gestures on the stage: swipe picks a colour; press and hold charges.
     let pointer: { x: number; y: number; timer: number; holding: boolean } | undefined;
     function onDown(e: PointerEvent): void {
-        if (!running) return;
+        if (!running || !begun) return;
         const timer = window.setTimeout(() => {
             if (pointer) {
                 pointer.holding = true;
@@ -320,6 +335,11 @@ export function createQuickdrawMode(deps: QuickdrawDeps): QuickdrawMode {
         root.classList.remove("hidden");
         deps.stage().setIdle(stageState());
         deps.stage().setPhase?.("cast");
+        if (!begun) {
+            // A remount may be a new renderer: its caption has not heard this yet.
+            lastSpeech = "";
+            say("Press Start");
+        }
         frame = requestAnimationFrame(step);
         render();
     }
@@ -330,15 +350,24 @@ export function createQuickdrawMode(deps: QuickdrawDeps): QuickdrawMode {
         for (const side of ["player", "opponent"] as const) deps.stage().live?.orb(side, undefined);
         root.classList.add("hidden");
     }
+    function begin(): void {
+        if (begun) return;
+        // A fresh match so the first ring is timed from this press, not from mount.
+        state = createQuickdraw({ player: state.colour.player });
+        begun = true;
+        say("");
+        render();
+    }
     function reset(): void {
         state = createQuickdraw({ player: state.colour.player });
+        begun = false;
         schedule = undefined;
         replaying = false;
         lastSpeech = "";
-        say("");
+        say("Press Start");
         deps.stage().setIdle(stageState());
         render();
     }
 
-    return { start, stop, reset, state: () => state, running: () => running };
+    return { start, begin, stop, reset, state: () => state, running: () => running };
 }

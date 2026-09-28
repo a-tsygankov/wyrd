@@ -50,6 +50,7 @@ import { buildRoundEvent, createTelemetry, getSessionId } from "./telemetry.js";
 import { loadSettings, saveSettings, type ArcadeMode, type Game, type Settings } from "./settings.js";
 import { createVolleyMode, type VolleyMode } from "./volleyMode.js";
 import { createQuickdrawMode, type QuickdrawMode } from "./quickdrawMode.js";
+import { fullscreenApi } from "./fullscreen.js";
 import { loadStats, recordMatchEnd, recordRematch, recordRound, saveStats, summarize, type Stats } from "./stats.js";
 import { QUICK_CAST_MS, REACTION_WINDOW_MS, timerState } from "./timers.js";
 import { buildTimeline, createStage, type Contribution, type Stage, type StageHooks, type StageState } from "./stage.js";
@@ -138,6 +139,7 @@ const settingsGameWord = byId<HTMLInputElement>("settings-game-word");
 const settingsArcadeQuickdraw = byId<HTMLInputElement>("settings-arcade-quickdraw");
 const volleyRoot = byId<HTMLElement>("volley");
 const quickdrawRoot = byId<HTMLElement>("quickdraw");
+const fullscreenToggle = byId<HTMLButtonElement>("fullscreen-toggle");
 const settingsSound = byId<HTMLInputElement>("settings-sound");
 const settingsTelemetry = byId<HTMLInputElement>("settings-telemetry");
 const settingsWeather = byId<HTMLInputElement>("settings-weather");
@@ -438,11 +440,29 @@ function applyGame(): void {
     } else {
         volley?.stop();
         quickdraw?.stop();
+        setImmersive(false);
         stage.setPhase?.(currentPhase ?? "read");
         stage.setIdle(stageState());
         log.info("game: word duel");
     }
     render();
+}
+
+// --- Fullscreen (arcade only): the immersive layout always, real fullscreen where the API exists.
+const fullscreen = fullscreenApi(document, document.documentElement);
+function setImmersive(on: boolean): void {
+    if (on) document.body.dataset.fullscreen = "1";
+    else delete document.body.dataset.fullscreen;
+    fullscreenToggle.setAttribute("aria-pressed", String(on));
+    fullscreenToggle.title = on ? "Exit fullscreen" : "Fullscreen";
+    void (on ? fullscreen.enter() : fullscreen.exit());
+}
+fullscreenToggle.addEventListener("click", () => setImmersive(document.body.dataset.fullscreen !== "1"));
+// Leaving real fullscreen from the browser (Esc, the back gesture) leaves the immersive layout too.
+for (const type of ["fullscreenchange", "webkitfullscreenchange"]) {
+    document.addEventListener(type, () => {
+        if (!fullscreen.active() && document.body.dataset.fullscreen === "1") setImmersive(false);
+    });
 }
 
 function applyGameSetting(game: Game, arcadeMode: ArcadeMode = settings.arcadeMode): void {
