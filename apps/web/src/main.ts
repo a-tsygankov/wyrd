@@ -64,7 +64,7 @@ import { playRitual, ritualCopy, type RitualHandle } from "./ritual.js";
 import { hiddenCount, revealSchedule, revealedSlots, scrySlot, type Reveal } from "./reveal.js";
 import { createSound, cueFor, extraCueFor, urgencyCue } from "./sound.js";
 import { focusMeter } from "./meter.js";
-import { GLOSSARY_GROUPS, glossaryFor } from "../../../packages/wyrd-content/src/glossary.js";
+import { glossaryFor, glossaryGroupsFor } from "../../../packages/wyrd-content/src/glossary.js";
 import { glyphRegistryByDisplayName } from "../../../packages/wyrd-content/src/glyphs.js";
 import {
     ROUND_FOCUS,
@@ -1907,12 +1907,16 @@ statsToggle.addEventListener("click", () => {
 });
 byId<HTMLButtonElement>("stats-close").addEventListener("click", () => statsPanel.classList.add("hidden"));
 
-// --- Help: the glossary, grouped, under the ruleset in force.
+// --- Help: the glossary, grouped, under the ruleset in force; the game being played leads.
 function renderHelp(): void {
-    helpRules.textContent = `Explained for the ${ruleset.title} rules. Change the ruleset in Settings and this text follows.`;
+    helpRules.textContent =
+        settings.game === "arcade"
+            ? `You are playing the arcade (${settings.arcadeMode === "quickdraw" ? "Quickdraw" : "Volley"}): its games come first. The word duel's glyphs and terms follow, explained for the ${ruleset.title} rules.`
+            : `Explained for the ${ruleset.title} rules. Change the ruleset in Settings and this text follows.`;
     const entries = glossaryFor(state.rules);
+    const groups = glossaryGroupsFor(settings.game);
     helpNav.replaceChildren(
-        ...GLOSSARY_GROUPS.map(group => {
+        ...groups.map(group => {
             const a = document.createElement("a");
             a.href = `#help-${group.id}`;
             a.textContent = group.title;
@@ -1920,7 +1924,7 @@ function renderHelp(): void {
         })
     );
     helpBody.replaceChildren(
-        ...GLOSSARY_GROUPS.map(group => {
+        ...groups.map(group => {
             const section = document.createElement("section");
             section.className = "help-group";
             section.id = `help-${group.id}`;
