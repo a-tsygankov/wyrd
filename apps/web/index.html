@@ -466,6 +466,15 @@
 
         <!-- Install coaching. Hidden until main.ts decides which hint applies
              (iOS Safari has no prompt API; Android/desktop Chromium offer one). -->
+        <!-- A newer deploy is live (apps/web/src/update.ts): offer a reload, never force one mid-game. -->
+        <aside id="update-banner" class="update-banner hidden" role="status" aria-live="polite">
+            <span id="update-text">A new version is available.</span>
+            <div class="install-actions">
+                <button id="update-reload" class="install-button" type="button">Reload</button>
+                <button id="update-dismiss" class="ghost-button" type="button">Later</button>
+            </div>
+        </aside>
+
         <aside id="install-banner" class="install-banner hidden" role="status">
             <span id="install-text"></span>
             <div class="install-actions">

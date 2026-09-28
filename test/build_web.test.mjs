@@ -19,6 +19,15 @@ test("build_web stamps the web version into index.html and sw.js", () => {
     assert.ok(!sw.includes("__WEB_VERSION__"), "placeholder left in sw.js");
 });
 
+test("build_web writes version.json for the client's update check", () => {
+    // The installed app polls this file (never cached by the service worker)
+    // and offers a reload when it names a newer web version than the page.
+    const served = JSON.parse(readFileSync("apps/web/dist/version.json", "utf8"));
+    assert.equal(served.web, version);
+    const sw = readFileSync("apps/web/dist/sw.js", "utf8");
+    assert.ok(sw.includes("/version.json"), "sw.js must bypass the cache for version.json");
+});
+
 test("build_web ships every compiled client module, not a hand-kept list", () => {
     // A module missing from dist is served as the HTML fallback by Pages and
     // the whole client fails to load (juice.js and meter.js, 2026-09-26).

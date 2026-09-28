@@ -31,8 +31,10 @@ self.addEventListener("fetch", event => {
     if (request.method !== "GET") return;
     const url = new URL(request.url);
     // /api/* is proxied to the worker and must always be live: versions,
-    // telemetry and (later) duel rooms are never served from cache.
-    if (url.origin !== self.location.origin || url.pathname.startsWith("/api/")) return;
+    // telemetry and (later) duel rooms are never served from cache. The same
+    // for /version.json: a cached copy would hide every update from the
+    // update check (apps/web/src/update.ts).
+    if (url.origin !== self.location.origin || url.pathname.startsWith("/api/") || url.pathname === "/version.json") return;
 
     if (request.mode === "navigate") {
         // Network first for the page itself so a deploy shows up on the

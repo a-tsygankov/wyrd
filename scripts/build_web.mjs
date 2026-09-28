@@ -16,6 +16,9 @@ mkdirSync(`${out}/apps/web/src`, { recursive: true });
 const stamp = file => readFileSync(file, "utf8").replaceAll("__WEB_VERSION__", webVersion);
 writeFileSync(`${out}/index.html`, stamp("apps/web/index.html"));
 writeFileSync(`${out}/sw.js`, stamp("apps/web/sw.js"));
+// The live version for the installed app's update check (apps/web/src/update.ts):
+// the page compares its own stamped version against this file.
+writeFileSync(`${out}/version.json`, JSON.stringify({ web: webVersion }) + "\n");
 cpSync("apps/web/style.css", `${out}/style.css`);
 cpSync("apps/web/manifest.webmanifest", `${out}/manifest.webmanifest`);
 cpSync("apps/web/icons", `${out}/icons`, { recursive: true });

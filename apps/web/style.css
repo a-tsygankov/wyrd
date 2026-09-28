@@ -376,6 +376,29 @@ body[data-fullscreen="1"] .stage svg { max-height: 56vh; }
 
 .install-actions { display: flex; gap: 8px; }
 
+/* The update banner floats at the top so it is seen in the arcade and in its
+   immersive layout too; it only offers the reload, the player picks the moment. */
+.update-banner {
+    position: fixed;
+    top: max(8px, env(safe-area-inset-top));
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 30;
+    width: min(calc(100% - 16px), 520px);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 14px;
+    border: 1px solid rgba(255, 196, 87, 0.55);
+    border-radius: 14px;
+    background: rgba(24, 14, 40, 0.96);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    color: #f4f0ff;
+    font-size: 0.88rem;
+}
+
 .install-button {
     min-height: 40px;
     padding: 0 16px;
