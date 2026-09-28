@@ -3,14 +3,16 @@ import { expect, test } from "@playwright/test";
 // Settings (one of four rulesets, timers, telemetry) and the Stats panel.
 
 test("the settings panel switches rulesets and the Focus budget follows", async ({ page }) => {
-    await page.goto("/?seed=smoke");
+    // Forty steps and a reload: on a slow CI runner the reload alone ran past the default budget.
+    test.slow();
+    await page.goto("/?game=word&seed=smoke");
     await expect(page.locator("#settings")).toBeHidden();
     await page.locator("#settings-toggle").click();
     await expect(page.locator("#settings")).toBeVisible();
     await expect(page.locator("#settings-rules .settings-option")).toHaveCount(4);
     await expect(page.locator("#settings-rules .settings-option.selected")).toContainText("Classic");
-    // Separate groups: Rules, Tempo, Privacy, Stage, Help; tempo is disabled for a ruleset without timers.
-    await expect(page.locator("#settings .settings-group")).toHaveCount(5);
+    // Separate groups: Game, Rules, Tempo, Privacy, Stage, Help; tempo is disabled for a ruleset without timers.
+    await expect(page.locator("#settings .settings-group")).toHaveCount(6);
     await expect(page.locator("#settings-rules .settings-option.selected li")).not.toHaveCount(0);
     await expect(page.locator("#settings-timers")).toBeDisabled();
     await expect(page.locator("#settings-timers-note")).toContainText("Classic has no timers");
@@ -59,7 +61,7 @@ test("the settings panel switches rulesets and the Focus budget follows", async 
 });
 
 test("the Resolve ruleset shows resolve bars and SEEK drains them", async ({ page }) => {
-    await page.goto("/?seed=smoke&rules=resolve&timers=off");
+    await page.goto("/?game=word&seed=smoke&rules=resolve&timers=off");
     await expect(page.locator("#player-resolve")).toBeVisible();
     await expect(page.locator("#player-resolve .resolve-text")).toHaveText("Resolve 10");
     await expect(page.locator("#scenario-note")).toContainText("Resolve");
@@ -75,18 +77,18 @@ test("the Resolve ruleset shows resolve bars and SEEK drains them", async ({ pag
 });
 
 test("timers are off in the teaching deck and on for the bot when the ruleset has them", async ({ page }) => {
-    await page.goto("/?seed=smoke&rules=pulse");
+    await page.goto("/?game=word&seed=smoke&rules=pulse");
     await expect(page.locator("#timer")).toBeHidden();
-    await page.goto("/?seed=smoke&rules=pulse&mode=hotseat");
+    await page.goto("/?game=word&seed=smoke&rules=pulse&mode=hotseat");
     await expect(page.locator("#timer")).toBeVisible();
     await expect(page.locator("#timer-text")).toContainText(/Quick cast/);
     await expect(page.locator("#resolve-round")).toHaveClass(/quick/);
-    await page.goto("/?seed=smoke&rules=pulse&mode=hotseat&timers=off");
+    await page.goto("/?game=word&seed=smoke&rules=pulse&mode=hotseat&timers=off");
     await expect(page.locator("#timer")).toBeHidden();
 });
 
 test("the stats panel shows this device's games and everyone's summary", async ({ page }) => {
-    await page.goto("/?seed=smoke&rules=teeth");
+    await page.goto("/?game=word&seed=smoke&rules=teeth");
     const tray = page.locator("#glyph-tray");
     for (const glyph of ["FIRE", "SEEK", "ENEMY"]) await tray.getByRole("button", { name: glyph, exact: true }).click();
     await page.locator("#resolve-round").click();

@@ -27,7 +27,7 @@ function pngSize(bytes: Uint8Array): { width: number; height: number } {
 }
 
 test("the manifest satisfies Chrome's install criteria", async ({ page, request }) => {
-    await page.goto("/");
+    await page.goto("/?game=word");
     const href = await page.locator('link[rel="manifest"]').getAttribute("href");
     expect(href).toBeTruthy();
     const manifestUrl = new URL(href!, page.url()).toString();
@@ -57,7 +57,7 @@ test("the manifest satisfies Chrome's install criteria", async ({ page, request 
 });
 
 test("iOS home-screen metadata is present", async ({ page, request }) => {
-    await page.goto("/");
+    await page.goto("/?game=word");
     await expect(page.locator('meta[name="apple-mobile-web-app-capable"]')).toHaveAttribute("content", "yes");
     await expect(page.locator('meta[name="apple-mobile-web-app-title"]')).toHaveAttribute("content", /.+/);
     await expect(page.locator('meta[name="apple-mobile-web-app-status-bar-style"]')).toHaveAttribute("content", /.+/);
@@ -70,7 +70,7 @@ test("iOS home-screen metadata is present", async ({ page, request }) => {
 });
 
 test("the install coach mark matches the platform", async ({ page, browserName }) => {
-    await page.goto("/");
+    await page.goto("/?game=word");
     const banner = page.locator("#install-banner");
     if (browserName === "webkit") {
         // iPhone Safari (not yet installed): manual Add-to-Home-Screen hint,

@@ -5,14 +5,14 @@ import { expect, test } from "@playwright/test";
 // product ships on. Read-only apart from the duel it plays client-side.
 
 test("the duel board loads with its version footer", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/?game=word");
     await expect(page).toHaveTitle("Wyrd Duel POC");
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     await expect(page.locator("#version-line")).toContainText(/web v\d+\.\d+\.\d+/);
 });
 
 test("a spell can be cast and scores a seal", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/?game=word");
     // Round 1 is the deck's teaching scenario on the high-information
     // telegraph: essence and action shown, target hidden.
     await expect(page.locator("#telegraph")).toHaveText("FIRE → SEEK → ?");
@@ -62,7 +62,7 @@ test("a full match through the scenario deck is won by reading the telegraph", a
     // A fixed seed pins the deck order (the opener, then the REFLECT lesson
     // for this seed), the telegraphs and the bot's rolls, so the walkthrough
     // below is deterministic.
-    await page.goto("/?seed=quill");
+    await page.goto("/?game=word&seed=quill");
     const tray = page.locator("#glyph-tray");
     const cast = async (glyphs: string[], reaction?: string) => {
         for (const glyph of glyphs) await tray.getByRole("button", { name: glyph, exact: true }).click();
@@ -116,7 +116,7 @@ test("a full match through the scenario deck is won by reading the telegraph", a
 });
 
 test("the service worker installs and the shell reloads offline", async ({ page, context, browserName }) => {
-    await page.goto("/");
+    await page.goto("/?game=word");
     const state = await page.evaluate(() =>
         "serviceWorker" in navigator
             ? Promise.race([

@@ -143,6 +143,35 @@ body[data-phase] .card.phase-target { box-shadow: 0 0 0 2px rgba(173, 99, 255, 0
 .weather[data-weather="ironbound"] strong { color: #c9d1dc; }
 .weather[data-weather="opensky"] strong { color: #7fd4ff; }
 
+/* Volley (arcade): the card under the stage; the word duel's cards hide while it plays. */
+body[data-game="arcade"] .scoreboard, body[data-game="arcade"] .opponent, body[data-game="arcade"] .composer, body[data-game="arcade"] .reaction, body[data-game="arcade"] .log,
+body[data-game="arcade"] #phase-strip, body[data-game="arcade"] .phase-hint, body[data-game="arcade"] #mode-toggle, body[data-game="arcade"] #commit-ritual { display: none !important; }
+.volley { display: grid; gap: 10px; }
+.volley-head { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: start; }
+.volley-side { display: grid; gap: 4px; }
+.volley-side.right { text-align: right; justify-items: end; }
+.volley-centre { display: grid; gap: 2px; text-align: center; min-width: 120px; }
+.volley-caption { font-weight: 800; letter-spacing: 0.04em; min-height: 1.3em; }
+.volley-speed { font-size: 0.78rem; }
+.pips { display: flex; gap: 4px; }
+.pips i { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: #3a2f55; }
+.pips.hearts i { width: 14px; height: 14px; }
+.pips.hearts i.lit { background: #ff5d7a; box-shadow: 0 0 8px rgba(255, 93, 122, 0.6); }
+.pips.focus-pips i { width: 8px; height: 8px; border-radius: 2px; }
+.pips.focus-pips i.lit { background: #ad63ff; }
+.volley-hint { font-size: 0.8rem; margin: 0; }
+.volley-pads { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.volley-pad { border: 2px solid var(--pad, #3a2f55); border-radius: 10px; padding: 10px 4px; background: rgba(255, 255, 255, 0.04); color: #f4f0ff; font-weight: 800; font-size: 0.78rem; letter-spacing: 0.04em; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.volley-pad.fire { --pad: #ff7a3d; } .volley-pad.water { --pad: #4fb3ff; } .volley-pad.shadow { --pad: #a56bff; } .volley-pad.life { --pad: #6ee7a8; }
+.volley-pad.selected { background: var(--pad); color: #140d22; }
+.volley-pad:disabled { opacity: 0.45; cursor: default; }
+.volley-actions { display: grid; grid-template-columns: 1fr 1.4fr 1fr; gap: 8px; align-items: stretch; }
+.volley-return { min-height: 52px; font-size: 1rem; }
+.volley-actions .ghost-button.selected { border-color: #ffc457; color: #ffc457; }
+.volley-verdict { margin: 0; font-weight: 800; color: #ffc457; }
+#volley[data-window="open"] .volley-return { box-shadow: 0 0 0 3px #ffc457, 0 0 18px rgba(255, 196, 87, 0.5); }
+#volley[data-phase="over"] .volley-pads, #volley[data-phase="over"] .volley-actions { display: none; }
+
 /* Press the round (ideas doc §J): the stake row above Cast. */
 .stakes { display: flex; flex-direction: column; gap: 6px; }
 .stake-actions { display: flex; gap: 8px; }

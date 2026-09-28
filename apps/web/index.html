@@ -163,6 +163,41 @@
             </svg>
         </section>
 
+        <!-- Volley (docs/arcade-duel-ideas.md §1 A): the arcade game, default. The
+             rules live in apps/web/src/volley.ts; this card is hearts, Focus and the thumb. -->
+        <section id="volley" class="volley card hidden" aria-label="Volley">
+            <div class="volley-head">
+                <div class="volley-side">
+                    <span id="volley-name-player" class="label">You</span>
+                    <div id="volley-hearts-player" class="pips hearts" role="img" aria-label="5 of 5"></div>
+                    <div id="volley-focus-player" class="pips focus-pips" role="img" aria-label="7 of 7"></div>
+                </div>
+                <div class="volley-centre">
+                    <span id="volley-caption" class="volley-caption" aria-live="polite"></span>
+                    <span id="volley-speed" class="muted volley-speed">…</span>
+                </div>
+                <div class="volley-side right">
+                    <span id="volley-name-opponent" class="label">Opponent</span>
+                    <div id="volley-hearts-opponent" class="pips hearts" role="img" aria-label="5 of 5"></div>
+                    <div id="volley-focus-opponent" class="pips focus-pips" role="img" aria-label="7 of 7"></div>
+                </div>
+            </div>
+            <p class="muted volley-hint">Tap the stage or Return when the gold ring shows. Swipe or tap a colour to return in it: the beating colour quenches, the same colour kindles. Hold for a ward.</p>
+            <div class="volley-pads" role="group" aria-label="Return colour">
+                <button class="volley-pad fire" data-essence="fire" type="button">▲ FIRE</button>
+                <button class="volley-pad water" data-essence="water" type="button">▶ WATER</button>
+                <button class="volley-pad shadow" data-essence="shadow" type="button">▼ SHADOW</button>
+                <button class="volley-pad life" data-essence="life" type="button">◀ LIFE</button>
+            </div>
+            <div class="volley-actions">
+                <button id="volley-ward" class="ghost-button" type="button">Ward · 2</button>
+                <button id="volley-return" class="cast-button volley-return" type="button">RETURN</button>
+                <button id="volley-smash" class="ghost-button" type="button">Smash · 3</button>
+            </div>
+            <p id="volley-verdict" class="volley-verdict hidden"></p>
+            <button id="volley-rematch" class="ghost-button hidden" type="button">Play again</button>
+        </section>
+
         <section class="opponent card">
             <div class="section-heading">
                 <div>
@@ -251,6 +286,22 @@
                 <span class="label">Settings</span>
                 <button id="settings-close" class="ghost-button" type="button">Close</button>
             </div>
+
+            <fieldset class="settings-group">
+                <legend class="label">Game</legend>
+                <div class="settings-rules" role="radiogroup" aria-label="Game">
+                    <label class="settings-option" id="settings-game-arcade-option">
+                        <input id="settings-game-arcade" type="radio" name="game" value="arcade">
+                        <strong>Arcade · Volley</strong>
+                        <ul><li>One bolt over the gate, faster every return; the colour wheel decides.</li><li>Five hearts, Focus for wards and smashes. One thumb.</li></ul>
+                    </label>
+                    <label class="settings-option" id="settings-game-word-option">
+                        <input id="settings-game-word" type="radio" name="game" value="word">
+                        <strong>Word duel</strong>
+                        <ul><li>Read the telegraph, choose a reaction, compose a spell from glyphs.</li><li>Rulesets, the teaching deck and hot-seat live here.</li></ul>
+                    </label>
+                </div>
+            </fieldset>
 
             <fieldset class="settings-group">
                 <legend class="label">Rules</legend>

@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 // Telegraph cards and the lit spell sentence.
 
 test("the telegraph shows rune cards: face-up glyphs and a face-down target", async ({ page }) => {
-    await page.goto("/?seed=smoke&animations=off");
+    await page.goto("/?game=word&seed=smoke&animations=off");
     const cards = page.locator("#telegraph-cards .rune-card");
     await expect(cards).toHaveCount(3);
     await expect(cards.nth(0)).toHaveAttribute("data-family", "essence");
@@ -15,7 +15,7 @@ test("the telegraph shows rune cards: face-up glyphs and a face-down target", as
 });
 
 test("Scry flips the hidden card face-up", async ({ page }) => {
-    await page.goto("/?seed=smoke&rules=teeth&animations=off");
+    await page.goto("/?game=word&seed=smoke&rules=teeth&animations=off");
     await page.locator("#scry").click();
     const cards = page.locator("#telegraph-cards .rune-card");
     await expect(cards.nth(2)).toHaveClass(/glyph/);
@@ -23,7 +23,7 @@ test("Scry flips the hidden card face-up", async ({ page }) => {
 });
 
 test("the spell sentence lights when it parses, marks the glyph at fault, carries modifiers as marks, and a tap removes a glyph", async ({ page }) => {
-    await page.goto("/?seed=smoke&animations=off");
+    await page.goto("/?game=word&seed=smoke&animations=off");
     const tray = page.locator("#glyph-tray");
     const strip = page.locator("#spell-cards");
     await expect(strip).toHaveAttribute("data-lit", "false");

@@ -1,6 +1,6 @@
 # Wyrd — arcade duel mechanics for the 3D arena
 
-Status: proposal, 2026-09-28. Companion to `docs/duel-engagement-options.md` (rules of the word duel) and `docs/duel-3d-assets-and-ui.md` (the arena). This document proposes **arcade modes**: duels a new player understands in one round without reading a glyph, played with one thumb in the Three.js arena, keeping Wyrd's essences, wards, reactions and seals as the vocabulary. Nothing here replaces the word duel; the arena, the bot personalities and the telemetry are shared. Mockups: the "Wyrd Arcade" page https://claude.ai/artifact/4718cuxELHMTcV6srKgZx7 (private to the owner).
+Status: proposal, 2026-09-28; **A Volley shipped the same day as the default game** (Settings → Game), with a Focus refill per clean return, a one-return ward and a smash button; lob/drive and the feint are not in yet. C Quickdraw is next. Word-duel specs pin `?game=word`. Companion to `docs/duel-engagement-options.md` (rules of the word duel) and `docs/duel-3d-assets-and-ui.md` (the arena). This document proposes **arcade modes**: duels a new player understands in one round without reading a glyph, played with one thumb in the Three.js arena, keeping Wyrd's essences, wards, reactions and seals as the vocabulary. Nothing here replaces the word duel; the arena, the bot personalities and the telemetry are shared. Mockups: the "Wyrd Arcade" page https://claude.ai/artifact/4718cuxELHMTcV6srKgZx7 (private to the owner).
 
 ## 0. The brief and what the references say
 

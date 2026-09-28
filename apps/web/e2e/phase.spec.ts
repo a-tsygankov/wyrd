@@ -4,7 +4,7 @@ import { expect, test } from "@playwright/test";
 // the 3D arena's camera follows the phase.
 
 test("the phase strip advances read → react → shape → cast → verdict as the player acts", async ({ page }) => {
-    await page.goto("/?seed=smoke&animations=off");
+    await page.goto("/?game=word&seed=smoke&animations=off");
     const active = page.locator("#phase-strip li.active");
     await expect(active).toHaveText("Read");
     await expect(page.locator("body")).toHaveAttribute("data-phase", "read");
@@ -26,7 +26,7 @@ test("the phase strip advances read → react → shape → cast → verdict as 
 
 test("the arena's camera follows the phase", async ({ page, browserName }) => {
     test.skip(browserName === "webkit", "headless WebKit has no WebGL in CI");
-    await page.goto("/?seed=smoke&stage=3d&animations=off");
+    await page.goto("/?game=word&seed=smoke&stage=3d&animations=off");
     const arena = page.locator("#arena");
     await expect(arena).toHaveAttribute("data-renderer", "3d", { timeout: 20_000 });
     await expect(arena).toHaveAttribute("data-camera", "read");

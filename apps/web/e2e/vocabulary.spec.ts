@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 // The wider tray: 19 glyphs, the gate as a contested objective, BREAK and MEND.
 
 test("the tray offers 19 glyphs and BREAK GATE shatters the objective", async ({ page }) => {
-    await page.goto("/?seed=smoke&animations=off");
+    await page.goto("/?game=word&seed=smoke&animations=off");
     await expect(page.locator("#glyph-tray button")).toHaveCount(19);
     for (const glyph of ["WATER", "LIFE", "BREAK", "MEND", "OPEN"]) {
         await expect(page.locator("#glyph-tray").getByRole("button", { name: glyph, exact: true })).toBeVisible();
@@ -22,7 +22,7 @@ test("the tray offers 19 glyphs and BREAK GATE shatters the objective", async ({
 });
 
 test("a closed gate cannot be closed again; OPEN scores instead", async ({ page }) => {
-    await page.goto("/?seed=smoke&animations=off&admin=1");
+    await page.goto("/?game=word&seed=smoke&animations=off&admin=1");
     const tray = page.locator("#glyph-tray");
     // Round 1: close it.
     for (const glyph of ["GATE", "CLOSE"]) await tray.getByRole("button", { name: glyph, exact: true }).click();

@@ -4,7 +4,7 @@ import { expect, test } from "@playwright/test";
 // right once it resolves, and a rematch once the duel is decided.
 
 test("the floating Next round button appears after a round and advances it", async ({ page }) => {
-    await page.goto("/?seed=smoke&animations=off");
+    await page.goto("/?game=word&seed=smoke&animations=off");
     const fab = page.locator("#next-round");
     await expect(fab).toBeHidden();
     const tray = page.locator("#glyph-tray");
