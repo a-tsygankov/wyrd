@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 // Balance fix 3: initiative by Focus and the contested gate.
 
 test("the cheaper spell resolves first and the verdict says so", async ({ page }) => {
-    await page.goto("/?seed=smoke&animations=off");
+    await page.goto("/?game=word&seed=smoke&animations=off");
     // Round 1: the opponent's FIRE SEEK ENEMY costs 3; SEEK ENEMY costs 2 and goes first.
     const tray = page.locator("#glyph-tray");
     for (const glyph of ["SEEK", "ENEMY"]) await tray.getByRole("button", { name: glyph, exact: true }).click();
@@ -15,7 +15,7 @@ test("the cheaper spell resolves first and the verdict says so", async ({ page }
 });
 
 test("two gate spells in one hot-seat round leave the gate where it was", async ({ page }) => {
-    await page.goto("/?mode=hotseat&seed=smoke&animations=off");
+    await page.goto("/?game=word&mode=hotseat&seed=smoke&animations=off");
     const tray = page.locator("#glyph-tray");
     const primary = page.locator("#resolve-round");
     const pick = async (glyphs: string[]) => {

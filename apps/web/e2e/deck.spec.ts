@@ -7,7 +7,7 @@ const DECK_OPENER = "FIRE → SEEK → ?";
 
 test("after the first match ends, the rematch meets the bot from round 1 and Settings can bring the deck back", async ({ page }) => {
     // The quill seed's deck order keeps the REFLECT lesson second, so the win path below holds.
-    await page.goto("/?seed=quill&stage=2d&animations=off");
+    await page.goto("/?game=word&seed=quill&stage=2d&animations=off");
     const note = page.locator("#scenario-note");
     await expect(note).toContainText("Scenario 1/");
     await expect(page.locator("#telegraph")).toHaveText(DECK_OPENER);
@@ -39,8 +39,8 @@ test("after the first match ends, the rematch meets the bot from round 1 and Set
 });
 
 test("?deck=off skips the deck on a fresh device and ?deck=on keeps it after a match", async ({ page }) => {
-    await page.goto("/?seed=smoke&deck=off&stage=2d&animations=off");
+    await page.goto("/?game=word&seed=smoke&deck=off&stage=2d&animations=off");
     await expect(page.locator("#scenario-note")).toContainText("Opponent: the");
-    await page.goto("/?seed=smoke&deck=on&stage=2d&animations=off");
+    await page.goto("/?game=word&seed=smoke&deck=on&stage=2d&animations=off");
     await expect(page.locator("#scenario-note")).toContainText("Scenario 1/");
 });

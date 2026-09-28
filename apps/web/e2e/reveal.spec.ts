@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 // Progressive telegraph reveal (timers) and Scry (1 Focus, reaction-cost rulesets).
 
 test("Scry buys one hidden glyph for 1 Focus under Teeth", async ({ page }) => {
-    await page.goto("/?seed=smoke&rules=teeth&animations=off");
+    await page.goto("/?game=word&seed=smoke&rules=teeth&animations=off");
     await expect(page.locator("#telegraph")).toHaveText("FIRE → SEEK → ?");
     const scry = page.locator("#scry");
     await expect(scry).toBeVisible();
@@ -21,14 +21,14 @@ test("Scry buys one hidden glyph for 1 Focus under Teeth", async ({ page }) => {
 });
 
 test("no Scry under Classic, where reactions are free", async ({ page }) => {
-    await page.goto("/?seed=smoke&rules=classic&animations=off");
+    await page.goto("/?game=word&seed=smoke&rules=classic&animations=off");
     await expect(page.locator("#telegraph")).toHaveText("FIRE → SEEK → ?");
     await expect(page.locator("#scry")).toBeHidden();
 });
 
 test("under Pulse timers the hidden glyph flips face-up during the reaction window", async ({ page }) => {
     // Hot-seat has timers on every turn; the deck's teaching rounds do not.
-    await page.goto("/?seed=smoke&rules=pulse&mode=hotseat&animations=off");
+    await page.goto("/?game=word&seed=smoke&rules=pulse&mode=hotseat&animations=off");
     const tray = page.locator("#glyph-tray");
     for (const glyph of ["FIRE", "SEEK", "ENEMY"]) await tray.getByRole("button", { name: glyph, exact: true }).click();
     await page.locator("#resolve-round").click();

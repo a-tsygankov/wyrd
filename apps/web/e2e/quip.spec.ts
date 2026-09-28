@@ -8,13 +8,13 @@ test("a quip from the opponent's personality follows the verdict, and replays wi
         for (const glyph of ["FIRE", "SEEK", "ENEMY"]) await tray.getByRole("button", { name: glyph, exact: true }).click();
         await page.locator("#resolve-round").click();
     };
-    await page.goto("/?seed=smoke&animations=off");
+    await page.goto("/?game=word&seed=smoke&animations=off");
     await cast();
     const quip = page.locator("#combat-log .quip");
     await expect(quip).toHaveCount(1);
     const text = (await quip.textContent()) ?? "";
     expect(text).toMatch(/Adept|Aggressor|Warden|Trickster|Gatekeeper/);
-    await page.goto("/?seed=smoke&animations=off");
+    await page.goto("/?game=word&seed=smoke&animations=off");
     await cast();
     await expect(page.locator("#combat-log .quip")).toHaveText(text);
 });

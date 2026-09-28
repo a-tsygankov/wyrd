@@ -7,7 +7,7 @@ import { expect, test } from "@playwright/test";
 test("a hot-seat round passes the phone twice and resolves both spells", async ({ page }) => {
     const errors: string[] = [];
     page.on("pageerror", error => errors.push(error.message));
-    await page.goto("/?mode=hotseat&seed=smoke");
+    await page.goto("/?game=word&mode=hotseat&seed=smoke");
 
     const tray = page.locator("#glyph-tray");
     const primary = page.locator("#resolve-round");
@@ -64,7 +64,7 @@ test("a hot-seat round passes the phone twice and resolves both spells", async (
 });
 
 test("the mode toggle switches between solo and hot-seat and resets the match", async ({ page }) => {
-    await page.goto("/?seed=smoke");
+    await page.goto("/?game=word&seed=smoke");
     await expect(page.locator("#mode-toggle")).toHaveText("Hot-seat");
     await expect(page.locator("#scenario-note")).toContainText("Scenario 1/");
     await page.locator("#mode-toggle").click();

@@ -5,7 +5,7 @@ import { expect, test } from "@playwright/test";
 // the resolver's explanations, and the client log.
 
 test("the console is hidden until the title is tapped three times", async ({ page }) => {
-    await page.goto("/?seed=smoke");
+    await page.goto("/?game=word&seed=smoke");
     const console_ = page.locator("#admin-console");
     await expect(console_).toBeHidden();
     const title = page.locator("#title-block");
@@ -16,7 +16,7 @@ test("the console is hidden until the title is tapped three times", async ({ pag
 });
 
 test("advice reveals the round-1 threat and recommends REFLECT with a reason", async ({ page }) => {
-    await page.goto("/?seed=smoke&admin=1");
+    await page.goto("/?game=word&seed=smoke&admin=1");
     const console_ = page.locator("#admin-console");
     await expect(console_).toBeVisible();
     await expect(page.locator("#admin-state")).toContainText("FIRE SEEK ENEMY");

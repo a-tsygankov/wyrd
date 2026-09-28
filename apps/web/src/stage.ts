@@ -312,6 +312,20 @@ const X: Record<Side, number> = { player: 70, opponent: 290 };
 const Y = 118;
 const GATE_X = 180;
 
+/** A bolt in continuous flight (Volley): where it is between two hands, and what it carries. */
+export type LiveBolt = { from: Side; to: Side; t: number; essence: string; magnitude: number; speed: number };
+
+/** Effects a continuous mode drives frame by frame, outside the beat timeline. */
+export type StageLive = {
+    /** Place the bolt along its arc, or hide it. */
+    bolt(bolt: LiveBolt | undefined): void;
+    /** A one-shot effect at a mage. */
+    burst(side: Side, essence: string, kind: "hit" | "block" | "shatter" | "quench" | "kindle"): void;
+    /** The return window ring on a mage. */
+    window(side: Side, open: boolean): void;
+    caption(text: string): void;
+};
+
 export type Stage = {
     /** Show the board at rest for a state (wards, chains, gate). */
     setIdle(state: StageState): void;
@@ -326,6 +340,8 @@ export type Stage = {
     /** Forget the floor marks (a new match). */
     clearMarks(): void;
     reducedMotion(): boolean;
+    /** Continuous modes (Volley) drive the bolt and bursts directly. */
+    live?: StageLive;
 };
 
 export function createStage(root: SVGSVGElement, hooks: StageHooks = {}, motion: { reduced: () => boolean } = { reduced: () => false }): Stage {
@@ -710,5 +726,47 @@ export function createStage(root: SVGSVGElement, hooks: StageHooks = {}, motion:
         }
     }
 
-    return { setIdle, setPersona, setPriority, play, clearMarks: () => marks.replaceChildren(), reducedMotion: () => motion.reduced() };
+    // Volley: the bolt placed frame by frame on the same arc `fly` animates.
+    let liveFlash = 0;
+    const live: StageLive = {
+        bolt: b => {
+            if (!b) {
+                bolt.setAttribute("opacity", "0");
+                trail.setAttribute("opacity", "0");
+                return;
+            }
+            const x0 = X[b.from] + (b.from === "player" ? 26 : -26);
+            const x1 = X[b.to] + (b.to === "player" ? 30 : -30);
+            const x = x0 + (x1 - x0) * b.t;
+            const y = Y - 6 - 28 * Math.sin(Math.PI * b.t);
+            bolt.setAttribute("r", String(5 + b.magnitude * 2.5));
+            bolt.setAttribute("fill", essenceColor(b.essence));
+            bolt.setAttribute("opacity", "1");
+            bolt.style.transform = `translate(${x}px, ${y}px)`;
+            trail.setAttribute("stroke", essenceColor(b.essence));
+            trail.setAttribute("opacity", String(Math.min(0.7, 0.2 + b.speed * 0.1)));
+            trail.setAttribute("x1", String(x - (x1 - x0) * 0.12));
+            trail.setAttribute("y1", String(y + 2));
+            trail.setAttribute("x2", String(x));
+            trail.setAttribute("y2", String(y));
+        },
+        burst: (side, essence, kind) => {
+            const color = essenceColor(essence);
+            flash.setAttribute("fill", kind === "hit" ? "#fff" : color);
+            flash.setAttribute("opacity", kind === "hit" ? "0.35" : "0.18");
+            window.clearTimeout(liveFlash);
+            liveFlash = window.setTimeout(() => flash.setAttribute("opacity", "0"), dur(kind === "hit" ? 220 : 160));
+            if (kind === "hit") {
+                mage[side].classList.add("hit");
+                window.setTimeout(() => mage[side].classList.remove("hit"), dur(300));
+            }
+            if (kind === "shatter") drawWard(side, undefined);
+        },
+        window: (side, open) => {
+            root.querySelector<SVGElement>(`#stage-priority-${side}`)?.setAttribute("opacity", open ? "1" : "0");
+        },
+        caption: say
+    };
+
+    return { setIdle, setPersona, setPriority, play, clearMarks: () => marks.replaceChildren(), reducedMotion: () => motion.reduced(), live };
 }

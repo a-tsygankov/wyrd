@@ -7,7 +7,7 @@ import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { ARENA_CLIPS, ARENA_MODELS, MARKS, NOTCHES, POSITIONS, boltArc, burstOffsets, clipFor, gateLean, isBodyPart, notchPosition, sealNotches, shardOffsets } from "./arenaMap.js";
 import { EMBER_COUNT, emberPosition, gateGlow, haloScale, idleSway, runeRing, shockwave, sparkOffsets, starPositions } from "./arenaFx.js";
 import { HIT_STOP_MS, decayTrauma, markFor, shakeOffset, traumaFor, type FloorMark } from "./juice.js";
-import { beatDuration, essenceColor, type Beat, type Side, type Stage, type StageHooks, type StageState } from "./stage.js";
+import { beatDuration, essenceColor, type Beat, type Side, type Stage, type StageHooks, type StageLive, type StageState } from "./stage.js";
 
 /**
  * The Three.js arena (docs/duel-3d-assets-and-ui.md): a second renderer of
@@ -1081,6 +1081,54 @@ export function createArena(container: HTMLElement, options: ArenaOptions): Aren
     // Start the frame loop once everything it touches exists.
     tick();
 
+    // Volley: the bolt placed frame by frame, bursts and shockwaves on demand,
+    // the priority rim as the return-window ring.
+    const live: StageLive = {
+        bolt: b => {
+            if (!b) {
+                bolt.visible = false;
+                return;
+            }
+            const color = new THREE.Color(essenceColor(b.essence));
+            boltMaterial.color.copy(color);
+            boltLight.color.copy(color);
+            (boltHalo.material as THREE.SpriteMaterial).color.copy(color);
+            boltHalo.scale.setScalar(haloScale(b.magnitude) * (1 + (b.speed - 1) * 0.08));
+            bolt.scale.setScalar(0.7 + b.magnitude * 0.35);
+            const p = boltArc(b.from, b.to, b.t);
+            bolt.position.set(p.x, p.y, p.z);
+            bolt.visible = true;
+        },
+        burst: (side, essence, kind) => {
+            const at = new THREE.Vector3(POSITIONS[side].x + (side === "player" ? 0.6 : -0.6), 1.25, 0.2);
+            const color = essenceColor(essence);
+            if (kind === "hit") {
+                addTrauma(0.45);
+                pulseFlash(0.3, 260);
+                void playBurst(at, color, 320);
+                void playShock(at, color, 320);
+                const root = mages[side].root;
+                const kick = (side === "player" ? -1 : 1) * 0.25;
+                void tween(260, t => (root.position.x = POSITIONS[side].x + Math.sin(Math.PI * t) * kick)).then(() => (root.position.x = POSITIONS[side].x));
+                playClip(side, ARENA_CLIPS.hit, false);
+            } else if (kind === "block" || kind === "shatter") {
+                addTrauma(0.2);
+                void playBurst(at, color, 260);
+                void tween(260, t => flareWard(wards[side], t));
+                playClip(side, ARENA_CLIPS.blockHit, false);
+                if (kind === "shatter") wards[side].visible = false;
+            } else {
+                // quench, kindle: a flare in the returning colour and the cast swing.
+                void playBurst(at, color, 220);
+                playClip(side, kind === "kindle" ? ARENA_CLIPS.castLong : ARENA_CLIPS.cast, false);
+            }
+        },
+        window: (side, open) => {
+            priority[side].visible = open;
+        },
+        caption: say
+    };
+
     return {
         setIdle,
         setPhase,
@@ -1089,6 +1137,7 @@ export function createArena(container: HTMLElement, options: ArenaOptions): Aren
         play,
         clearMarks: () => marks.clear(),
         reducedMotion: () => motion.reduced(),
+        live,
         ready,
         setModel,
         dispose

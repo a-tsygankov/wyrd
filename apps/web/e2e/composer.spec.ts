@@ -7,7 +7,7 @@ const glyph = (page: import("@playwright/test").Page, name: string) =>
     page.locator("#glyph-tray").getByRole("button", { name, exact: true });
 
 test("the tray highlights what completes the spell and dims what cannot follow", async ({ page }) => {
-    await page.goto("/?seed=smoke&animations=off");
+    await page.goto("/?game=word&seed=smoke&animations=off");
     await expect(glyph(page, "AMPLIFY")).toHaveAttribute("data-fit", "incompatible");
     await expect(glyph(page, "FIRE")).toHaveAttribute("data-fit", "open");
     await glyph(page, "FIRE").click();
@@ -27,7 +27,7 @@ test("the tray highlights what completes the spell and dims what cannot follow",
 });
 
 test("REVERSE turns OPEN into CLOSE and the log says so", async ({ page }) => {
-    await page.goto("/?seed=smoke&animations=off");
+    await page.goto("/?game=word&seed=smoke&animations=off");
     for (const name of ["GATE", "OPEN", "REVERSE"]) await glyph(page, name).click();
     await expect(page.locator("#spell-explain")).toContainText(/OPEN into CLOSE/);
     await expect(page.locator("#spell-explain .summary").first()).toContainText(/seal to you/i);
@@ -37,7 +37,7 @@ test("REVERSE turns OPEN into CLOSE and the log says so", async ({ page }) => {
 });
 
 test("SPLIT explains its two branches and REFLECT's half answer", async ({ page }) => {
-    await page.goto("/?seed=smoke&rules=teeth&animations=off");
+    await page.goto("/?game=word&seed=smoke&rules=teeth&animations=off");
     for (const name of ["FIRE", "SEEK", "ENEMY", "SPLIT"]) await glyph(page, name).click();
     await expect(page.locator("#spell-explain")).toContainText(/two branches/i);
     await expect(page.locator("#spell-explain")).toContainText(/REFLECT/);

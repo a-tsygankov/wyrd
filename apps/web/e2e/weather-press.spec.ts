@@ -6,7 +6,7 @@ import { expect, test } from "@playwright/test";
 const WEATHERS = ["storm", "hush", "ironbound", "opensky"];
 
 test("the playtest options are off by default and the switches sit in the Rules group", async ({ page }) => {
-    await page.goto("/?seed=smoke&stage=2d&animations=off");
+    await page.goto("/?game=word&seed=smoke&stage=2d&animations=off");
     await expect(page.locator("#weather-banner")).toBeHidden();
     await expect(page.locator("#stakes")).toBeHidden();
     await page.locator("#settings-toggle").click();
@@ -18,7 +18,7 @@ test("the playtest options are off by default and the switches sit in the Rules 
 });
 
 test("a hot-seat match announces round 3's weather in round 2 and plays it in round 3", async ({ page }) => {
-    await page.goto("/?mode=hotseat&seed=smoke&weather=on&stage=2d&animations=off");
+    await page.goto("/?game=word&mode=hotseat&seed=smoke&weather=on&stage=2d&animations=off");
     const banner = page.locator("#weather-banner");
     await expect(banner).toBeHidden();
     const tray = page.locator("#glyph-tray");
@@ -52,7 +52,7 @@ test("a hot-seat match announces round 3's weather in round 2 and plays it in ro
 });
 
 test("pressing the round doubles the seal you win it by", async ({ page }) => {
-    await page.goto("/?seed=smoke&press=on&stage=2d&animations=off");
+    await page.goto("/?game=word&seed=smoke&press=on&stage=2d&animations=off");
     const press = page.locator("#press-round");
     await expect(page.locator("#stakes")).toBeVisible();
     await expect(page.locator("#retreat-round")).toBeHidden(); // the deck's opponent never presses

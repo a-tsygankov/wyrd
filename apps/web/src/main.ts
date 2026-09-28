@@ -47,7 +47,8 @@ import {
     type HotseatRound
 } from "./hotseat.js";
 import { buildRoundEvent, createTelemetry, getSessionId } from "./telemetry.js";
-import { loadSettings, saveSettings, type Settings } from "./settings.js";
+import { loadSettings, saveSettings, type Game, type Settings } from "./settings.js";
+import { createVolleyMode, type VolleyMode } from "./volleyMode.js";
 import { loadStats, recordMatchEnd, recordRematch, recordRound, saveStats, summarize, type Stats } from "./stats.js";
 import { QUICK_CAST_MS, REACTION_WINDOW_MS, timerState } from "./timers.js";
 import { buildTimeline, createStage, type Contribution, type Stage, type StageHooks, type StageState } from "./stage.js";
@@ -131,6 +132,9 @@ const settingsHelp = byId<HTMLInputElement>("settings-help");
 const settingsAnimations = byId<HTMLInputElement>("settings-animations");
 const settingsArena3d = byId<HTMLInputElement>("settings-arena3d");
 const settingsArenaFx = byId<HTMLInputElement>("settings-arena-fx");
+const settingsGameArcade = byId<HTMLInputElement>("settings-game-arcade");
+const settingsGameWord = byId<HTMLInputElement>("settings-game-word");
+const volleyRoot = byId<HTMLElement>("volley");
 const settingsSound = byId<HTMLInputElement>("settings-sound");
 const settingsTelemetry = byId<HTMLInputElement>("settings-telemetry");
 const settingsWeather = byId<HTMLInputElement>("settings-weather");
@@ -251,6 +255,8 @@ for (const info of PHASES) {
 
 /** Layout A: name the phase, light its card, move the arena's camera. */
 function renderPhase(): void {
+    // The arcade game has no round phases: the camera stays on the volley.
+    if (settings.game === "arcade") return;
     const phase = derivePhase({
         mode,
         hotseatPhase: hotseat.phase,
@@ -319,7 +325,26 @@ function pairStages(svg: Stage, three: Stage): Stage {
             svg.clearMarks();
             three.clearMarks();
         },
-        reducedMotion: () => three.reducedMotion()
+        reducedMotion: () => three.reducedMotion(),
+        // Continuous modes drive both renderers frame by frame too.
+        live: {
+            bolt: b => {
+                svg.live?.bolt(b);
+                three.live?.bolt(b);
+            },
+            burst: (side, essence, kind) => {
+                svg.live?.burst(side, essence, kind);
+                three.live?.burst(side, essence, kind);
+            },
+            window: (side, open) => {
+                svg.live?.window(side, open);
+                three.live?.window(side, open);
+            },
+            caption: text => {
+                svg.live?.caption(text);
+                three.live?.caption(text);
+            }
+        }
     };
 }
 
@@ -364,7 +389,50 @@ async function mountStage(): Promise<void> {
         stageRoot.classList.remove("hidden");
         delete arenaRoot.dataset.renderer;
     }
-    stage.setIdle(stageState());
+    if (settings.game === "arcade" && volley) {
+        // A new renderer: the volley re-syncs its board and camera onto it.
+        volley.stop();
+        volley.start();
+    } else {
+        stage.setIdle(stageState());
+    }
+}
+
+// --- The game: the arcade Volley (default) or the word duel. One plays at a time.
+let volley: VolleyMode | undefined;
+const tempoParam = new URLSearchParams(location.search).get("tempo");
+
+const tagline = document.querySelector<HTMLElement>(".topbar h1");
+function applyGame(): void {
+    document.body.dataset.game = settings.game;
+    if (tagline) tagline.textContent = settings.game === "arcade" ? "Return the bolt. Read the colour." : "Read the spell. Shape the counter.";
+    if (settings.game === "arcade") {
+        volley ??= createVolleyMode({
+            root: volleyRoot,
+            stage: () => stage,
+            personalityId: () => personality.id,
+            rng: () => rng,
+            names: () => ({ you: "You", them: personality.title }),
+            ...(tempoParam === "slow" ? { tempo: 3 } : {}),
+            onOver: winner => log.info(`volley over: ${winner} wins`)
+        });
+        volley.start();
+        log.info("game: arcade volley");
+    } else {
+        volley?.stop();
+        stage.setPhase?.(currentPhase ?? "read");
+        stage.setIdle(stageState());
+        log.info("game: word duel");
+    }
+    render();
+}
+
+function applyGameSetting(game: Game): void {
+    if (game === settings.game) return;
+    settings = { ...settings, game };
+    saveSettings(deviceStorage, settings);
+    applyGame();
+    renderSettings();
 }
 function stageState(): StageState {
     return {
@@ -1006,7 +1074,7 @@ function render(): void {
     renderPhase();
     renderWeather();
     renderStakes();
-    if (stageRoot.dataset.playing !== "1") stage.setIdle(stageState());
+    if (stageRoot.dataset.playing !== "1" && settings.game !== "arcade") stage.setIdle(stageState());
 
     // The floating Next round shows while a round is resolved; once the duel
     // is decided the Rematch button takes its place.
@@ -1486,7 +1554,10 @@ modeToggle.addEventListener("click", () => {
 });
 nextRoundButton.addEventListener("click", startNextRound);
 rematchFab.addEventListener("click", resetMatch);
-resetButton.addEventListener("click", resetMatch);
+resetButton.addEventListener("click", () => {
+    if (settings.game === "arcade") volley?.reset();
+    else resetMatch();
+});
 
 // --- Tempo (Pulse / Resolve): reaction ring and quick-cast badge.
 let lastTickSecond = -1;
@@ -1572,6 +1643,10 @@ function renderSettings(): void {
     settingsHelp.checked = settings.glyphHelpOpen;
     settingsAnimations.checked = settings.animations;
     settingsArena3d.checked = settings.arena3d;
+    settingsGameArcade.checked = settings.game === "arcade";
+    settingsGameWord.checked = settings.game === "word";
+    byId<HTMLElement>("settings-game-arcade-option").classList.toggle("selected", settings.game === "arcade");
+    byId<HTMLElement>("settings-game-word-option").classList.toggle("selected", settings.game === "word");
     settingsArenaFx.checked = settings.arenaFx;
     settingsArenaFx.disabled = !settings.arena3d;
     settingsArenaFx.closest("label")?.classList.toggle("disabled", !settings.arena3d);
@@ -1627,6 +1702,8 @@ settingsArena3d.addEventListener("change", () => {
     log.info(`3D arena: ${settings.arena3d ? "on" : "off"}`);
     void mountStage().then(() => renderSettings());
 });
+settingsGameArcade.addEventListener("change", () => applyGameSetting("arcade"));
+settingsGameWord.addEventListener("change", () => applyGameSetting("word"));
 settingsArenaFx.addEventListener("change", () => {
     settings = { ...settings, arenaFx: settingsArenaFx.checked };
     saveSettings(deviceStorage, settings);
@@ -1938,5 +2015,6 @@ if (versionLine) {
 
 render();
 
-// The renderer choice (SVG stage or Three.js arena) is applied once the page is wired.
-void mountStage();
+// The renderer choice (SVG stage or Three.js arena) is applied once the page is
+// wired, then the game (arcade Volley by default, or the word duel) starts on it.
+void mountStage().then(applyGame);

@@ -6,7 +6,7 @@ import { expect, test } from "@playwright/test";
 // still completes.
 
 test("a cast plays through to the seal and the stage returns to idle", async ({ page }) => {
-    await page.goto("/?seed=smoke&animations=on");
+    await page.goto("/?game=word&seed=smoke&animations=on");
     const stage = page.locator("#stage");
     await expect(stage).toBeVisible();
     await expect(page.locator("#stage-mage-player")).toBeVisible();
@@ -24,7 +24,7 @@ test("a cast plays through to the seal and the stage returns to idle", async ({ 
 });
 
 test("a ward shows on the stage once it exists", async ({ page }) => {
-    await page.goto("/?seed=smoke&animations=off");
+    await page.goto("/?game=word&seed=smoke&animations=off");
     const tray = page.locator("#glyph-tray");
     for (const glyph of ["SELF", "WARD", "SHADOW"]) await tray.getByRole("button", { name: glyph, exact: true }).click();
     await page.locator("#resolve-round").click();
@@ -36,7 +36,7 @@ test("a ward shows on the stage once it exists", async ({ page }) => {
 test.describe("reduced motion", () => {
     test.use({ reducedMotion: "reduce" });
     test("the timeline still completes and lands on the result", async ({ page }) => {
-        await page.goto("/?seed=smoke");
+        await page.goto("/?game=word&seed=smoke");
         const tray = page.locator("#glyph-tray");
         for (const glyph of ["GATE", "CLOSE"]) await tray.getByRole("button", { name: glyph, exact: true }).click();
         await page.locator("#resolve-round").click();
@@ -47,7 +47,7 @@ test.describe("reduced motion", () => {
 });
 
 test("the Stage settings group has animation and sound switches", async ({ page }) => {
-    await page.goto("/?seed=smoke");
+    await page.goto("/?game=word&seed=smoke");
     await page.locator("#settings-toggle").click();
     await expect(page.locator("#settings-animations")).toBeChecked();
     await expect(page.locator("#settings-sound")).not.toBeChecked();

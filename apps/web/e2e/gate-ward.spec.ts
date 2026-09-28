@@ -4,7 +4,7 @@ import { expect, test } from "@playwright/test";
 
 test("GATE WARD claims the gate; the owner's CLOSE passes it next round", async ({ page }) => {
     // The quill seed keeps the REFLECT lesson second: round 2 leaves the gate alone.
-    await page.goto("/?seed=quill&animations=off&admin=1");
+    await page.goto("/?game=word&seed=quill&animations=off&admin=1");
     const tray = page.locator("#glyph-tray");
     const pick = async (glyphs: string[]) => {
         for (const glyph of glyphs) await tray.getByRole("button", { name: glyph, exact: true }).click();
@@ -26,7 +26,7 @@ test("GATE WARD claims the gate; the owner's CLOSE passes it next round", async 
 });
 
 test("a filtered gate ward is refused before casting", async ({ page }) => {
-    await page.goto("/?seed=smoke&animations=off");
+    await page.goto("/?game=word&seed=smoke&animations=off");
     const tray = page.locator("#glyph-tray");
     for (const glyph of ["GATE", "WARD", "FIRE"]) await tray.getByRole("button", { name: glyph, exact: true }).click();
     await expect(page.locator("#spell-explain")).toContainText(/takes no essence/i);

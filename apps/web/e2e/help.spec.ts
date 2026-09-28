@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 // The Help section: every glyph, reaction, term and control, rule-aware.
 
 test("Help lists all glyphs, reactions, terms and controls for the current rules", async ({ page }) => {
-    await page.goto("/?seed=smoke&rules=teeth&animations=off");
+    await page.goto("/?game=word&seed=smoke&rules=teeth&animations=off");
     await expect(page.locator("#help")).toBeHidden();
     await page.locator("#help-toggle").click();
     await expect(page.locator("#help")).toBeVisible();
@@ -22,7 +22,7 @@ test("Help lists all glyphs, reactions, terms and controls for the current rules
 });
 
 test("Help follows the ruleset: reactions are free under Classic", async ({ page }) => {
-    await page.goto("/?seed=smoke&rules=classic&animations=off");
+    await page.goto("/?game=word&seed=smoke&rules=classic&animations=off");
     await page.locator("#help-toggle").click();
     await expect(page.locator("#help-reactions")).toContainText("Free under these rules");
 });

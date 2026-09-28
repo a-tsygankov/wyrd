@@ -7,7 +7,7 @@ test("the 3D arena mounts, plays a round and can be switched back", async ({ pag
     test.skip(browserName === "webkit", "headless WebKit has no WebGL in CI");
     const errors: string[] = [];
     page.on("pageerror", error => errors.push(error.message));
-    await page.goto("/?seed=smoke&stage=3d&animations=off");
+    await page.goto("/?game=word&seed=smoke&stage=3d&animations=off");
     const arena = page.locator("#arena");
     await expect(arena).toBeVisible();
     await expect(arena.locator("canvas")).toHaveCount(1, { timeout: 20_000 });
@@ -34,7 +34,7 @@ test("?fx=light mounts the arena without the post-processing chain and the switc
     test.skip(browserName === "webkit", "headless WebKit has no WebGL in CI");
     const errors: string[] = [];
     page.on("pageerror", error => errors.push(error.message));
-    await page.goto("/?seed=smoke&stage=3d&fx=light&animations=off");
+    await page.goto("/?game=word&seed=smoke&stage=3d&fx=light&animations=off");
     const arena = page.locator("#arena");
     await expect(arena).toHaveAttribute("data-renderer", "3d", { timeout: 20_000 });
     await expect(arena).toHaveAttribute("data-fx", "light");
@@ -49,7 +49,7 @@ test("?fx=light mounts the arena without the post-processing chain and the switc
 test("with ?stage=2d the flat stage renders and no 3D module is fetched", async ({ page }) => {
     const requests: string[] = [];
     page.on("request", request => requests.push(request.url()));
-    await page.goto("/?seed=smoke&stage=2d&animations=off");
+    await page.goto("/?game=word&seed=smoke&stage=2d&animations=off");
     await expect(page.locator("#stage")).toBeVisible();
     await expect(page.locator("#arena")).toBeHidden();
     expect(requests.some(url => url.includes("/vendor/three/") || url.includes("/assets/arena/"))).toBe(false);

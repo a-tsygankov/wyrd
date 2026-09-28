@@ -31,7 +31,12 @@ export type Settings = {
     deck: boolean;
     /** The arena's full graphics pass (bloom, soft shadows, embers); off keeps the geometry and skips the post-processing. `?fx=light|full`. */
     arenaFx: boolean;
+    /** Which game the page plays: the arcade Volley (default) or the word duel. `?game=arcade|word`. */
+    game: Game;
 };
+
+export type Game = "arcade" | "word";
+export const GAMES: readonly Game[] = ["arcade", "word"];
 
 export const DEFAULT_SETTINGS: Settings = {
     ruleset: "classic",
@@ -45,7 +50,8 @@ export const DEFAULT_SETTINGS: Settings = {
     suddenDeath: false,
     press: false,
     deck: true,
-    arenaFx: true
+    arenaFx: true,
+    game: "arcade"
 };
 
 type StorageLike = { getItem(key: string): string | null; setItem(key: string, value: string): void };
@@ -54,6 +60,10 @@ const KEY = "wyrd.settings";
 
 function isRuleset(value: unknown): value is RulesetId {
     return typeof value === "string" && (rulesetIds as readonly string[]).includes(value);
+}
+
+function isGame(value: unknown): value is Game {
+    return typeof value === "string" && (GAMES as readonly string[]).includes(value);
 }
 
 function parseSwitch(value: string | null): boolean | undefined {
@@ -80,6 +90,7 @@ export function loadSettings(storage: StorageLike, params: URLSearchParams): Set
             if (typeof saved.press === "boolean") settings.press = saved.press;
             if (typeof saved.deck === "boolean") settings.deck = saved.deck;
             if (typeof saved.arenaFx === "boolean") settings.arenaFx = saved.arenaFx;
+            if (isGame(saved.game)) settings.game = saved.game;
         }
     } catch {
         // Unreadable storage or corrupt JSON: defaults.
@@ -102,6 +113,8 @@ export function loadSettings(storage: StorageLike, params: URLSearchParams): Set
     if (press !== undefined) settings.press = press;
     const deck = parseSwitch(params.get("deck"));
     if (deck !== undefined) settings.deck = deck;
+    const game = params.get("game");
+    if (isGame(game)) settings.game = game;
     const fx = params.get("fx");
     if (fx === "light") settings.arenaFx = false;
     if (fx === "full") settings.arenaFx = true;
