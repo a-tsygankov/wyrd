@@ -116,7 +116,7 @@ h2 {
 
 /* Layout A: the stage stays pinned while the round's cards scroll beneath it;
    cards scroll into view below it, the active card is lit. */
-.stage.card { display: flex; flex-direction: column; gap: 8px; }
+.stage.card { position: relative; display: flex; flex-direction: column; gap: 8px; }
 /* Pin the stage only where a phone's height is not the constraint: under it, a
    tap would land on the stage instead of the card scrolled beneath. */
 @media (min-height: 960px) {
@@ -181,6 +181,21 @@ body[data-game="arcade"] #phase-strip, body[data-game="arcade"] .phase-hint, bod
 
 #volley[data-window="open"] .volley-return { box-shadow: 0 0 0 3px #ffc457, 0 0 18px rgba(255, 196, 87, 0.5); }
 #volley[data-phase="over"] .volley-pads, #volley[data-phase="over"] .volley-actions { display: none; }
+
+/* Start: the arcade clock waits for this press; it takes the thumb row until then. */
+.arcade-start { min-height: 56px; font-size: 1.1rem; letter-spacing: 0.08em; }
+.volley[data-phase="ready"] .volley-pads, .volley[data-phase="ready"] .volley-actions, .volley[data-phase="ready"] .qd-ring { display: none; }
+
+/* Fullscreen (arcade only): a corner button on the stage. The immersive layout
+   drops the header and hints and gives the stage the height, for browsers
+   without element fullscreen (Safari on iPhone) as much as for those with it. */
+.fullscreen-toggle { position: absolute; top: 12px; right: 14px; z-index: 4; width: 36px; height: 36px; border-radius: 10px; border: 1px solid rgba(195, 174, 255, 0.3); background: rgba(13, 7, 22, 0.6); color: #f4f0ff; font-size: 1.1rem; line-height: 1; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.fullscreen-toggle[aria-pressed="true"] { border-color: #ffc457; color: #ffc457; }
+body:not([data-game="arcade"]) .fullscreen-toggle { display: none; }
+body[data-fullscreen="1"] .app-shell { width: 100%; padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left)); }
+body[data-fullscreen="1"] .topbar, body[data-fullscreen="1"] .volley-hint, body[data-fullscreen="1"] .install-banner { display: none !important; }
+body[data-fullscreen="1"] .arena { aspect-ratio: auto; height: min(56vh, 150vw); }
+body[data-fullscreen="1"] .stage svg { max-height: 56vh; }
 
 /* Press the round (ideas doc §J): the stake row above Cast. */
 .stakes { display: flex; flex-direction: column; gap: 6px; }

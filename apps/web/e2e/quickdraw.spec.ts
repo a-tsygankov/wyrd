@@ -25,6 +25,7 @@ test("a quick draw in the beating colour lands for two hearts when the ring clos
     // The bot's colour starts as fire; water quenches fire. The player draws in the first (stretched) second.
     await page.goto("/?seed=smoke&stage=2d&arcade=quickdraw&tempo=slow");
     const qd = page.locator("#quickdraw");
+    await page.locator("#quickdraw-start").click();
     await expect(qd).toHaveAttribute("data-phase", "draw", { timeout: 5_000 });
     await expect(qd).toHaveAttribute("data-quick-window", "open");
     await page.locator('.quickdraw-pad[data-essence="water"]').click();
@@ -42,6 +43,7 @@ test("a quick draw in the beating colour lands for two hearts when the ring clos
 test("holding Charge grows the orb and a ward stands against a colour it is not beaten by", async ({ page }) => {
     await page.goto("/?seed=smoke&stage=2d&arcade=quickdraw&tempo=slow");
     const qd = page.locator("#quickdraw");
+    await page.locator("#quickdraw-start").click();
     await expect(qd).toHaveAttribute("data-phase", "draw", { timeout: 5_000 });
     await page.locator('.quickdraw-pad[data-essence="shadow"]').click();
     const charge = page.locator("#quickdraw-charge");

@@ -71,6 +71,9 @@
             <!-- The Three.js arena (apps/web/src/arena.ts): a second renderer of the
                  same beats, behind the "3D arena" setting; hidden until it mounts. -->
             <div id="arena" class="arena hidden" aria-label="Duel arena"></div>
+            <!-- Arcade only: the immersive layout, plus real fullscreen where the
+                 browser has the API (apps/web/src/fullscreen.ts). -->
+            <button id="fullscreen-toggle" class="fullscreen-toggle" type="button" aria-pressed="false" aria-label="Fullscreen" title="Fullscreen">⛶</button>
             <!-- Layout A: where you are in the round; a tap scrolls to that card. -->
             <ol id="phase-strip" class="phase-strip" aria-label="Round phases"></ol>
             <!-- Weather rounds and sudden death (options doc §H): the card both mages see. -->
@@ -196,6 +199,7 @@
                 <button id="volley-return" class="cast-button volley-return" type="button">RETURN</button>
                 <button id="volley-smash" class="ghost-button" type="button">Smash · 3</button>
             </div>
+            <button id="volley-start" class="cast-button arcade-start" type="button">Start</button>
             <p id="volley-verdict" class="volley-verdict hidden"></p>
             <button id="volley-rematch" class="ghost-button hidden" type="button">Play again</button>
         </section>
@@ -237,6 +241,7 @@
                 <button id="quickdraw-charge" class="cast-button volley-return" type="button">HOLD TO CHARGE</button>
                 <span></span>
             </div>
+            <button id="quickdraw-start" class="cast-button arcade-start" type="button">Start</button>
             <p id="quickdraw-verdict" class="volley-verdict hidden"></p>
             <button id="quickdraw-rematch" class="ghost-button hidden" type="button">Play again</button>
         </section>
