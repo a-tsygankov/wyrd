@@ -325,6 +325,8 @@ export type StageLive = {
     window(side: Side, open: boolean): void;
     /** An orb growing in a mage's hand (Quickdraw's telegraph), or none. */
     orb(side: Side, held: { essence: string; magnitude: number } | undefined): void;
+    /** Beam clash: a beam from each hand to the knot at t (0 the player's hand, 1 the opponent's), or none. */
+    beams?(beams: { player: string; opponent: string; t: number } | undefined): void;
     caption(text: string): void;
 };
 
@@ -777,6 +779,27 @@ export function createStage(root: SVGSVGElement, hooks: StageHooks = {}, motion:
             hand.setAttribute("r", String(4 + held.magnitude * 2.5));
             hand.setAttribute("fill", essenceColor(held.essence));
             hand.setAttribute("opacity", "1");
+        },
+        beams: b => {
+            for (const side of ["player", "opponent"] as const) {
+                const line = root.querySelector<SVGLineElement>(`#stage-beam-${side}`);
+                if (!line) continue;
+                if (!b) {
+                    line.setAttribute("opacity", "0");
+                    continue;
+                }
+                // The knot sits on the bolt's arc, so the beams meet where live.bolt draws it.
+                const x0 = X.player + 26;
+                const x1 = X.opponent - 30;
+                const kx = x0 + (x1 - x0) * b.t;
+                const ky = Y - 6 - 28 * Math.sin(Math.PI * b.t);
+                line.setAttribute("x1", String(side === "player" ? X.player + 26 : X.opponent - 26));
+                line.setAttribute("y1", String(Y - 6));
+                line.setAttribute("x2", String(kx));
+                line.setAttribute("y2", String(ky));
+                line.setAttribute("stroke", essenceColor(b[side]));
+                line.setAttribute("opacity", "0.85");
+            }
         },
         caption: say
     };

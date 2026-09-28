@@ -63,6 +63,14 @@ test("the arcade group explains both games, their rules and every arcade button 
     assert.match(glossary.find(e => e.term === "Wheel").text, /water quenches fire/);
 });
 
+test("Beam clash has its own arcade topics: the beat, the knot, the switch, its ward and its clock", () => {
+    const arcade = glossary.filter(e => e.group === "arcade").map(e => e.term);
+    for (const term of ["Beam clash", "Beat", "Knot", "Push", "Switch", "Ward (Beam clash)", "Seals (Beam clash)", "Time (Beam clash)"]) {
+        assert.ok(arcade.includes(term), `${term} missing from the arcade group`);
+    }
+    assert.match(glossary.find(e => e.term === "Beam clash").text, /beat/);
+});
+
 test("the update banner is explained among the controls", () => {
     const update = glossary.find(e => e.group === "controls" && e.term === "Update banner");
     assert.ok(update);
