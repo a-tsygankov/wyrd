@@ -50,6 +50,7 @@ import { buildRoundEvent, createTelemetry, getSessionId } from "./telemetry.js";
 import { loadSettings, saveSettings, type ArcadeMode, type Game, type Settings } from "./settings.js";
 import { createVolleyMode, type VolleyMode } from "./volleyMode.js";
 import { createQuickdrawMode, type QuickdrawMode } from "./quickdrawMode.js";
+import { createBeamMode, type BeamMode } from "./beamMode.js";
 import { fullscreenApi } from "./fullscreen.js";
 import { updateAvailable } from "./update.js";
 import { loadStats, recordMatchEnd, recordRematch, recordRound, saveStats, summarize, type Stats } from "./stats.js";
@@ -138,8 +139,10 @@ const settingsArenaFx = byId<HTMLInputElement>("settings-arena-fx");
 const settingsGameArcade = byId<HTMLInputElement>("settings-game-arcade");
 const settingsGameWord = byId<HTMLInputElement>("settings-game-word");
 const settingsArcadeQuickdraw = byId<HTMLInputElement>("settings-arcade-quickdraw");
+const settingsArcadeBeam = byId<HTMLInputElement>("settings-arcade-beam");
 const volleyRoot = byId<HTMLElement>("volley");
 const quickdrawRoot = byId<HTMLElement>("quickdraw");
+const beamRoot = byId<HTMLElement>("beam");
 const fullscreenToggle = byId<HTMLButtonElement>("fullscreen-toggle");
 const settingsSound = byId<HTMLInputElement>("settings-sound");
 const settingsTelemetry = byId<HTMLInputElement>("settings-telemetry");
@@ -350,6 +353,10 @@ function pairStages(svg: Stage, three: Stage): Stage {
                 svg.live?.orb(side, held);
                 three.live?.orb(side, held);
             },
+            beams: b => {
+                svg.live?.beams?.(b);
+                three.live?.beams?.(b);
+            },
             caption: text => {
                 svg.live?.caption(text);
                 three.live?.caption(text);
@@ -399,48 +406,61 @@ async function mountStage(): Promise<void> {
         stageRoot.classList.remove("hidden");
         delete arenaRoot.dataset.renderer;
     }
-    if (settings.game === "arcade" && (volley?.running() || quickdraw?.running())) {
+    const active = settings.game === "arcade" ? Object.values(arcadeGames).find(g => g?.running()) : undefined;
+    if (active) {
         // A new renderer: the arcade game re-syncs its board and camera onto it.
-        const active = volley?.running() ? volley : quickdraw;
-        active?.stop();
-        active?.start();
+        active.stop();
+        active.start();
     } else {
         stage.setIdle(stageState());
     }
 }
 
-// --- The game: an arcade game (Volley by default, or Quickdraw) or the word duel. One plays at a time.
-let volley: VolleyMode | undefined;
-let quickdraw: QuickdrawMode | undefined;
+// --- The game: an arcade game (Volley by default, Quickdraw or Beam clash) or the word duel. One plays at a time.
+type ArcadeGame = VolleyMode | QuickdrawMode | BeamMode;
+const arcadeGames: Partial<Record<ArcadeMode, ArcadeGame>> = {};
 const tempoParam = new URLSearchParams(location.search).get("tempo");
+const ARCADE_TITLES: Record<ArcadeMode, string> = { volley: "Volley", quickdraw: "Quickdraw", beam: "Beam clash" };
+const ARCADE_TAGLINES: Record<ArcadeMode, string> = {
+    volley: "Return the bolt. Read the colour.",
+    quickdraw: "Draw fast, or read and answer.",
+    beam: "Push on the beat. Win the wheel."
+};
+
+/** Each arcade game is built on first use and kept: switching back resumes its board. */
+function arcadeGame(mode: ArcadeMode): ArcadeGame {
+    const shared = {
+        stage: () => stage,
+        personalityId: () => personality.id,
+        rng: () => rng,
+        names: () => ({ you: "You", them: personality.title }),
+        ...(tempoParam === "slow" ? { tempo: 3 } : {}),
+        onOver: (winner: string) => log.info(`${mode} over: ${winner} wins`)
+    };
+    const make = (): ArcadeGame => {
+        switch (mode) {
+            case "quickdraw":
+                return createQuickdrawMode({ root: quickdrawRoot, ...shared });
+            case "beam":
+                return createBeamMode({ root: beamRoot, ...shared, cue: name => sound.play(name) });
+            default:
+                return createVolleyMode({ root: volleyRoot, ...shared });
+        }
+    };
+    return (arcadeGames[mode] ??= make());
+}
 
 const tagline = document.querySelector<HTMLElement>(".topbar h1");
 function applyGame(): void {
     document.body.dataset.game = settings.game;
-    if (tagline) tagline.textContent = settings.game === "word" ? "Read the spell. Shape the counter." : settings.arcadeMode === "quickdraw" ? "Draw fast, or read and answer." : "Return the bolt. Read the colour.";
+    if (tagline) tagline.textContent = settings.game === "word" ? "Read the spell. Shape the counter." : ARCADE_TAGLINES[settings.arcadeMode];
     document.body.dataset.arcade = settings.game === "arcade" ? settings.arcadeMode : "";
     if (settings.game === "arcade") {
-        const shared = {
-            stage: () => stage,
-            personalityId: () => personality.id,
-            rng: () => rng,
-            names: () => ({ you: "You", them: personality.title }),
-            ...(tempoParam === "slow" ? { tempo: 3 } : {})
-        };
-        if (settings.arcadeMode === "quickdraw") {
-            volley?.stop();
-            quickdraw ??= createQuickdrawMode({ root: quickdrawRoot, ...shared, onOver: winner => log.info(`quickdraw over: ${winner} wins`) });
-            quickdraw.start();
-            log.info("game: arcade quickdraw");
-        } else {
-            quickdraw?.stop();
-            volley ??= createVolleyMode({ root: volleyRoot, ...shared, onOver: winner => log.info(`volley over: ${winner} wins`) });
-            volley.start();
-            log.info("game: arcade volley");
-        }
+        for (const [mode, game] of Object.entries(arcadeGames)) if (mode !== settings.arcadeMode) game?.stop();
+        arcadeGame(settings.arcadeMode).start();
+        log.info(`game: arcade ${settings.arcadeMode}`);
     } else {
-        volley?.stop();
-        quickdraw?.stop();
+        for (const game of Object.values(arcadeGames)) game?.stop();
         setImmersive(false);
         stage.setPhase?.(currentPhase ?? "read");
         stage.setIdle(stageState());
@@ -1594,7 +1614,7 @@ modeToggle.addEventListener("click", () => {
 nextRoundButton.addEventListener("click", startNextRound);
 rematchFab.addEventListener("click", resetMatch);
 resetButton.addEventListener("click", () => {
-    if (settings.game === "arcade") (settings.arcadeMode === "quickdraw" ? quickdraw : volley)?.reset();
+    if (settings.game === "arcade") arcadeGames[settings.arcadeMode]?.reset();
     else resetMatch();
 });
 
@@ -1684,11 +1704,14 @@ function renderSettings(): void {
     settingsArena3d.checked = settings.arena3d;
     const volleyOn = settings.game === "arcade" && settings.arcadeMode === "volley";
     const quickdrawOn = settings.game === "arcade" && settings.arcadeMode === "quickdraw";
+    const beamOn = settings.game === "arcade" && settings.arcadeMode === "beam";
     settingsGameArcade.checked = volleyOn;
     settingsArcadeQuickdraw.checked = quickdrawOn;
+    settingsArcadeBeam.checked = beamOn;
     settingsGameWord.checked = settings.game === "word";
     byId<HTMLElement>("settings-game-arcade-option").classList.toggle("selected", volleyOn);
     byId<HTMLElement>("settings-game-quickdraw-option").classList.toggle("selected", quickdrawOn);
+    byId<HTMLElement>("settings-game-beam-option").classList.toggle("selected", beamOn);
     byId<HTMLElement>("settings-game-word-option").classList.toggle("selected", settings.game === "word");
     settingsArenaFx.checked = settings.arenaFx;
     settingsArenaFx.disabled = !settings.arena3d;
@@ -1747,6 +1770,7 @@ settingsArena3d.addEventListener("change", () => {
 });
 settingsGameArcade.addEventListener("change", () => applyGameSetting("arcade", "volley"));
 settingsArcadeQuickdraw.addEventListener("change", () => applyGameSetting("arcade", "quickdraw"));
+settingsArcadeBeam.addEventListener("change", () => applyGameSetting("arcade", "beam"));
 settingsGameWord.addEventListener("change", () => applyGameSetting("word"));
 settingsArenaFx.addEventListener("change", () => {
     settings = { ...settings, arenaFx: settingsArenaFx.checked };
@@ -1911,7 +1935,7 @@ byId<HTMLButtonElement>("stats-close").addEventListener("click", () => statsPane
 function renderHelp(): void {
     helpRules.textContent =
         settings.game === "arcade"
-            ? `You are playing the arcade (${settings.arcadeMode === "quickdraw" ? "Quickdraw" : "Volley"}): its games come first. The word duel's glyphs and terms follow, explained for the ${ruleset.title} rules.`
+            ? `You are playing the arcade (${ARCADE_TITLES[settings.arcadeMode]}): its games come first. The word duel's glyphs and terms follow, explained for the ${ruleset.title} rules.`
             : `Explained for the ${ruleset.title} rules. Change the ruleset in Settings and this text follows.`;
     const entries = glossaryFor(state.rules);
     const groups = glossaryGroupsFor(settings.game);

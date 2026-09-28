@@ -453,6 +453,19 @@ export function createArena(container: HTMLElement, options: ArenaOptions): Aren
     bolt.add(boltHalo);
     bolt.visible = false;
     scene.add(bolt);
+    // Beam clash: a beam from each hand to the knot (the bolt parked on its arc).
+    const beamMeshes: Record<Side, THREE.Mesh> = {
+        player: new THREE.Mesh(),
+        opponent: new THREE.Mesh()
+    };
+    for (const side of SIDES) {
+        const material = new THREE.MeshBasicMaterial({ color: 0xf4f0ff, transparent: true, opacity: 0.8, depthWrite: false, blending: THREE.AdditiveBlending });
+        const mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.07, 1, 12, 1, true), material);
+        mesh.visible = false;
+        scene.add(mesh);
+        beamMeshes[side] = mesh;
+    }
+    const beamUp = new THREE.Vector3(0, 1, 0);
     // Sparks shed behind the bolt in flight.
     const sparkGeometry = new THREE.BufferGeometry();
     const sparkArray = new Float32Array(14 * 3);
@@ -1149,6 +1162,27 @@ export function createArena(container: HTMLElement, options: ArenaOptions): Aren
             mesh.scale.setScalar(0.6 + held.magnitude * 0.4);
             halo.scale.setScalar(haloScale(held.magnitude));
             mesh.visible = true;
+        },
+        beams: b => {
+            for (const side of SIDES) {
+                const mesh = beamMeshes[side];
+                if (!b) {
+                    mesh.visible = false;
+                    continue;
+                }
+                const a = boltArc("player", "opponent", side === "player" ? 0 : 1);
+                const k = boltArc("player", "opponent", b.t);
+                const from = new THREE.Vector3(a.x, a.y, a.z);
+                const to = new THREE.Vector3(k.x, k.y, k.z);
+                const span = to.clone().sub(from);
+                const length = Math.max(0.001, span.length());
+                // A unit cylinder along y, stretched between the hand and the knot.
+                mesh.position.copy(from).addScaledVector(span, 0.5);
+                mesh.quaternion.setFromUnitVectors(beamUp, span.normalize());
+                mesh.scale.set(1, length, 1);
+                (mesh.material as THREE.MeshBasicMaterial).color.set(essenceColor(b[side]));
+                mesh.visible = true;
+            }
         },
         caption: say
     };

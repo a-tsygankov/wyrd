@@ -49,7 +49,7 @@ export const GLOSSARY_GROUPS: readonly GlossaryGroup[] = [
     {
         id: "arcade",
         title: "Arcade games",
-        intro: "Volley and Quickdraw: one-thumb duels on the four-colour wheel, five hearts each, first to empty the other's hearts wins. Pick the game in Settings → Game. The ruleset and the glyph grammar do not apply here."
+        intro: "Volley, Quickdraw and Beam clash: one-thumb duels on the four-colour wheel. Volley and Quickdraw play for five hearts each, Beam clash for three seals. Pick the game in Settings → Game. The ruleset and the glyph grammar do not apply here."
     }
 ];
 
@@ -148,9 +148,17 @@ const arcadeEntries: GlossaryEntry[] = [
     { term: "Charge", text: "Hold Charge (or press and hold the stage) to grow your orb a step per second, one Focus a step, up to magnitude 3. Letting go banks the charge so far." },
     { term: "Ward (Quickdraw)", text: "Tap Ward (2 Focus) instead of drawing: you throw nothing this round, and a ward in your colour stands against an orb it is not beaten by. The same colour or the beating colour goes through." },
     { term: "Clash", text: "When Quickdraw's ring closes both orbs fly. The colour that beats the other lands alone; the same colour goes to the bigger orb and equal orbs cancel; colours across the wheel both land. The orb you watch growing in the other hand is their telegraph." },
-    { term: "Start", text: "Neither arcade game starts on its own: the clock begins when you press Start, so you can read the board or go fullscreen first." },
-    { term: "Colour pads", text: "The four pads under the stage, placed like the swipes: up FIRE, right WATER, down SHADOW, left LIFE. In Volley a pad returns in that colour; in Quickdraw it draws that colour." },
-    { term: "Gestures", text: "On the stage itself: in Volley a tap returns, a swipe returns in the colour of its direction and a long press wards; in Quickdraw a swipe picks a colour and press-and-hold charges." },
+    { term: "Beam clash", text: "The third arcade game: both mages fire a beam and the beams meet in a knot over the gate. Tap on the beat to push the knot toward the other mage; push it past their end for a seal. First to three seals, or the leader after 90 seconds." },
+    { term: "Beat", text: "Beam clash runs on a 100 bpm metronome: the gold ring under your mage and around Push lights on each beat, and with sound on it ticks. A tap within about a tenth of a second of the beat pushes one step, within a twentieth it is perfect and pushes two; an off-beat tap pushes nothing and costs a Focus. The match opens with a four-beat count-in (4, 3, 2, 1) and taps during it are free." },
+    { term: "Knot", text: "Where the beams meet, shown on the track under the names. Each beat both pushes are compared and the knot moves by the difference: equal pushes hold it, a stronger push moves it. Three steps from the middle to either end." },
+    { term: "Push", text: "Tap Push or anywhere on the stage on the beat. A push counts on the press, not the release, so a rhythm is not late by the length of your tap. A perfect tap pushes two; holding the colour that beats the other beam doubles your push again." },
+    { term: "Switch", text: "Tap a colour pad to recolour your beam. It lands 300 ms later, so the other mage sees it coming and can answer. The first switch in a clash is free; each after it costs 2 Focus." },
+    { term: "Ward (Beam clash)", text: "Tap Ward (2 Focus, once per clash) to hold your end: pushes past it dent the ward instead of scoring, and it shatters after two. Best raised when the knot is a step from you." },
+    { term: "Seals (Beam clash)", text: "The gold diamonds. A seal pauses the clash, gives the mage who was scored on a Focus back, and restarts the knot a step toward them: the scorer keeps a little momentum." },
+    { term: "Time (Beam clash)", text: "After 90 seconds the mage with more seals wins. Level at time goes to sudden death: the next seal decides." },
+    { term: "Start", text: "No arcade game starts on its own: the clock begins when you press Start, so you can read the board or go fullscreen first." },
+    { term: "Colour pads", text: "The four pads under the stage, placed like the swipes: up FIRE, right WATER, down SHADOW, left LIFE. In Volley a pad returns in that colour, in Quickdraw it draws that colour, in Beam clash it switches your beam." },
+    { term: "Gestures", text: "On the stage itself: in Volley a tap returns, a swipe returns in the colour of its direction and a long press wards; in Quickdraw a swipe picks a colour and press-and-hold charges; in Beam clash any touch on the stage is a push." },
     { term: "Play again", text: "Shown when a game ends: a fresh game of the same kind starts straight away." },
     { term: "Reset (arcade)", text: "In the arcade, Reset abandons the game in progress and puts the board back on Start." },
     { term: "Fullscreen", text: "The corner button on the stage (arcade only): hides the header and hints and gives the stage the height; where the browser allows it the page goes truly fullscreen too. Tap it again, or leave fullscreen from the browser, to come back." }

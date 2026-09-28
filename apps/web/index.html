@@ -157,6 +157,8 @@
                 <polygon id="stage-ward-opponent" class="ward" points="256,88 270,96 270,124 256,132 242,124 242,96" opacity="0" fill="#f4f0ff" fill-opacity="0.12" stroke="#f4f0ff" stroke-width="2"/>
 
                 <!-- The bolt and its trail, the seal orb, the impact flash. -->
+                <line id="stage-beam-player" x1="0" y1="0" x2="0" y2="0" stroke="#fff" stroke-width="4" stroke-linecap="round" opacity="0"/>
+                <line id="stage-beam-opponent" x1="0" y1="0" x2="0" y2="0" stroke="#fff" stroke-width="4" stroke-linecap="round" opacity="0"/>
                 <line id="stage-trail" x1="0" y1="0" x2="0" y2="0" stroke="#fff" stroke-width="3" stroke-linecap="round" opacity="0"/>
                 <circle id="stage-hand-player" cx="96" cy="112" r="6" fill="#fff" opacity="0"/>
                 <circle id="stage-hand-opponent" cx="264" cy="112" r="6" fill="#fff" opacity="0"/>
@@ -244,6 +246,42 @@
             <button id="quickdraw-start" class="cast-button arcade-start" type="button">Start</button>
             <p id="quickdraw-verdict" class="volley-verdict hidden"></p>
             <button id="quickdraw-rematch" class="ghost-button hidden" type="button">Play again</button>
+        </section>
+
+        <!-- Beam clash (arcade doc §1 B): two beams meet in a knot; push it on the
+             beat. Rules in apps/web/src/beam.ts. -->
+        <section id="beam" class="volley beam card hidden" aria-label="Beam clash">
+            <div class="volley-head">
+                <div class="volley-side">
+                    <span id="beam-name-player" class="label">You</span>
+                    <div id="beam-seals-player" class="pips seals" role="img" aria-label="0 of 3"></div>
+                    <div id="beam-focus-player" class="pips focus-pips" role="img" aria-label="7 of 7"></div>
+                </div>
+                <div class="volley-centre">
+                    <span id="beam-caption" class="volley-caption" aria-live="polite"></span>
+                    <span id="beam-clock" class="muted volley-speed"></span>
+                </div>
+                <div class="volley-side right">
+                    <span id="beam-name-opponent" class="label">Opponent</span>
+                    <div id="beam-seals-opponent" class="pips seals" role="img" aria-label="0 of 3"></div>
+                    <div id="beam-focus-opponent" class="pips focus-pips" role="img" aria-label="7 of 7"></div>
+                </div>
+            </div>
+            <div id="beam-track" class="beam-track" aria-hidden="true"></div>
+            <p class="muted volley-hint">Tap Push or the stage on the beat (the gold ring) to push the knot; dead on the beat pushes two. The colour that beats theirs doubles it: tap a pad to switch (the first switch is free, then 2 Focus). Off-beat taps cost a Focus. Ward holds your end twice.</p>
+            <div class="volley-pads" role="group" aria-label="Beam colour">
+                <button class="volley-pad beam-pad fire" data-essence="fire" type="button">▲ FIRE</button>
+                <button class="volley-pad beam-pad water" data-essence="water" type="button">▶ WATER</button>
+                <button class="volley-pad beam-pad shadow" data-essence="shadow" type="button">▼ SHADOW</button>
+                <button class="volley-pad beam-pad life" data-essence="life" type="button">◀ LIFE</button>
+            </div>
+            <div class="volley-actions beam-actions">
+                <button id="beam-ward" class="ghost-button" type="button">Ward · 2</button>
+                <button id="beam-push" class="cast-button volley-return" type="button">PUSH</button>
+            </div>
+            <button id="beam-start" class="cast-button arcade-start" type="button">Start</button>
+            <p id="beam-verdict" class="volley-verdict hidden"></p>
+            <button id="beam-rematch" class="ghost-button hidden" type="button">Play again</button>
         </section>
 
         <section class="opponent card">
@@ -347,6 +385,11 @@
                         <input id="settings-arcade-quickdraw" type="radio" name="arcade" value="quickdraw">
                         <strong>Arcade · Quickdraw</strong>
                         <ul><li>Both draw once inside a three-second ring; the orb is the telegraph.</li><li>Swipe a colour, hold to charge, or ward. The wheel and the charge decide.</li></ul>
+                    </label>
+                    <label class="settings-option" id="settings-game-beam-option">
+                        <input id="settings-arcade-beam" type="radio" name="arcade" value="beam">
+                        <strong>Arcade · Beam clash</strong>
+                        <ul><li>Two beams meet in a knot over the gate; push it on the beat.</li><li>The winning colour pushes double; push the knot into their mage for a seal. First to three.</li></ul>
                     </label>
                     <label class="settings-option" id="settings-game-word-option">
                         <input id="settings-game-word" type="radio" name="game" value="word">
