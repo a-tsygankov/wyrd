@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { glossary, glossaryFor, GLOSSARY_GROUPS } from "../dist/packages/wyrd-content/src/glossary.js";
+import { glossary, glossaryFor, glossaryGroupsFor, GLOSSARY_GROUPS } from "../dist/packages/wyrd-content/src/glossary.js";
 import { glyphs } from "../dist/packages/wyrd-content/src/glyphs.js";
 import { rulesets } from "../dist/packages/wyrd-content/src/rulesets.js";
 
 // The in-app Help section: every glyph, every reaction, every term the
 // interface uses and every control, explained from content, rule-aware.
 
-test("the glossary groups cover glyphs, reactions, terms and controls", () => {
-    assert.deepEqual(GLOSSARY_GROUPS.map(g => g.id), ["glyphs", "reactions", "terms", "controls"]);
+test("the glossary groups cover glyphs, reactions, terms, controls and the arcade games", () => {
+    assert.deepEqual(GLOSSARY_GROUPS.map(g => g.id), ["glyphs", "reactions", "terms", "controls", "arcade"]);
     for (const group of GLOSSARY_GROUPS) assert.ok(group.title.length > 2 && group.intro.length > 20, group.id);
 });
 
@@ -50,4 +50,26 @@ test("glossaryFor adds the ruleset's lines: prices under Teeth, hit points under
     assert.match(find(teeth, "WARD"), /Integrity 2/);
     assert.match(find(glossaryFor(rulesets.resolve.rules), "SEEK"), /Resolve/);
     assert.equal(classic.length, glossary.length);
+});
+
+test("the arcade group explains both games, their rules and every arcade button and gesture", () => {
+    const arcade = glossary.filter(e => e.group === "arcade").map(e => e.term);
+    for (const term of ["Volley", "Quickdraw", "Wheel", "Hearts", "Arcade Focus", "Serve", "Speed", "Return window", "Quench", "Kindle", "Weak return", "Ward (Volley)", "Smash", "Quick draw", "Charge", "Ward (Quickdraw)", "Clash", "Start", "Colour pads", "Gestures", "Play again", "Reset (arcade)", "Fullscreen"]) {
+        assert.ok(arcade.includes(term), `${term} missing from the arcade group`);
+    }
+    // Moved, not copied: the word duel's terms no longer carry the arcade lines.
+    const terms = glossary.filter(e => e.group === "terms").map(e => e.term);
+    for (const term of ["Volley", "Quickdraw", "Wheel", "Return window", "Ward (Volley)", "Smash"]) assert.ok(!terms.includes(term), `${term} still under terms`);
+    assert.match(glossary.find(e => e.term === "Wheel").text, /water quenches fire/);
+});
+
+test("the update banner is explained among the controls", () => {
+    const update = glossary.find(e => e.group === "controls" && e.term === "Update banner");
+    assert.ok(update);
+    assert.match(update.text, /Reload/);
+});
+
+test("Help leads with the game being played: arcade first in the arcade, last in the word duel", () => {
+    assert.deepEqual(glossaryGroupsFor("arcade").map(g => g.id), ["arcade", "glyphs", "reactions", "terms", "controls"]);
+    assert.deepEqual(glossaryGroupsFor("word").map(g => g.id), ["glyphs", "reactions", "terms", "controls", "arcade"]);
 });

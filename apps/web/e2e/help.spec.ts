@@ -26,3 +26,22 @@ test("Help follows the ruleset: reactions are free under Classic", async ({ page
     await page.locator("#help-toggle").click();
     await expect(page.locator("#help-reactions")).toContainText("Free under these rules");
 });
+
+test("in the arcade, Help opens on the arcade games: rules, buttons and gestures", async ({ page }) => {
+    await page.goto("/?seed=smoke&stage=2d");
+    await page.locator("#help-toggle").click();
+    await expect(page.locator("#help-rules")).toContainText("arcade");
+    await expect(page.locator("#help-body .help-group").first()).toHaveAttribute("id", "help-arcade");
+    await expect(page.locator("#help-nav a").first()).toHaveText("Arcade games");
+    const arcade = page.locator("#help-arcade");
+    for (const term of ["Volley", "Quickdraw", "Wheel", "Smash", "Charge", "Start", "Fullscreen", "Gestures"]) {
+        await expect(arcade.locator(".help-term", { hasText: term }).first()).toBeVisible();
+    }
+});
+
+test("in the word duel, the arcade games come last in Help", async ({ page }) => {
+    await page.goto("/?game=word&seed=smoke&animations=off");
+    await page.locator("#help-toggle").click();
+    await expect(page.locator("#help-body .help-group").first()).toHaveAttribute("id", "help-glyphs");
+    await expect(page.locator("#help-body .help-group").last()).toHaveAttribute("id", "help-arcade");
+});

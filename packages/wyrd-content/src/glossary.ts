@@ -7,9 +7,11 @@ import { POC_TRAY } from "./tray.js";
  * The in-app Help section: every glyph, every reaction, every term the
  * interface uses and every control, in one place. Data, not code, built
  * from the same content the composer's help uses so the two never
- * disagree. `glossaryFor(rules)` adds the lines a ruleset changes.
+ * disagree. `glossaryFor(rules)` adds the lines a ruleset changes. The
+ * arcade games (Volley, Quickdraw) have their own group, which Help puts
+ * first while an arcade game is being played (`glossaryGroupsFor`).
  */
-export type GlossaryGroupId = "glyphs" | "reactions" | "terms" | "controls";
+export type GlossaryGroupId = "glyphs" | "reactions" | "terms" | "controls" | "arcade";
 
 export type GlossaryGroup = { id: GlossaryGroupId; title: string; intro: string };
 
@@ -43,8 +45,20 @@ export const GLOSSARY_GROUPS: readonly GlossaryGroup[] = [
         id: "controls",
         title: "Controls",
         intro: "What every button does."
+    },
+    {
+        id: "arcade",
+        title: "Arcade games",
+        intro: "Volley and Quickdraw: one-thumb duels on the four-colour wheel, five hearts each, first to empty the other's hearts wins. Pick the game in Settings → Game. The ruleset and the glyph grammar do not apply here."
     }
 ];
+
+/** The groups in the order Help shows them: the game being played leads. */
+export function glossaryGroupsFor(game: "arcade" | "word"): GlossaryGroup[] {
+    const arcade = GLOSSARY_GROUPS.filter(g => g.id === "arcade");
+    const rest = GLOSSARY_GROUPS.filter(g => g.id !== "arcade");
+    return game === "arcade" ? [...arcade, ...rest] : [...rest, ...arcade];
+}
 
 const REACTION_GLYPHS = ["REFLECT", "SILENCE", "NULL", "SPELL"];
 
@@ -94,12 +108,6 @@ const termEntries: GlossaryEntry[] = [
     { term: "Opponent personality", text: "After the deck the computer opponent plays as one of five personalities (the Adept, the Aggressor, the Warden, the Trickster, the Gatekeeper), chosen from the match seed, with a plan each round; it never repeats its last three spells." },
     { term: "Seed", text: "The match seed decides the opponent's spells, reactions and telegraph order. Open the same ?seed= link to replay the same opponent and share a challenge." },
     { term: "Hot-seat", text: "Two players on one phone: Player 2 composes, hands over, Player 1 reads and reacts and casts, hands back, Player 2 reacts, both spells resolve." },
-    { term: "Volley", text: "The arcade game (Settings → Game, on by default): one bolt volleyed over the gate, faster every return. Tap or Return in the gold window to send it back; swipe or tap a colour to return in that colour; miss and you lose hearts equal to its magnitude. Five hearts each." },
-    { term: "Quickdraw", text: "The second arcade game (Settings → Game): both mages draw once inside a three-second ring. Tap a colour; inside the first second it is a quick draw, +1 magnitude but chosen blind. Hold Charge to grow the orb a step per second (a Focus each). Ward instead for 2 Focus. When the ring closes both orbs fly: the beating colour lands alone, the same colour goes to the bigger orb (equal orbs cancel), colours across the wheel both land. The orb you see growing in the other hand is the telegraph." },
-    { term: "Wheel", text: "The colour rule of the arcade: water quenches fire, fire burns life, life banishes shadow, shadow drinks water. Returning with the beating colour quenches the bolt to speed 1 and makes it yours; the same colour kindles it (+1 magnitude); a losing colour is a weak half-speed return; the colours across the wheel are neutral." },
-    { term: "Return window", text: "The last part of the bolt's flight, marked by the gold ring under your mage and around Return: a swing counts only inside it. It narrows as the bolt speeds up, never below what a thumb can hit." },
-    { term: "Ward (Volley)", text: "Hold the stage or tap Ward (2 Focus) to raise a ward in your colour for one return. It stands unless the bolt's colour beats yours, or a kindled bolt of your own colour comes through. A block drops the bolt and you serve next." },
-    { term: "Smash", text: "Tap Smash (3 Focus) before your return to double its speed. Focus refills one per clean return, so a volleying mage can afford smashes and a hiding one runs dry." },
     { term: "Weather", text: "A playtest option (Settings → Rules). Every third round draws a card both mages see, announced the round before, that bends one rule for that round only: Storm (AMPLIFY costs no Focus), Hush (SILENCE is free and strips the essence too, so any ward catches the spell), Ironbound (every ward has integrity 1), Open sky (no ward may be raised)." },
     { term: "Sudden death", text: "A playtest option. At 2-2 the next round is sudden death: the opponent's telegraph drops to the medium preset, reactions cost double, and the first seal to land decides the duel. A round nobody scores is played again." },
     { term: "Press the round", text: "A playtest option, solo only. Before you cast, press: this round's seal counts double for whoever wins it, so a press cuts both ways. If the opponent presses you may retreat instead, conceding one seal and playing the round at single stake. Both pressing makes the seal count four. Seals to win stay at 3." }
@@ -117,10 +125,38 @@ const controlEntries: GlossaryEntry[] = [
     { term: "Press / Retreat", text: "With the press option on, the two buttons above Cast: Press stakes a double seal on this round; Retreat, offered only when the opponent pressed, concedes one seal and keeps the round at single stake." },
     { term: "Stats", text: "Your rounds, seals, reactions and time to commit on this device, and everyone's per-ruleset summary." },
     { term: "Help", text: "This section: every glyph, reaction, term and button, under the rules you play." },
+    { term: "Update banner", text: "Appears at the top when a newer version of the app is live: Reload fetches it now, Later hides it until an even newer one. The app never reloads on its own, so a game in progress is safe." },
     { term: "Admin console", text: "Triple-tap the title (or ?admin=1) for hidden state, the opponent's spell, best-move advice with the resolver's reasons, and the client log." }
 ].map(e => ({ group: "controls" as const, ...e }));
 
-export const glossary: readonly GlossaryEntry[] = [...glyphEntries, ...reactionEntries, ...termEntries, ...controlEntries];
+// The arcade games (apps/web/src/volley.ts and quickdraw.ts hold the numbers these lines quote).
+const arcadeEntries: GlossaryEntry[] = [
+    { term: "Volley", text: "The default arcade game: one bolt volleyed over the gate, faster every return. Swing inside the gold window to send it back, in a colour if you like; a bolt that reaches you unanswered costs hearts equal to its magnitude, and whoever landed it serves next." },
+    { term: "Quickdraw", text: "The second arcade game: both mages draw once inside a three-second ring. Pick a colour, charge it or ward instead; when the ring closes both orbs fly and the wheel decides the clash. Two Focus come back after every round." },
+    { term: "Wheel", text: "The colour rule of both games: water quenches fire, fire burns life, life banishes shadow, shadow drinks water. Fire and shadow, water and life sit across the wheel from each other and are neutral." },
+    { term: "Hearts", text: "Five each, the red pips. A hit takes hearts equal to the magnitude of the bolt or orb (1 to 3); the first mage at zero loses." },
+    { term: "Arcade Focus", text: "Seven each, the violet pips, spent on wards (2), smashes (3) and Quickdraw charge (1 a step). Volley gives one back for every clean return; Quickdraw gives two back after every round." },
+    { term: "Serve", text: "Volley opens with the opponent serving in their colour. After a hit the mage who landed it serves; after a ward blocks, the blocker serves. The serve flies in the server's colour at speed 1." },
+    { term: "Speed", text: "Volley's bolt has six speed steps: every return adds one, so it crosses in 1.4 s at speed 1 and 0.65 s at speed 6. A quench drops it back to 1, a weak return halves it, a smash doubles it." },
+    { term: "Return window", text: "The last part of the bolt's flight, marked by the gold ring under your mage and around Return: a swing counts only inside it. It narrows from 0.45 s to 0.3 s as the bolt speeds up, never below what a thumb can hit." },
+    { term: "Quench", text: "Return in the colour that beats the bolt's (water on fire, and so on round the wheel): the bolt goes back in your colour at speed 1 and magnitude 1. The safe answer to a fast or heavy bolt." },
+    { term: "Kindle", text: "Return in the bolt's own colour: +1 magnitude (up to 3), so it costs the other mage more hearts if it lands. Speed still rises by one." },
+    { term: "Weak return", text: "Return in a colour the bolt beats: you reach it, but it goes back at half speed and magnitude 1, and it earns no Focus. A neutral colour or a plain tap is an ordinary return." },
+    { term: "Ward (Volley)", text: "Hold the stage or tap Ward (2 Focus) while the bolt is coming to raise a ward in your colour for that one arrival. It stands unless the bolt's colour beats yours, or a kindled bolt of your own colour comes through. A block drops the bolt and you serve next." },
+    { term: "Smash", text: "Tap Smash (3 Focus) while the bolt is coming: your return goes back at double speed (up to 6). Focus refills one per clean return, so a volleying mage can afford smashes and a hiding one runs dry." },
+    { term: "Quick draw", text: "In Quickdraw, a colour tapped inside the first second of the ring is a quick draw: +1 magnitude, but chosen before you could read the other orb. The pads glow gold while the quick window is open." },
+    { term: "Charge", text: "Hold Charge (or press and hold the stage) to grow your orb a step per second, one Focus a step, up to magnitude 3. Letting go banks the charge so far." },
+    { term: "Ward (Quickdraw)", text: "Tap Ward (2 Focus) instead of drawing: you throw nothing this round, and a ward in your colour stands against an orb it is not beaten by. The same colour or the beating colour goes through." },
+    { term: "Clash", text: "When Quickdraw's ring closes both orbs fly. The colour that beats the other lands alone; the same colour goes to the bigger orb and equal orbs cancel; colours across the wheel both land. The orb you watch growing in the other hand is their telegraph." },
+    { term: "Start", text: "Neither arcade game starts on its own: the clock begins when you press Start, so you can read the board or go fullscreen first." },
+    { term: "Colour pads", text: "The four pads under the stage, placed like the swipes: up FIRE, right WATER, down SHADOW, left LIFE. In Volley a pad returns in that colour; in Quickdraw it draws that colour." },
+    { term: "Gestures", text: "On the stage itself: in Volley a tap returns, a swipe returns in the colour of its direction and a long press wards; in Quickdraw a swipe picks a colour and press-and-hold charges." },
+    { term: "Play again", text: "Shown when a game ends: a fresh game of the same kind starts straight away." },
+    { term: "Reset (arcade)", text: "In the arcade, Reset abandons the game in progress and puts the board back on Start." },
+    { term: "Fullscreen", text: "The corner button on the stage (arcade only): hides the header and hints and gives the stage the height; where the browser allows it the page goes truly fullscreen too. Tap it again, or leave fullscreen from the browser, to come back." }
+].map(e => ({ group: "arcade" as const, ...e }));
+
+export const glossary: readonly GlossaryEntry[] = [...glyphEntries, ...reactionEntries, ...termEntries, ...controlEntries, ...arcadeEntries];
 
 /** The glossary with the ruleset's own lines appended (prices, integrity, hit points). */
 export function glossaryFor(rules: RuleOptions = CLASSIC_RULES): GlossaryEntry[] {
