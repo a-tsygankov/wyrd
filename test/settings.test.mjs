@@ -8,14 +8,14 @@ function memory(initial = {}) {
 }
 
 test("defaults: classic rules, timers on, telemetry on", () => {
-    assert.deepEqual(DEFAULT_SETTINGS, { ruleset: "classic", timers: true, telemetry: true, glyphHelpOpen: false, animations: true, sound: false, arena3d: true, weather: false, suddenDeath: false, press: false, deck: true, arenaFx: true, game: "arcade" });
+    assert.deepEqual(DEFAULT_SETTINGS, { ruleset: "classic", timers: true, telemetry: true, glyphHelpOpen: false, animations: true, sound: false, arena3d: true, weather: false, suddenDeath: false, press: false, deck: true, arenaFx: true, game: "arcade", arcadeMode: "volley" });
     assert.deepEqual(loadSettings(memory(), new URLSearchParams()), DEFAULT_SETTINGS);
 });
 
 test("saved settings are restored and unknown values fall back", () => {
     const storage = memory();
-    saveSettings(storage, { ruleset: "teeth", timers: false, telemetry: true, glyphHelpOpen: true, animations: false, sound: true, arena3d: true, weather: false, suddenDeath: false, press: false, deck: true, arenaFx: true, game: "arcade" });
-    assert.deepEqual(loadSettings(storage, new URLSearchParams()), { ruleset: "teeth", timers: false, telemetry: true, glyphHelpOpen: true, animations: false, sound: true, arena3d: true, weather: false, suddenDeath: false, press: false, deck: true, arenaFx: true, game: "arcade" });
+    saveSettings(storage, { ruleset: "teeth", timers: false, telemetry: true, glyphHelpOpen: true, animations: false, sound: true, arena3d: true, weather: false, suddenDeath: false, press: false, deck: true, arenaFx: true, game: "arcade", arcadeMode: "volley" });
+    assert.deepEqual(loadSettings(storage, new URLSearchParams()), { ruleset: "teeth", timers: false, telemetry: true, glyphHelpOpen: true, animations: false, sound: true, arena3d: true, weather: false, suddenDeath: false, press: false, deck: true, arenaFx: true, game: "arcade", arcadeMode: "volley" });
     storage.setItem("wyrd.settings", JSON.stringify({ ruleset: "lightning", timers: "maybe" }));
     assert.deepEqual(loadSettings(storage, new URLSearchParams()), DEFAULT_SETTINGS);
     storage.setItem("wyrd.settings", "not json");
@@ -24,10 +24,10 @@ test("saved settings are restored and unknown values fall back", () => {
 
 test("URL parameters override storage for this visit only", () => {
     const storage = memory();
-    saveSettings(storage, { ruleset: "teeth", timers: true, telemetry: true, glyphHelpOpen: false, animations: true, sound: false, arena3d: true, weather: false, suddenDeath: false, press: false, deck: true, arenaFx: true, game: "arcade" });
+    saveSettings(storage, { ruleset: "teeth", timers: true, telemetry: true, glyphHelpOpen: false, animations: true, sound: false, arena3d: true, weather: false, suddenDeath: false, press: false, deck: true, arenaFx: true, game: "arcade", arcadeMode: "volley" });
     const fromUrl = loadSettings(storage, new URLSearchParams("rules=resolve&timers=off&telemetry=off&animations=off&sound=on"));
-    assert.deepEqual(fromUrl, { ruleset: "resolve", timers: false, telemetry: false, glyphHelpOpen: false, animations: false, sound: true, arena3d: true, weather: false, suddenDeath: false, press: false, deck: true, arenaFx: true, game: "arcade" });
-    assert.deepEqual(loadSettings(storage, new URLSearchParams()), { ruleset: "teeth", timers: true, telemetry: true, glyphHelpOpen: false, animations: true, sound: false, arena3d: true, weather: false, suddenDeath: false, press: false, deck: true, arenaFx: true, game: "arcade" }, "storage untouched");
+    assert.deepEqual(fromUrl, { ruleset: "resolve", timers: false, telemetry: false, glyphHelpOpen: false, animations: false, sound: true, arena3d: true, weather: false, suddenDeath: false, press: false, deck: true, arenaFx: true, game: "arcade", arcadeMode: "volley" });
+    assert.deepEqual(loadSettings(storage, new URLSearchParams()), { ruleset: "teeth", timers: true, telemetry: true, glyphHelpOpen: false, animations: true, sound: false, arena3d: true, weather: false, suddenDeath: false, press: false, deck: true, arenaFx: true, game: "arcade", arcadeMode: "volley" }, "storage untouched");
     assert.equal(loadSettings(storage, new URLSearchParams("rules=bogus")).ruleset, "teeth", "an unknown rules= is ignored");
 });
 
@@ -63,4 +63,14 @@ test("the game is a setting: arcade (Volley) by default, the word duel on reques
     assert.equal(loadSettings(store, new URLSearchParams("game=chess")).game, "arcade", "unknown values fall back");
     saveSettings(store, { ...DEFAULT_SETTINGS, game: "word" });
     assert.equal(loadSettings(store, new URLSearchParams()).game, "word", "remembered");
+});
+
+test("the arcade game is a setting: Volley by default, Quickdraw on request, ?arcade= for a visit", () => {
+    assert.equal(DEFAULT_SETTINGS.arcadeMode, "volley");
+    const store = memory();
+    assert.equal(loadSettings(store, new URLSearchParams("arcade=quickdraw")).arcadeMode, "quickdraw");
+    assert.equal(loadSettings(store, new URLSearchParams("arcade=volley")).arcadeMode, "volley");
+    assert.equal(loadSettings(store, new URLSearchParams("arcade=pinball")).arcadeMode, "volley", "unknown values fall back");
+    saveSettings(store, { ...DEFAULT_SETTINGS, arcadeMode: "quickdraw" });
+    assert.equal(loadSettings(store, new URLSearchParams()).arcadeMode, "quickdraw", "remembered");
 });

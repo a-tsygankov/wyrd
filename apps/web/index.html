@@ -155,6 +155,8 @@
 
                 <!-- The bolt and its trail, the seal orb, the impact flash. -->
                 <line id="stage-trail" x1="0" y1="0" x2="0" y2="0" stroke="#fff" stroke-width="3" stroke-linecap="round" opacity="0"/>
+                <circle id="stage-hand-player" cx="96" cy="112" r="6" fill="#fff" opacity="0"/>
+                <circle id="stage-hand-opponent" cx="264" cy="112" r="6" fill="#fff" opacity="0"/>
                 <circle id="stage-bolt" cx="0" cy="0" r="8" fill="#fff" opacity="0"/>
                 <circle id="stage-orb" cx="0" cy="0" r="9" fill="url(#stage-glow)" opacity="0"/>
                 </g>
@@ -196,6 +198,47 @@
             </div>
             <p id="volley-verdict" class="volley-verdict hidden"></p>
             <button id="volley-rematch" class="ghost-button hidden" type="button">Play again</button>
+        </section>
+
+        <!-- Quickdraw (docs/arcade-duel-ideas.md §1 C): both draw once inside a ring;
+             the orb is the telegraph. Rules in apps/web/src/quickdraw.ts. -->
+        <section id="quickdraw" class="volley quickdraw card hidden" aria-label="Quickdraw">
+            <div class="volley-head">
+                <div class="volley-side">
+                    <span id="quickdraw-name-player" class="label">You</span>
+                    <div id="quickdraw-hearts-player" class="pips hearts" role="img" aria-label="5 of 5"></div>
+                    <div id="quickdraw-focus-player" class="pips focus-pips" role="img" aria-label="7 of 7"></div>
+                </div>
+                <div class="volley-centre">
+                    <span id="quickdraw-caption" class="volley-caption" aria-live="polite"></span>
+                    <span id="quickdraw-round" class="muted volley-speed">…</span>
+                </div>
+                <div class="volley-side right">
+                    <span id="quickdraw-name-opponent" class="label">Opponent</span>
+                    <div id="quickdraw-hearts-opponent" class="pips hearts" role="img" aria-label="5 of 5"></div>
+                    <div id="quickdraw-focus-opponent" class="pips focus-pips" role="img" aria-label="7 of 7"></div>
+                </div>
+            </div>
+            <div class="qd-ring" aria-hidden="true"><span id="quickdraw-ring-fill"></span></div>
+            <div class="qd-orbs" aria-label="The orbs">
+                <div id="quickdraw-orb-player" class="qd-orb"></div>
+                <span class="qd-vs muted">vs</span>
+                <div id="quickdraw-orb-opponent" class="qd-orb"></div>
+            </div>
+            <p class="muted volley-hint">Tap a colour: inside the first second it is a quick draw (+1). Hold Charge to grow your orb, one Focus a step. Ward instead for 2 Focus. When the ring closes, both orbs fly.</p>
+            <div class="volley-pads" role="group" aria-label="Draw colour">
+                <button class="volley-pad quickdraw-pad fire" data-essence="fire" type="button">▲ FIRE</button>
+                <button class="volley-pad quickdraw-pad water" data-essence="water" type="button">▶ WATER</button>
+                <button class="volley-pad quickdraw-pad shadow" data-essence="shadow" type="button">▼ SHADOW</button>
+                <button class="volley-pad quickdraw-pad life" data-essence="life" type="button">◀ LIFE</button>
+            </div>
+            <div class="volley-actions">
+                <button id="quickdraw-ward" class="ghost-button" type="button">Ward · 2</button>
+                <button id="quickdraw-charge" class="cast-button volley-return" type="button">HOLD TO CHARGE</button>
+                <span></span>
+            </div>
+            <p id="quickdraw-verdict" class="volley-verdict hidden"></p>
+            <button id="quickdraw-rematch" class="ghost-button hidden" type="button">Play again</button>
         </section>
 
         <section class="opponent card">
@@ -291,9 +334,14 @@
                 <legend class="label">Game</legend>
                 <div class="settings-rules" role="radiogroup" aria-label="Game">
                     <label class="settings-option" id="settings-game-arcade-option">
-                        <input id="settings-game-arcade" type="radio" name="game" value="arcade">
+                        <input id="settings-game-arcade" type="radio" name="game" value="volley">
                         <strong>Arcade · Volley</strong>
                         <ul><li>One bolt over the gate, faster every return; the colour wheel decides.</li><li>Five hearts, Focus for wards and smashes. One thumb.</li></ul>
+                    </label>
+                    <label class="settings-option" id="settings-game-quickdraw-option">
+                        <input id="settings-arcade-quickdraw" type="radio" name="arcade" value="quickdraw">
+                        <strong>Arcade · Quickdraw</strong>
+                        <ul><li>Both draw once inside a three-second ring; the orb is the telegraph.</li><li>Swipe a colour, hold to charge, or ward. The wheel and the charge decide.</li></ul>
                     </label>
                     <label class="settings-option" id="settings-game-word-option">
                         <input id="settings-game-word" type="radio" name="game" value="word">
