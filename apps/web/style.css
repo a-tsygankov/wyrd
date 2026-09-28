@@ -169,6 +169,16 @@ body[data-game="arcade"] #phase-strip, body[data-game="arcade"] .phase-hint, bod
 .volley-return { min-height: 52px; font-size: 1rem; }
 .volley-actions .ghost-button.selected { border-color: #ffc457; color: #ffc457; }
 .volley-verdict { margin: 0; font-weight: 800; color: #ffc457; }
+.qd-ring { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.qd-ring span { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, #f2c46b, #ffc457); transition: width 0.1s linear; }
+.qd-orbs { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; justify-items: center; min-height: 56px; }
+.qd-orb { --orb: #3a2f55; --mag: 0.6; width: 36px; height: 36px; border-radius: 50%; background: var(--orb); transform: scale(var(--mag)); transition: transform 0.2s ease-out, background 0.2s ease-out; box-shadow: 0 0 18px var(--orb); display: grid; place-items: center; font-weight: 800; font-size: 0.9rem; color: #140d22; }
+.qd-orb.quick { outline: 3px solid #ffc457; outline-offset: 3px; }
+.qd-orb.warded { background: #f4f0ff; box-shadow: 0 0 18px rgba(244, 240, 255, 0.6); transform: scale(0.9); }
+#quickdraw[data-quick-window="open"] .volley-pad:not(:disabled) { box-shadow: 0 0 0 2px #ffc457; }
+#quickdraw[data-phase="over"] .volley-pads, #quickdraw[data-phase="over"] .volley-actions, #quickdraw[data-phase="over"] .qd-ring { display: none; }
+:root { --fire: #ff7a3d; --water: #4fb3ff; --shadow: #a56bff; --life: #6ee7a8; }
+
 #volley[data-window="open"] .volley-return { box-shadow: 0 0 0 3px #ffc457, 0 0 18px rgba(255, 196, 87, 0.5); }
 #volley[data-phase="over"] .volley-pads, #volley[data-phase="over"] .volley-actions { display: none; }
 

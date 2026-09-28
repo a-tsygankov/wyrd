@@ -487,6 +487,17 @@ export function createArena(container: HTMLElement, options: ArenaOptions): Aren
     orb.add(glowSprite(0xf2c46b, 1.1, 0.9));
     orb.visible = false;
     scene.add(orb);
+    // Orbs held in the hands (Quickdraw's telegraph): a core and a halo each.
+    const handOrbs: Record<Side, { mesh: THREE.Mesh; halo: THREE.Sprite }> = { player: { mesh: new THREE.Mesh(), halo: new THREE.Sprite() }, opponent: { mesh: new THREE.Mesh(), halo: new THREE.Sprite() } };
+    for (const side of SIDES) {
+        const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.1, 16, 16), new THREE.MeshBasicMaterial({ color: 0xf4f0ff }));
+        const halo = glowSprite(0xf4f0ff, 0.8, 0.9);
+        mesh.add(halo);
+        mesh.position.set(POSITIONS[side].x + (side === "player" ? 0.55 : -0.55), 1.25, 0);
+        mesh.visible = false;
+        scene.add(mesh);
+        handOrbs[side] = { mesh, halo };
+    }
     // Soft scorch decal for the floor marks (a radial fade instead of a hard disc).
     const scorchTexture = canvasTexture(128, ctx => {
         const g = ctx.createRadialGradient(64, 64, 4, 64, 64, 64);
@@ -1125,6 +1136,19 @@ export function createArena(container: HTMLElement, options: ArenaOptions): Aren
         },
         window: (side, open) => {
             priority[side].visible = open;
+        },
+        orb: (side, held) => {
+            const { mesh, halo } = handOrbs[side];
+            if (!held) {
+                mesh.visible = false;
+                return;
+            }
+            const color = new THREE.Color(essenceColor(held.essence));
+            (mesh.material as THREE.MeshBasicMaterial).color.copy(color);
+            (halo.material as THREE.SpriteMaterial).color.copy(color);
+            mesh.scale.setScalar(0.6 + held.magnitude * 0.4);
+            halo.scale.setScalar(haloScale(held.magnitude));
+            mesh.visible = true;
         },
         caption: say
     };

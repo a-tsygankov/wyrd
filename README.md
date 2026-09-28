@@ -63,7 +63,7 @@ The client posts anonymous round/rematch/match-end events to `POST /api/telemetr
 
 ## Versioning and deployment
 
-Games: the page opens on the arcade **Volley** (magic ping-pong over the gate, `apps/web/src/volley.ts`); Settings → Game switches to the **word duel**; `?game=word|arcade` pins one for a visit and `?tempo=slow` runs the volley at a third of the speed.
+Games: the page opens on the arcade **Volley** (magic ping-pong over the gate, `apps/web/src/volley.ts`); Settings → Game switches to **Quickdraw** (`apps/web/src/quickdraw.ts`, `?arcade=quickdraw`) or the **word duel**; `?game=word|arcade` pins one for a visit and `?tempo=slow` runs the volley at a third of the speed.
 
 Same model as gigsy and feedme2. Each tier has its own version, bumped automatically on commit for the tiers the staged diff touches (`scripts/version_rules.py`; a package change cascades to everything bundled on top of it). PRs are gated by `.github/workflows/version-check.yml`. A schema change is a **new** numbered file in `apps/api/migrations/`; never edit one in place.
 

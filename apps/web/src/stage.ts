@@ -323,6 +323,8 @@ export type StageLive = {
     burst(side: Side, essence: string, kind: "hit" | "block" | "shatter" | "quench" | "kindle"): void;
     /** The return window ring on a mage. */
     window(side: Side, open: boolean): void;
+    /** An orb growing in a mage's hand (Quickdraw's telegraph), or none. */
+    orb(side: Side, held: { essence: string; magnitude: number } | undefined): void;
     caption(text: string): void;
 };
 
@@ -764,6 +766,17 @@ export function createStage(root: SVGSVGElement, hooks: StageHooks = {}, motion:
         },
         window: (side, open) => {
             root.querySelector<SVGElement>(`#stage-priority-${side}`)?.setAttribute("opacity", open ? "1" : "0");
+        },
+        orb: (side, held) => {
+            const hand = root.querySelector<SVGCircleElement>(`#stage-hand-${side}`);
+            if (!hand) return;
+            if (!held) {
+                hand.setAttribute("opacity", "0");
+                return;
+            }
+            hand.setAttribute("r", String(4 + held.magnitude * 2.5));
+            hand.setAttribute("fill", essenceColor(held.essence));
+            hand.setAttribute("opacity", "1");
         },
         caption: say
     };

@@ -33,10 +33,14 @@ export type Settings = {
     arenaFx: boolean;
     /** Which game the page plays: the arcade Volley (default) or the word duel. `?game=arcade|word`. */
     game: Game;
+    /** Which arcade game plays: Volley (default) or Quickdraw. `?arcade=volley|quickdraw`. */
+    arcadeMode: ArcadeMode;
 };
 
 export type Game = "arcade" | "word";
 export const GAMES: readonly Game[] = ["arcade", "word"];
+export type ArcadeMode = "volley" | "quickdraw";
+export const ARCADE_MODES: readonly ArcadeMode[] = ["volley", "quickdraw"];
 
 export const DEFAULT_SETTINGS: Settings = {
     ruleset: "classic",
@@ -51,7 +55,8 @@ export const DEFAULT_SETTINGS: Settings = {
     press: false,
     deck: true,
     arenaFx: true,
-    game: "arcade"
+    game: "arcade",
+    arcadeMode: "volley"
 };
 
 type StorageLike = { getItem(key: string): string | null; setItem(key: string, value: string): void };
@@ -64,6 +69,10 @@ function isRuleset(value: unknown): value is RulesetId {
 
 function isGame(value: unknown): value is Game {
     return typeof value === "string" && (GAMES as readonly string[]).includes(value);
+}
+
+function isArcadeMode(value: unknown): value is ArcadeMode {
+    return typeof value === "string" && (ARCADE_MODES as readonly string[]).includes(value);
 }
 
 function parseSwitch(value: string | null): boolean | undefined {
@@ -91,6 +100,7 @@ export function loadSettings(storage: StorageLike, params: URLSearchParams): Set
             if (typeof saved.deck === "boolean") settings.deck = saved.deck;
             if (typeof saved.arenaFx === "boolean") settings.arenaFx = saved.arenaFx;
             if (isGame(saved.game)) settings.game = saved.game;
+            if (isArcadeMode(saved.arcadeMode)) settings.arcadeMode = saved.arcadeMode;
         }
     } catch {
         // Unreadable storage or corrupt JSON: defaults.
@@ -115,6 +125,8 @@ export function loadSettings(storage: StorageLike, params: URLSearchParams): Set
     if (deck !== undefined) settings.deck = deck;
     const game = params.get("game");
     if (isGame(game)) settings.game = game;
+    const arcade = params.get("arcade");
+    if (isArcadeMode(arcade)) settings.arcadeMode = arcade;
     const fx = params.get("fx");
     if (fx === "light") settings.arenaFx = false;
     if (fx === "full") settings.arenaFx = true;
