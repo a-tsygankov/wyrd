@@ -29,7 +29,7 @@ function runePoints(rune: ArenaRune): THREE.Vector3[] {
     if (rune === "arc") for (let i=0;i<=24;i++){const a=Math.PI+(Math.PI*i/24);p.push(new THREE.Vector3(Math.cos(a)*.62,Math.sin(a)*.48,0));}
     if (rune === "circle") for (let i=0;i<=36;i++){const a=Math.PI*2*i/36;p.push(new THREE.Vector3(Math.cos(a)*.56,Math.sin(a)*.56,0));}
     if (rune === "triangle") return [new THREE.Vector3(0,.62,0),new THREE.Vector3(-.58,-.45,0),new THREE.Vector3(.58,-.45,0),new THREE.Vector3(0,.62,0)];
-    if (rune === "spiral") for(let i=0;i<=48;i++){const a=Math.PI*4*i/48,r=.08+.5*i/48;p.push(new THREE.Vector3(Math.cos(a)*r,Math.sin(a)*r,0));}
+    if (rune === "spiral") for (let i=0;i<=24;i++){const a=Math.PI*i/24;p.push(new THREE.Vector3(-.62+1.24*i/24,-Math.sin(a)*.48,0));}
     return p;
 }
 
