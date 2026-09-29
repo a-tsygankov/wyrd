@@ -1,7 +1,7 @@
 type Point={x:number;y:number;t:number}; type Rune="line"|"arc"|"circle"|"triangle"|"spiral"|"unknown";
 const $=<T extends HTMLElement>(id:string)=>document.getElementById(id) as T;
 const canvas=$<HTMLCanvasElement>("rune-canvas"), cast=$("cast"), ctx=canvas.getContext("2d")!;
-const recognized=$("recognized"), quality=$("quality"), intent=$("enemy-intent"), result=$("result"), timer=$("timer");
+const recognized=$("recognized"), quality=$("quality"), intent=$("enemy-intent"), result=$("result"), timer=$("timer"), arena=$("arena");
 let points:Point[]=[]; let drawing=false; let mode:"fencing"|"parry"="fencing"; let hpYou=100,hpEnemy=100; let roundOpen=true; let parryDeadline=0; let enemyRune:Rune="unknown"; let fencingTimer=60; let tick=0;
 const names:Record<Rune,string>={line:"PIERCE",arc:"REDIRECT",circle:"WARD",triangle:"POWER",spiral:"ABSORB",unknown:"—"};
 function resize(){const r=canvas.getBoundingClientRect(),d=devicePixelRatio||1;canvas.width=r.width*d;canvas.height=r.height*d;ctx.setTransform(d,0,0,d,0,0);redraw()}
@@ -35,6 +35,12 @@ function scheduleFencing(){roundOpen=false;intent.classList.remove("show");setTi
 function startParry(){roundOpen=true;points=[];redraw();enemyRune=chooseEnemy();parryDeadline=performance.now()+4000;intent.textContent="ENEMY CAST HIDDEN";intent.classList.add("show");$("cast-label").textContent="COMMIT BEFORE REVEAL";timer.textContent="4.0"}
 function resolveParry(r:Rune,score:number){roundOpen=false;intent.textContent="REVEAL · "+names[enemyRune];const playerWins=counters[enemyRune]?.includes(r),enemyWins=counters[r]?.includes(enemyRune);setTimeout(()=>{if(playerWins&&!enemyWins){damage("enemy",Math.round(12+score*10));flash("PARRY",true)}else if(enemyWins&&!playerWins){damage("you",18);flash("COUNTERED",false)}else flash("CLASH",true);setTimeout(startParry,1200)},550)}
 function setMode(m:"fencing"|"parry"){mode=m;document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",(x as HTMLElement).dataset.mode===m));hpYou=hpEnemy=100;damage("you",0);damage("enemy",0);points=[];redraw();if(m==="fencing"){$("mode-title").textContent="Real-time spell fencing";$("mode-help").textContent="Read the telegraph. Draw a counter before impact.";timer.textContent="60";fencingTimer=60;scheduleFencing()}else{$("mode-title").textContent="Simultaneous rune parry";$("mode-help").textContent="Commit within 4 seconds, then both runes resolve.";startParry()}}
+type Camera="behind"|"side"|"top"|"abstract";
+const cameraHelp:Record<Camera,string>={behind:"Over the caster's shoulder.",side:"Classic readable duel profile.",top:"Tactical geometry and spacing.",abstract:"Transparent opponent emphasizes gesture language."};
+function setCamera(camera:Camera){arena.dataset.camera=camera;document.querySelectorAll<HTMLButtonElement>("[data-camera]").forEach(b=>b.classList.toggle("active",b.dataset.camera===camera));$("camera-help").textContent=cameraHelp[camera];try{localStorage.setItem("wyrd-rune-camera",camera)}catch{}}
+$("camera-toggle").onclick=()=>$("camera-panel").classList.toggle("hidden");
+document.querySelectorAll<HTMLButtonElement>("[data-camera]").forEach(b=>b.onclick=()=>setCamera(b.dataset.camera as Camera));
+let initialCamera:Camera="behind";try{const saved=localStorage.getItem("wyrd-rune-camera");if(saved&&saved in cameraHelp)initialCamera=saved as Camera}catch{}setCamera(initialCamera);
 document.querySelectorAll<HTMLButtonElement>(".tab").forEach(b=>b.onclick=()=>setMode(b.dataset.mode as "fencing"|"parry"));$("reset").onclick=()=>setMode(mode);
 setInterval(()=>{if(mode==="fencing"){if(++tick%10===0&&fencingTimer>0)timer.textContent=String(--fencingTimer)}else if(roundOpen){const left=Math.max(0,parryDeadline-performance.now());timer.textContent=(left/1000).toFixed(1);if(left<=0){roundOpen=false;damage("you",12);flash("TOO SLOW",false);setTimeout(startParry,900)}}},100);
 setMode("fencing");
