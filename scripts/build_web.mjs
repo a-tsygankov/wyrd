@@ -15,6 +15,7 @@ mkdirSync(`${out}/apps/web/src`, { recursive: true });
 // deploy invalidates the previous shell). test/build_web.test.mjs guards both.
 const stamp = file => readFileSync(file, "utf8").replaceAll("__WEB_VERSION__", webVersion);
 writeFileSync(`${out}/index.html`, stamp("apps/web/index.html"));
+writeFileSync(`${out}/rune-lab.html`, stamp("apps/web/rune-lab.html"));
 writeFileSync(`${out}/sw.js`, stamp("apps/web/sw.js"));
 // The live version for the installed app's update check (apps/web/src/update.ts):
 // the page compares its own stamped version against this file.
