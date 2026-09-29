@@ -17,7 +17,7 @@ test("switches and persists all arena views", async ({ page }) => {
 });
 
 test("fencing accepts a drawn line and resolves combat feedback", async ({ page }) => {
-    await expect(page.locator("#enemy-intent")).toHaveClass(/show/, { timeout: 3_000 });
+    await expect(page.locator("#enemy-intent")).toHaveClass(/show/, { timeout: 3_000 });\n    await expect(page.locator("#arena")).toHaveAttribute("data-opponent-rune-visible", "true");
     await page.waitForTimeout(1_450);
     const box = await page.locator("#rune-canvas").boundingBox();
     expect(box).not.toBeNull();
@@ -34,7 +34,7 @@ test("fencing accepts a drawn line and resolves combat feedback", async ({ page 
 test("parry starts a four-second hidden commit and reset restarts it", async ({ page }) => {
     await page.getByRole("button", { name: "RUNE PARRY" }).click();
     await expect(page.locator("#mode-title")).toHaveText("Simultaneous rune parry");
-    await expect(page.locator("#enemy-intent")).toHaveText("ENEMY CAST HIDDEN");
+    await expect(page.locator("#enemy-intent")).toHaveText("ENEMY CAST HIDDEN");\n    await expect(page.locator("#arena")).toHaveAttribute("data-opponent-rune-visible", "false");
     await expect(page.locator("#cast-label")).toHaveText("COMMIT BEFORE REVEAL");
     await expect(page.locator("#timer")).toHaveText(/^[34]\./);
     await page.getByRole("button", { name: "RESET" }).click();
