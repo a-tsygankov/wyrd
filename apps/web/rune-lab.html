@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+    <meta name="theme-color" content="#090713">
+    <title>Wyrd Rune Lab</title>
+    <style>
+        :root{font-family:Inter,ui-sans-serif,system-ui,sans-serif;color:#f7f2ff;background:#090713;--violet:#9b6cff;--gold:#ffc86b;--cyan:#65d9ff;--red:#ff6d65}
+        *{box-sizing:border-box}body{margin:0;min-height:100dvh;background:radial-gradient(circle at 50% 10%,#241442 0,#0b0914 42%,#05040a 100%);overscroll-behavior:none}
+        button{font:inherit;color:inherit}.shell{max-width:520px;margin:auto;min-height:100dvh;padding:env(safe-area-inset-top) 12px calc(14px + env(safe-area-inset-bottom))}
+        header{display:flex;justify-content:space-between;align-items:center;padding:10px 2px}.brand{font-weight:900;letter-spacing:.16em;font-size:12px}.back{color:#bfb3d9;text-decoration:none;font-size:13px}
+        .tabs{display:grid;grid-template-columns:1fr 1fr;gap:6px;background:#100c1d;padding:5px;border:1px solid #30264a;border-radius:16px}.tab{border:0;background:transparent;padding:11px;border-radius:12px;color:#9388aa;font-weight:800}.tab.active{background:#332052;color:white;box-shadow:0 0 24px #6d41c844}
+        .arena{position:relative;height:46dvh;min-height:330px;max-height:470px;margin-top:10px;border:1px solid #392b58;border-radius:24px;overflow:hidden;background:linear-gradient(#141127aa,#080711),radial-gradient(circle at 50% 72%,#4e276b 0,#151025 35%,#07060d 70%)}
+        .arena:before{content:"";position:absolute;inset:48% -20% -10%;background:repeating-radial-gradient(ellipse at center,#ffffff0a 0 1px,transparent 2px 26px);transform:perspective(240px) rotateX(60deg)}
+        .hud{position:absolute;top:12px;left:12px;right:12px;display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;z-index:3}.hp{height:7px;background:#241d34;border-radius:9px;overflow:hidden}.hp i{display:block;height:100%;width:100%;background:linear-gradient(90deg,#7256ff,#62c9ff)}.hp.enemy i{background:linear-gradient(90deg,#ffb35e,#ff5e76)}.timer{font-weight:900;font-variant-numeric:tabular-nums}
+        .mage{position:absolute;bottom:74px;width:70px;height:126px;filter:drop-shadow(0 12px 10px #0008)}.mage.you{left:14%}.mage.enemy{right:14%;transform:scaleX(-1)}.head{position:absolute;left:24px;top:5px;width:23px;height:23px;border-radius:50%;background:#c7b8d2}.body{position:absolute;left:9px;top:28px;width:53px;height:83px;background:linear-gradient(135deg,#5b39c8,#241444);clip-path:polygon(30% 0,70% 0,100% 100%,0 100%)}.arm{position:absolute;top:49px;left:45px;width:42px;height:7px;border-radius:8px;background:#bbaeca;transform:rotate(-18deg);transform-origin:left}.enemy .body{background:linear-gradient(135deg,#9d315f,#35142c)}
+        .orb{position:absolute;width:18px;height:18px;border-radius:50%;background:white;box-shadow:0 0 8px 3px white,0 0 30px 10px var(--violet);opacity:.9}.you .orb{left:79px;top:39px}.enemy .orb{left:79px;top:39px}
+        .enemy-intent{position:absolute;top:62px;left:50%;transform:translateX(-50%);padding:7px 11px;border-radius:99px;background:#0b0916cc;border:1px solid #594071;color:#d8c9ef;font-size:12px;font-weight:800;opacity:0;transition:.18s}.enemy-intent.show{opacity:1}
+        .projectile{position:absolute;left:23%;top:51%;width:16px;height:16px;border-radius:50%;background:#ff9a55;box-shadow:0 0 12px 4px #ff9a55,0 0 35px 12px #ff5d3d;opacity:0}.projectile.fly{animation:fly .65s ease-in forwards}@keyframes fly{0%{opacity:1;left:25%}100%{opacity:1;left:72%}}
+        .result{position:absolute;left:50%;top:34%;transform:translate(-50%,-50%) scale(.8);font-size:26px;font-weight:1000;letter-spacing:.06em;text-shadow:0 0 18px currentColor;opacity:0;z-index:4}.result.show{animation:result .9s ease}@keyframes result{20%,70%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0}}
+        .cast{position:absolute;left:10px;right:10px;bottom:10px;height:42%;border-radius:20px;background:linear-gradient(#161124aa,#090713dd);border:1px solid #534071;touch-action:none;overflow:hidden}.cast canvas{width:100%;height:100%;display:block}.cast-label{position:absolute;left:12px;top:10px;font-size:11px;color:#9f91b6;pointer-events:none}.readout{position:absolute;right:10px;top:9px;text-align:right;pointer-events:none}.readout strong{display:block;color:#fff;font-size:13px}.readout span{font-size:10px;color:#9f91b6}
+        .footer{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:10px 4px 0}.status strong{display:block;font-size:14px}.status span{font-size:11px;color:#9f91b6}.action{border:1px solid #684aa0;background:#2a1749;padding:10px 14px;border-radius:13px;font-weight:850}
+        .vocab{display:flex;gap:6px;overflow:auto;padding:9px 1px 3px}.chip{flex:0 0 auto;border:1px solid #35284d;background:#100d19;border-radius:11px;padding:7px 9px;color:#9e91b5;font-size:11px}.chip b{color:#eee2ff;font-size:15px;margin-right:4px}
+        .note{margin:8px 3px 0;color:#756b87;font-size:10px;line-height:1.35}
+    </style>
+</head>
+<body>
+<main class="shell">
+<header><span class="brand">WYRD · RUNE LAB</span><a class="back" href="./">Word duel ↗</a></header>
+<nav class="tabs"><button class="tab active" data-mode="fencing">RUNE FENCING</button><button class="tab" data-mode="parry">RUNE PARRY</button></nav>
+<section class="arena" id="arena">
+    <div class="hud"><div class="hp"><i id="hp-you"></i></div><div class="timer" id="timer">60</div><div class="hp enemy"><i id="hp-enemy"></i></div></div>
+    <div class="enemy-intent" id="enemy-intent">SENSING…</div>
+    <div class="mage you"><i class="head"></i><i class="body"></i><i class="arm"></i><i class="orb"></i></div>
+    <div class="mage enemy"><i class="head"></i><i class="body"></i><i class="arm"></i><i class="orb"></i></div>
+    <div class="projectile" id="projectile"></div><div class="result" id="result">PARRY</div>
+    <div class="cast" id="cast"><canvas id="rune-canvas"></canvas><span class="cast-label" id="cast-label">DRAW A RUNE</span><div class="readout"><strong id="recognized">—</strong><span id="quality">touch to cast</span></div></div>
+</section>
+<div class="vocab"><span class="chip"><b>—</b>PIERCE</span><span class="chip"><b>⌒</b>REDIRECT</span><span class="chip"><b>○</b>WARD</span><span class="chip"><b>△</b>POWER</span><span class="chip"><b>↻</b>ABSORB</span></div>
+<div class="footer"><div class="status"><strong id="mode-title">Real-time spell fencing</strong><span id="mode-help">Read the telegraph. Draw a counter before impact.</span></div><button class="action" id="reset">RESET</button></div>
+<p class="note">Prototype instrumentation: classification is intentionally forgiving. Shape quality changes power; it does not cancel a recognized cast. Best played one-handed in portrait.</p>
+</main>
+<script type="module" src="./apps/web/src/runeLab.js"></script>
+</body></html>
