@@ -8,6 +8,8 @@ export type RuneArena = {
     setCamera(view: RuneArenaCamera): void;
     showOpponentRune(rune: ArenaRune, visible: boolean): void;
     pulseOpponentCast(): void;
+    presentSpell(side: "player"|"opponent", rune: ArenaRune): void;
+    presentHit(side: "player"|"opponent", amount: number): void;
     dispose(): void;
 };
 
@@ -67,6 +69,8 @@ export function createRuneArena(container: HTMLElement): RuneArena {
     const runeGroup=new THREE.Group(); runeGroup.position.set(POSITIONS.opponent.x,1.55,POSITIONS.opponent.z+.48); scene.add(runeGroup);
     const glow=new THREE.PointLight(0xff7a3d,0,3); runeGroup.add(glow);
     let currentView:RuneArenaCamera="behind", runeVisible=false, pulseUntil=0;
+    const bolts: { mesh: THREE.Mesh; from: THREE.Vector3; to: THREE.Vector3; start: number; ms: number }[]=[];
+    let hitFlash:{side:"player"|"opponent";until:number}|undefined;
 
     function setRune(rune:ArenaRune){
         runeGroup.clear(); runeGroup.add(glow);
@@ -79,11 +83,23 @@ export function createRuneArena(container: HTMLElement): RuneArena {
     function showOpponentRune(rune:ArenaRune,visible:boolean){setRune(rune);runeVisible=visible;runeGroup.visible=visible;container.dataset.opponentRuneVisible=String(visible);container.dataset.opponentRune=rune;}
     function setCamera(view:RuneArenaCamera){currentView=view;const p=cameraPoses[view];camera.position.set(...p.at);camera.fov=p.fov;camera.updateProjectionMatrix();camera.lookAt(...p.look);container.dataset.camera=view;mageRoots.opponent.traverse(o=>{if(o instanceof THREE.Mesh){const mats=Array.isArray(o.material)?o.material:[o.material];for(const m of mats){m.transparent=view==="abstract";m.opacity=view==="abstract"?.2:1;}}});}
     function pulseOpponentCast(){pulseUntil=performance.now()+420;}
+    function presentSpell(side:"player"|"opponent",rune:ArenaRune){
+        const from=new THREE.Vector3(POSITIONS[side].x,1.35,POSITIONS[side].z);
+        const other=side==="player"?"opponent":"player"; const to=new THREE.Vector3(POSITIONS[other].x,1.25,POSITIONS[other].z);
+        const color=side==="player"?0xad63ff:0xff7a3d;
+        const mesh=new THREE.Mesh(new THREE.SphereGeometry(rune==="triangle"?.13:.09,10,10),new THREE.MeshBasicMaterial({color,transparent:true,opacity:.95}));
+        const halo=new THREE.PointLight(color,2.2,3);mesh.add(halo);mesh.position.copy(from);scene.add(mesh);bolts.push({mesh,from,to,start:performance.now(),ms:rune==="line"?360:560});
+        container.dataset.lastSpell=side+":"+rune;
+    }
+    function presentHit(side:"player"|"opponent",amount:number){hitFlash={side,until:performance.now()+300};container.dataset.lastHit=side+":"+amount;}
 
     const clock=new THREE.Clock();let frame=0;
     function resize(){const r=container.getBoundingClientRect();renderer.setSize(r.width,r.height,false);camera.aspect=Math.max(.1,r.width/Math.max(1,r.height));camera.updateProjectionMatrix();}
     const ro=new ResizeObserver(resize);ro.observe(container);resize();setCamera("behind");
-    function render(){frame=requestAnimationFrame(render);const dt=Math.min(clock.getDelta(),.05);for(const m of mixers)m.update(dt);const now=performance.now();const pulse=now<pulseUntil?1-(pulseUntil-now)/420:0;runeGroup.scale.setScalar(runeVisible?1+Math.sin(pulse*Math.PI)*.18:1);glow.intensity=runeVisible?1.2+Math.sin(now*.01)*.35:0;renderer.render(scene,camera);}render();
+    function render(){frame=requestAnimationFrame(render);const dt=Math.min(clock.getDelta(),.05);for(const m of mixers)m.update(dt);const now=performance.now();
+        for(let i=bolts.length-1;i>=0;i--){const b=bolts[i]!;const t=Math.min(1,(now-b.start)/b.ms);b.mesh.position.lerpVectors(b.from,b.to,t);b.mesh.scale.setScalar(1+Math.sin(t*Math.PI)*1.4);if(t>=1){scene.remove(b.mesh);bolts.splice(i,1);}}
+        if(hitFlash){const root=mageRoots[hitFlash.side];root.scale.setScalar(now<hitFlash.until?1+Math.sin(now*.06)*.08:1);if(now>=hitFlash.until)hitFlash=undefined;}
+        const pulse=now<pulseUntil?1-(pulseUntil-now)/420:0;runeGroup.scale.setScalar(runeVisible?1+Math.sin(pulse*Math.PI)*.18:1);glow.intensity=runeVisible?1.2+Math.sin(now*.01)*.35:0;renderer.render(scene,camera);}render();
 
-    return {setCamera,showOpponentRune,pulseOpponentCast,dispose(){cancelAnimationFrame(frame);ro.disconnect();renderer.dispose();container.removeChild(renderer.domElement);}};
+    return {setCamera,showOpponentRune,pulseOpponentCast,presentSpell,presentHit,dispose(){cancelAnimationFrame(frame);ro.disconnect();renderer.dispose();container.removeChild(renderer.domElement);}};
 }
