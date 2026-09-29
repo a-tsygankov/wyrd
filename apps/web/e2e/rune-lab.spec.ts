@@ -66,3 +66,43 @@ test("zero opponent HP produces victory and closes casting", async ({ page }) =>
     await page.getByRole("button", { name: "Log" }).click();
     await expect(page.locator("#combat-log")).toContainText("VICTORY");
 });
+
+
+test("camera controls rotate, zoom and reset the 3D arena", async ({ page }) => {
+    await page.getByRole("button", { name: "View" }).click();
+    const arena = page.locator("#arena");
+    const initialDistance = await arena.getAttribute("data-camera-distance");
+    const initialYaw = await arena.getAttribute("data-camera-yaw");
+    await page.getByRole("button", { name: "Turn camera right" }).click();
+    await expect(arena).not.toHaveAttribute("data-camera-yaw", initialYaw ?? "");
+    await page.getByRole("button", { name: "Zoom in" }).click();
+    await expect(arena).not.toHaveAttribute("data-camera-distance", initialDistance ?? "");
+    await page.getByRole("button", { name: "Reset view" }).click();
+    await expect(arena).toHaveAttribute("data-camera", "behind");
+});
+
+test("rune guide shows drawing instructions including inverted-arc Absorb", async ({ page }) => {
+    await page.getByRole("button", { name: "Runes" }).click();
+    await expect(page.locator("#rune-help")).toContainText("how to draw");
+    await expect(page.locator("#rune-help")).toContainText("inverse of Redirect");
+    await expect(page.locator("#rune-help")).toContainText("Finish close to the starting point");
+});
+
+test("downward open arc is recognized as Absorb", async ({ page }) => {
+    await expect(page.locator("#enemy-intent")).toHaveClass(/show/, { timeout: 3_000 });
+    const box = await page.locator("#rune-canvas").boundingBox();
+    expect(box).not.toBeNull();
+    if (!box) return;
+    const x0 = box.x + 45;
+    const y0 = box.y + box.height * .35;
+    await page.mouse.move(x0, y0);
+    await page.mouse.down();
+    for (let i = 1; i <= 14; i++) {
+        const t = i / 14;
+        const x = x0 + t * Math.min(180, box.width - 90);
+        const y = y0 + Math.sin(Math.PI * t) * 75;
+        await page.mouse.move(x, y);
+    }
+    await page.mouse.up();
+    await expect(page.locator("#recognized")).toHaveText("ABSORB");
+});

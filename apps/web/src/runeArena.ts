@@ -6,6 +6,9 @@ export type RuneArenaCamera = "behind" | "side" | "top" | "abstract";
 export type ArenaRune = "line" | "arc" | "circle" | "triangle" | "spiral" | "unknown";
 export type RuneArena = {
     setCamera(view: RuneArenaCamera): void;
+    orbit(deltaYaw: number, deltaPitch: number): void;
+    zoom(delta: number): void;
+    resetCamera(): void;
     showOpponentRune(rune: ArenaRune, visible: boolean): void;
     pulseOpponentCast(): void;
     presentSpell(side: "player"|"opponent", rune: ArenaRune): void;
@@ -14,10 +17,10 @@ export type RuneArena = {
 };
 
 const cameraPoses: Record<RuneArenaCamera, { at: [number,number,number]; look: [number,number,number]; fov: number }> = {
-    behind: { at: [-4.4,2.15,2.75], look: [0.55,1.15,0], fov: 34 },
-    side: { at: [0,2.0,6.4], look: [0,1.15,0], fov: 30 },
-    top: { at: [0,8.8,0.35], look: [0,0,0], fov: 38 },
-    abstract: { at: [0,2.0,6.4], look: [0,1.15,0], fov: 30 }
+    behind: { at: [-5.8,2.65,3.9], look: [0,1.05,0], fov: 38 },
+    side: { at: [0,2.45,7.2], look: [0,1.05,0], fov: 34 },
+    top: { at: [0,9.6,1.3], look: [0,0.8,0], fov: 42 },
+    abstract: { at: [0,2.45,7.2], look: [0,1.05,0], fov: 34 }
 };
 
 function runePoints(rune: ArenaRune): THREE.Vector3[] {
@@ -26,7 +29,7 @@ function runePoints(rune: ArenaRune): THREE.Vector3[] {
     if (rune === "arc") for (let i=0;i<=24;i++){const a=Math.PI+(Math.PI*i/24);p.push(new THREE.Vector3(Math.cos(a)*.62,Math.sin(a)*.48,0));}
     if (rune === "circle") for (let i=0;i<=36;i++){const a=Math.PI*2*i/36;p.push(new THREE.Vector3(Math.cos(a)*.56,Math.sin(a)*.56,0));}
     if (rune === "triangle") return [new THREE.Vector3(0,.62,0),new THREE.Vector3(-.58,-.45,0),new THREE.Vector3(.58,-.45,0),new THREE.Vector3(0,.62,0)];
-    if (rune === "spiral") for(let i=0;i<=48;i++){const a=Math.PI*4*i/48,r=.08+.5*i/48;p.push(new THREE.Vector3(Math.cos(a)*r,Math.sin(a)*r,0));}
+    if (rune === "spiral") for (let i=0;i<=24;i++){const a=Math.PI*i/24;p.push(new THREE.Vector3(-.62+1.24*i/24,-Math.sin(a)*.48,0));}
     return p;
 }
 
@@ -69,6 +72,10 @@ export function createRuneArena(container: HTMLElement): RuneArena {
     const runeGroup=new THREE.Group(); runeGroup.position.set(POSITIONS.opponent.x,1.55,POSITIONS.opponent.z+.48); scene.add(runeGroup);
     const glow=new THREE.PointLight(0xff7a3d,0,3); runeGroup.add(glow);
     let currentView:RuneArenaCamera="behind", runeVisible=false, pulseUntil=0;
+    const cameraTarget=new THREE.Vector3(0,1.05,0);
+    let cameraDistance=7, cameraYaw=0, cameraPitch=.28;
+    let dragPointer:number|undefined, lastX=0,lastY=0;
+    const activePointers=new Map<number,{x:number;y:number}>(); let pinchDistance=0;
     const bolts: { mesh: THREE.Mesh; from: THREE.Vector3; to: THREE.Vector3; start: number; ms: number }[]=[];
     let hitFlash:{side:"player"|"opponent";until:number}|undefined;
 
@@ -81,7 +88,20 @@ export function createRuneArena(container: HTMLElement): RuneArena {
         for(const pt of pts.filter((_,i)=>i%6===0)){const spark=new THREE.Mesh(new THREE.SphereGeometry(.025,6,6),new THREE.MeshBasicMaterial({color:0xffe4c2}));spark.position.copy(pt);runeGroup.add(spark);}
     }
     function showOpponentRune(rune:ArenaRune,visible:boolean){setRune(rune);runeVisible=visible;runeGroup.visible=visible;container.dataset.opponentRuneVisible=String(visible);container.dataset.opponentRune=rune;}
-    function setCamera(view:RuneArenaCamera){currentView=view;const p=cameraPoses[view];camera.position.set(...p.at);camera.fov=p.fov;camera.updateProjectionMatrix();camera.lookAt(...p.look);container.dataset.camera=view;mageRoots.opponent.traverse(o=>{if(o instanceof THREE.Mesh){const mats=Array.isArray(o.material)?o.material:[o.material];for(const m of mats){m.transparent=view==="abstract";m.opacity=view==="abstract"?.2:1;}}});}
+    function applyCamera(){
+        const horizontal=Math.cos(cameraPitch)*cameraDistance;
+        camera.position.set(cameraTarget.x+Math.sin(cameraYaw)*horizontal,cameraTarget.y+Math.sin(cameraPitch)*cameraDistance,cameraTarget.z+Math.cos(cameraYaw)*horizontal);
+        camera.lookAt(cameraTarget);camera.updateProjectionMatrix();
+        container.dataset.cameraDistance=cameraDistance.toFixed(2);container.dataset.cameraYaw=cameraYaw.toFixed(3);
+    }
+    function setCamera(view:RuneArenaCamera){currentView=view;const p=cameraPoses[view];const at=new THREE.Vector3(...p.at),look=new THREE.Vector3(...p.look),d=at.clone().sub(look);cameraTarget.copy(look);cameraDistance=d.length();cameraYaw=Math.atan2(d.x,d.z);cameraPitch=Math.asin(THREE.MathUtils.clamp(d.y/cameraDistance,-.99,.99));camera.fov=p.fov;applyCamera();container.dataset.camera=view;mageRoots.opponent.traverse(o=>{if(o instanceof THREE.Mesh){const mats=Array.isArray(o.material)?o.material:[o.material];for(const m of mats){m.transparent=view==="abstract";m.opacity=view==="abstract"?.2:1;}}});}
+    function orbit(deltaYaw:number,deltaPitch:number){cameraYaw+=deltaYaw;cameraPitch=THREE.MathUtils.clamp(cameraPitch+deltaPitch,.12,1.38);applyCamera();}
+    function zoom(delta:number){cameraDistance=THREE.MathUtils.clamp(cameraDistance+delta,4.8,11.5);applyCamera();}
+    function resetCamera(){setCamera(currentView);}
+    function pointerDown(e:PointerEvent){activePointers.set(e.pointerId,{x:e.clientX,y:e.clientY});renderer.domElement.setPointerCapture(e.pointerId);if(activePointers.size===1){dragPointer=e.pointerId;lastX=e.clientX;lastY=e.clientY}else if(activePointers.size===2){const ps=[...activePointers.values()];pinchDistance=Math.hypot(ps[0]!.x-ps[1]!.x,ps[0]!.y-ps[1]!.y);}}
+    function pointerMove(e:PointerEvent){if(!activePointers.has(e.pointerId))return;activePointers.set(e.pointerId,{x:e.clientX,y:e.clientY});if(activePointers.size===2){const ps=[...activePointers.values()],next=Math.hypot(ps[0]!.x-ps[1]!.x,ps[0]!.y-ps[1]!.y);if(pinchDistance)zoom((pinchDistance-next)*.018);pinchDistance=next;return;}if(dragPointer===e.pointerId){const dx=e.clientX-lastX,dy=e.clientY-lastY;lastX=e.clientX;lastY=e.clientY;orbit(-dx*.008,dy*.006);}}
+    function pointerUp(e:PointerEvent){activePointers.delete(e.pointerId);if(dragPointer===e.pointerId)dragPointer=undefined;if(activePointers.size<2)pinchDistance=0;}
+    renderer.domElement.style.touchAction="none";renderer.domElement.addEventListener("pointerdown",pointerDown);renderer.domElement.addEventListener("pointermove",pointerMove);renderer.domElement.addEventListener("pointerup",pointerUp);renderer.domElement.addEventListener("pointercancel",pointerUp);renderer.domElement.addEventListener("wheel",e=>{e.preventDefault();zoom(e.deltaY*.006)},{passive:false});
     function pulseOpponentCast(){pulseUntil=performance.now()+420;}
     function presentSpell(side:"player"|"opponent",rune:ArenaRune){
         const from=new THREE.Vector3(POSITIONS[side].x,1.35,POSITIONS[side].z);
@@ -101,5 +121,5 @@ export function createRuneArena(container: HTMLElement): RuneArena {
         if(hitFlash){const root=mageRoots[hitFlash.side];root.scale.setScalar(now<hitFlash.until?1+Math.sin(now*.06)*.08:1);if(now>=hitFlash.until)hitFlash=undefined;}
         const pulse=now<pulseUntil?1-(pulseUntil-now)/420:0;runeGroup.scale.setScalar(runeVisible?1+Math.sin(pulse*Math.PI)*.18:1);glow.intensity=runeVisible?1.2+Math.sin(now*.01)*.35:0;renderer.render(scene,camera);}render();
 
-    return {setCamera,showOpponentRune,pulseOpponentCast,presentSpell,presentHit,dispose(){cancelAnimationFrame(frame);ro.disconnect();renderer.dispose();container.removeChild(renderer.domElement);}};
+    return {setCamera,orbit,zoom,resetCamera,showOpponentRune,pulseOpponentCast,presentSpell,presentHit,dispose(){cancelAnimationFrame(frame);ro.disconnect();renderer.dispose();container.removeChild(renderer.domElement);}};
 }
