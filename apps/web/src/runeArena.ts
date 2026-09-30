@@ -10,6 +10,8 @@ export type RuneArena = {
     zoom(delta: number): void;
     resetCamera(): void;
     showOpponentRune(rune: ArenaRune, visible: boolean): void;
+    /** How much of the opponent's rune is written, 0..1: the stroke grows with a glowing tip where the pen is. */
+    setOpponentProgress(progress: number): void;
     pulseOpponentCast(): void;
     presentSpell(side: "player"|"opponent", rune: ArenaRune): void;
     presentHit(side: "player"|"opponent", amount: number): void;
@@ -22,6 +24,23 @@ const cameraPoses: Record<RuneArenaCamera, { at: [number,number,number]; look: [
     top: { at: [0,9.6,1.3], look: [0,0.8,0], fov: 42 },
     abstract: { at: [0,2.45,7.2], look: [0,1.05,0], fov: 34 }
 };
+
+/** The rune's path at even spacing, so a partial draw grows at a steady pace whatever the shape (a Pierce has only two raw points). */
+function evenPoints(pts: THREE.Vector3[], n = 48): THREE.Vector3[] {
+    if (pts.length < 2) return pts;
+    const lengths = [0];
+    for (let i = 1; i < pts.length; i++) lengths.push(lengths[i - 1]! + pts[i]!.distanceTo(pts[i - 1]!));
+    const total = lengths.at(-1)!;
+    const out: THREE.Vector3[] = [];
+    let j = 1;
+    for (let k = 0; k < n; k++) {
+        const target = (total * k) / (n - 1);
+        while (j < pts.length - 1 && lengths[j]! < target) j++;
+        const span = lengths[j]! - lengths[j - 1]! || 1;
+        out.push(pts[j - 1]!.clone().lerp(pts[j]!, (target - lengths[j - 1]!) / span));
+    }
+    return out;
+}
 
 function runePoints(rune: ArenaRune): THREE.Vector3[] {
     const p: THREE.Vector3[] = [];
@@ -79,15 +98,30 @@ export function createRuneArena(container: HTMLElement): RuneArena {
     const bolts: { mesh: THREE.Mesh; from: THREE.Vector3; to: THREE.Vector3; start: number; ms: number }[]=[];
     let hitFlash:{side:"player"|"opponent";until:number}|undefined;
 
+    // The rune being written: the line's draw range grows with the progress, sparks follow it, a bright tip marks the pen.
+    let runePath: THREE.Vector3[] = [];
+    let runeGeometry: THREE.BufferGeometry | undefined;
+    let runeSparks: THREE.Mesh[] = [];
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(.05,10,10), new THREE.MeshBasicMaterial({color:0xfff1d6}));
     function setRune(rune:ArenaRune){
-        runeGroup.clear(); runeGroup.add(glow);
-        const pts=runePoints(rune); if(pts.length<2)return;
-        const geom=new THREE.BufferGeometry().setFromPoints(pts);
-        const line=new THREE.Line(geom,new THREE.LineBasicMaterial({color:0xffb06b,transparent:true,opacity:.98,blending:THREE.AdditiveBlending,depthWrite:false}));
+        runeGroup.clear(); runeGroup.add(glow); runeSparks=[]; runeGeometry=undefined;
+        runePath=evenPoints(runePoints(rune)); if(runePath.length<2)return;
+        runeGeometry=new THREE.BufferGeometry().setFromPoints(runePath);
+        const line=new THREE.Line(runeGeometry,new THREE.LineBasicMaterial({color:0xffb06b,transparent:true,opacity:.98,blending:THREE.AdditiveBlending,depthWrite:false}));
         runeGroup.add(line);
-        for(const pt of pts.filter((_,i)=>i%6===0)){const spark=new THREE.Mesh(new THREE.SphereGeometry(.025,6,6),new THREE.MeshBasicMaterial({color:0xffe4c2}));spark.position.copy(pt);runeGroup.add(spark);}
+        for(const pt of runePath.filter((_,i)=>i%6===0)){const spark=new THREE.Mesh(new THREE.SphereGeometry(.025,6,6),new THREE.MeshBasicMaterial({color:0xffe4c2}));spark.position.copy(pt);runeGroup.add(spark);runeSparks.push(spark);}
+        runeGroup.add(tip);
     }
-    function showOpponentRune(rune:ArenaRune,visible:boolean){setRune(rune);runeVisible=visible;runeGroup.visible=visible;container.dataset.opponentRuneVisible=String(visible);container.dataset.opponentRune=rune;}
+    function setOpponentProgress(progress:number){
+        const p=Math.min(1,Math.max(0,progress));
+        const count=Math.max(1,Math.round(p*(runePath.length-1))+1);
+        runeGeometry?.setDrawRange(0,count);
+        runeSparks.forEach((spark,i)=>spark.visible=i*6<count);
+        const at=runePath[count-1]; if(at)tip.position.copy(at);
+        tip.visible=p>0&&p<1;
+        container.dataset.opponentProgress=p.toFixed(2);
+    }
+    function showOpponentRune(rune:ArenaRune,visible:boolean){setRune(rune);setOpponentProgress(1);runeVisible=visible;runeGroup.visible=visible;container.dataset.opponentRuneVisible=String(visible);container.dataset.opponentRune=rune;}
     function applyCamera(){
         const horizontal=Math.cos(cameraPitch)*cameraDistance;
         camera.position.set(cameraTarget.x+Math.sin(cameraYaw)*horizontal,cameraTarget.y+Math.sin(cameraPitch)*cameraDistance,cameraTarget.z+Math.cos(cameraYaw)*horizontal);
@@ -121,5 +155,5 @@ export function createRuneArena(container: HTMLElement): RuneArena {
         if(hitFlash){const root=mageRoots[hitFlash.side];root.scale.setScalar(now<hitFlash.until?1+Math.sin(now*.06)*.08:1);if(now>=hitFlash.until)hitFlash=undefined;}
         const pulse=now<pulseUntil?1-(pulseUntil-now)/420:0;runeGroup.scale.setScalar(runeVisible?1+Math.sin(pulse*Math.PI)*.18:1);glow.intensity=runeVisible?1.2+Math.sin(now*.01)*.35:0;renderer.render(scene,camera);}render();
 
-    return {setCamera,orbit,zoom,resetCamera,showOpponentRune,pulseOpponentCast,presentSpell,presentHit,dispose(){cancelAnimationFrame(frame);ro.disconnect();renderer.dispose();container.removeChild(renderer.domElement);}};
+    return {setCamera,orbit,zoom,resetCamera,showOpponentRune,setOpponentProgress,pulseOpponentCast,presentSpell,presentHit,dispose(){cancelAnimationFrame(frame);ro.disconnect();renderer.dispose();container.removeChild(renderer.domElement);}};
 }
