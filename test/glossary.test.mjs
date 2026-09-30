@@ -79,6 +79,14 @@ test("Gate tug has its own arcade topics: the rail, the temper, the comeback, it
     assert.match(glossary.find(e => e.term === "Temper").text, /beat or match/);
 });
 
+test("Ward rhythm has its own arcade topics: the lane, the ward tap, absorbing, the throw and the bot's read", () => {
+    const arcade = glossary.filter(e => e.group === "arcade").map(e => e.term);
+    for (const term of ["Ward rhythm", "Lane", "Ward tap", "Absorb", "Throw", "Their ward"]) {
+        assert.ok(arcade.includes(term), `${term} missing from the arcade group`);
+    }
+    assert.match(glossary.find(e => e.term === "Throw").text, /late/);
+});
+
 test("the update banner is explained among the controls", () => {
     const update = glossary.find(e => e.group === "controls" && e.term === "Update banner");
     assert.ok(update);

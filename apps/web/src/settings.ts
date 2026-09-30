@@ -33,14 +33,14 @@ export type Settings = {
     arenaFx: boolean;
     /** Which game the page plays: the arcade Volley (default) or the word duel. `?game=arcade|word`. */
     game: Game;
-    /** Which arcade game plays: Volley (default), Quickdraw, Beam clash or Gate tug. `?arcade=volley|quickdraw|beam|gatetug`. */
+    /** Which arcade game plays: Volley (default), Quickdraw, Beam clash, Gate tug or Ward rhythm. `?arcade=volley|quickdraw|beam|gatetug|wardrhythm`. */
     arcadeMode: ArcadeMode;
 };
 
 export type Game = "arcade" | "word";
 export const GAMES: readonly Game[] = ["arcade", "word"];
-export type ArcadeMode = "volley" | "quickdraw" | "beam" | "gatetug";
-export const ARCADE_MODES: readonly ArcadeMode[] = ["volley", "quickdraw", "beam", "gatetug"];
+export type ArcadeMode = "volley" | "quickdraw" | "beam" | "gatetug" | "wardrhythm";
+export const ARCADE_MODES: readonly ArcadeMode[] = ["volley", "quickdraw", "beam", "gatetug", "wardrhythm"];
 
 export const DEFAULT_SETTINGS: Settings = {
     ruleset: "classic",
