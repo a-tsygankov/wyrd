@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { openPaused, tick, tickUntil } from "./clock.js";
 
 // Gate tug (docs/arcade-duel-ideas.md §1 D): the fourth arcade game, chosen in
 // Settings → Game or with ?arcade=gatetug. Quickdraw's draw pushes the gate
@@ -23,15 +24,17 @@ test("?arcade=gatetug shows Gate tug waiting on Start; Start opens the ring with
 });
 
 test("after a clash the stage's gate stands where the rail says, tinted with the temper that moved it", async ({ page }) => {
-    await page.goto("/?seed=smoke&stage=2d&arcade=gatetug&tempo=slow");
+    // On the fake clock (clock.ts): the ring and the clash animation run in game time, not real seconds.
+    await openPaused(page, "/?seed=smoke&stage=2d&arcade=gatetug");
     const tug = page.locator("#gatetug");
     await page.locator("#gatetug-start").click();
-    await expect(tug).toHaveAttribute("data-phase", "draw", { timeout: 5_000 });
+    await tickUntil(page, tug, "data-phase", "draw", 1_000);
     await page.locator('.gatetug-pad[data-essence="fire"]').click();
     await expect(tug).toHaveAttribute("data-essence-player", "fire");
+    await tick(page, 50);
     await expect(page.locator("#stage-hand-player")).toHaveAttribute("opacity", "1");
-    // The ring closes (9 s at the slow tempo), the orbs fly, the gate settles and round 2 opens.
-    await expect(tug).toHaveAttribute("data-round", "2", { timeout: 25_000 });
+    // The ring closes (3 s), the orbs fly, the gate settles and round 2 opens.
+    await tickUntil(page, tug, "data-round", "2", 8_000);
     const gate = Number(await tug.getAttribute("data-gate"));
     expect(await page.locator("#stage-gate").evaluate(el => (el as SVGGElement).style.transform)).toContain(shift(gate));
     const temper = await tug.getAttribute("data-temper");
