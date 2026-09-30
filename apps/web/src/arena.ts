@@ -1163,6 +1163,11 @@ export function createArena(container: HTMLElement, options: ArenaOptions): Aren
             halo.scale.setScalar(haloScale(held.magnitude));
             mesh.visible = true;
         },
+        gate: (offset, temper) => {
+            // The rail runs from the middle to a step short of either mage.
+            gate.position.x = Math.max(-1, Math.min(1, offset)) * (POSITIONS.opponent.x - 0.9);
+            gateRuneStrip.emissive.set(temper ? essenceColor(temper) : 0xad63ff);
+        },
         beams: b => {
             for (const side of SIDES) {
                 const mesh = beamMeshes[side];

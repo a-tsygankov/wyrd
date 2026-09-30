@@ -327,6 +327,8 @@ export type StageLive = {
     orb(side: Side, held: { essence: string; magnitude: number } | undefined): void;
     /** Beam clash: a beam from each hand to the knot at t (0 the player's hand, 1 the opponent's), or none. */
     beams?(beams: { player: string; opponent: string; t: number } | undefined): void;
+    /** Gate tug: the gate slid along its rail (-1 at the player's circle, 1 at the opponent's) and tinted with its temper. */
+    gate?(offset: number, temper: string | undefined): void;
     caption(text: string): void;
 };
 
@@ -453,13 +455,15 @@ export function createStage(root: SVGSVGElement, hooks: StageHooks = {}, motion:
 
     // The scoreboard on the gate: notches on the chains, the gate's lean.
     let shownSeals: Record<Side, number> = { player: 0, opponent: 0 };
+    /** Gate tug slides the gate along the rail; the lean composes on top of the shift. */
+    let gateShift = 0;
     const NOTCH_X: Record<Side, number[]> = { player: [148, 130, 112], opponent: [212, 230, 248] };
     function drawSeals(seals: Record<Side, number>): void {
         shownSeals = { ...seals };
         for (const notch of sealNotches(seals)) {
             root.querySelector<SVGElement>(`#stage-notch-${notch.side}-${notch.index + 1}`)?.setAttribute("opacity", notch.lit ? "1" : "0.25");
         }
-        gate.style.transform = `rotate(${(gateLean(seals) * 180) / Math.PI}deg)`;
+        gate.style.transform = `translate(${gateShift}px, 0px) rotate(${(gateLean(seals) * 180) / Math.PI}deg)`;
     }
 
     function setIdle(state: StageState): void {
@@ -779,6 +783,13 @@ export function createStage(root: SVGSVGElement, hooks: StageHooks = {}, motion:
             hand.setAttribute("r", String(4 + held.magnitude * 2.5));
             hand.setAttribute("fill", essenceColor(held.essence));
             hand.setAttribute("opacity", "1");
+        },
+        gate: (offset, temper) => {
+            // From the middle (x 180) to a step short of either mage (x 110 / 250).
+            gateShift = Math.max(-1, Math.min(1, offset)) * 70;
+            gate.style.transform = `translate(${gateShift}px, 0px) rotate(${(gateLean(shownSeals) * 180) / Math.PI}deg)`;
+            gateDoor.setAttribute("fill", temper ? essenceColor(temper) : "#5b3fd1");
+            gate.dataset.temper = temper ?? "";
         },
         beams: b => {
             for (const side of ["player", "opponent"] as const) {

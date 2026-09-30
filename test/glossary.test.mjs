@@ -71,6 +71,14 @@ test("Beam clash has its own arcade topics: the beat, the knot, the switch, its 
     assert.match(glossary.find(e => e.term === "Beam clash").text, /beat/);
 });
 
+test("Gate tug has its own arcade topics: the rail, the temper, the comeback, its ward and its round limit", () => {
+    const arcade = glossary.filter(e => e.group === "arcade").map(e => e.term);
+    for (const term of ["Gate tug", "Rail", "Temper", "Comeback", "Ward (Gate tug)", "Round limit"]) {
+        assert.ok(arcade.includes(term), `${term} missing from the arcade group`);
+    }
+    assert.match(glossary.find(e => e.term === "Temper").text, /beat or match/);
+});
+
 test("the update banner is explained among the controls", () => {
     const update = glossary.find(e => e.group === "controls" && e.term === "Update banner");
     assert.ok(update);
