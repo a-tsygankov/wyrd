@@ -1,9 +1,11 @@
 import { expect, test, type Page } from "@playwright/test";
+import { openPaused, tickUntil } from "./clock.js";
 
 // Ward rhythm (docs/arcade-duel-ideas.md §1 E): the fifth arcade game, chosen
-// in Settings → Game or with ?arcade=wardrhythm. `?tempo=slow` stretches the
-// beat threefold so the runner can read the due bolt (data-next) and answer
-// inside its window.
+// in Settings → Game or with ?arcade=wardrhythm. The rhythm specs run on the
+// fake clock (clock.ts): time stands still while the spec reads the due bolt
+// (data-next) and answers, then advances to the next window. They used to
+// wait out the beat in real time at ?tempo=slow (24 s a device for a volley).
 
 const BEATER: Record<string, string> = { fire: "water", life: "fire", shadow: "life", water: "shadow" };
 
@@ -12,15 +14,15 @@ async function pad(page: Page, essence: string): Promise<void> {
     await page.locator(`.wr-pad[data-essence="${essence}"]`).dispatchEvent("pointerdown");
 }
 
-/** Answer every bolt of the current volley with the colour that beats it. */
+/** Answer every bolt of the current volley with the colour that beats it, stepping the clock to each window. */
 async function blockVolley(page: Page): Promise<void> {
     const wr = page.locator("#wardrhythm");
-    while ((await wr.getAttribute("data-phase")) === "defend") {
-        await expect(wr).toHaveAttribute("data-window", "open", { timeout: 10_000 }).catch(() => undefined);
-        if ((await wr.getAttribute("data-phase")) !== "defend") break;
+    // data-next is the next unanswered bolt's colour, empty once the volley is answered (the phase moves a frame later).
+    while ((await wr.getAttribute("data-next")) !== "") {
+        await tickUntil(page, wr, "data-window", "open", 5_000);
         const next = await wr.getAttribute("data-next");
         if (next) await pad(page, BEATER[next]!);
-        await expect(wr).toHaveAttribute("data-window", "closed", { timeout: 5_000 });
+        await tickUntil(page, wr, "data-window", "closed", 2_000);
     }
 }
 
@@ -38,34 +40,34 @@ test("?arcade=wardrhythm shows Ward rhythm waiting on Start; Start sends the fir
 });
 
 test("the colour that beats the due bolt blocks it; letting one land costs a heart", async ({ page }) => {
-    await page.goto("/?seed=smoke&stage=2d&arcade=wardrhythm&tempo=slow");
+    await openPaused(page, "/?seed=smoke&stage=2d&arcade=wardrhythm");
     const wr = page.locator("#wardrhythm");
     await page.locator("#wr-start").click();
-    await expect(wr).toHaveAttribute("data-window", "open", { timeout: 15_000 });
+    await tickUntil(page, wr, "data-window", "open", 5_000);
     const next = (await wr.getAttribute("data-next"))!;
     await pad(page, BEATER[next]!);
     await expect(page.locator("#wr-caption")).toContainText("Blocked");
     await expect(wr).toHaveAttribute("data-hearts-player", "5");
     // Leave the next bolt alone: it lands and costs a heart.
-    await expect(wr).toHaveAttribute("data-hearts-player", "4", { timeout: 15_000 });
+    await tickUntil(page, wr, "data-hearts-player", "4", 3_000);
 });
 
 test("after a clean volley you throw at their ward, and the match moves to the second volley", async ({ page }) => {
-    test.slow();
-    await page.goto("/?seed=smoke&stage=2d&arcade=wardrhythm&tempo=slow");
+    await openPaused(page, "/?seed=smoke&stage=2d&arcade=wardrhythm");
     const wr = page.locator("#wardrhythm");
     await page.locator("#wr-start").click();
-    await expect(wr).toHaveAttribute("data-phase", "defend");
+    await tickUntil(page, wr, "data-phase", "defend", 1_000);
     await blockVolley(page);
-    await expect(wr).toHaveAttribute("data-phase", "attack", { timeout: 10_000 });
+    await tickUntil(page, wr, "data-phase", "attack", 3_000);
     await expect(wr).toHaveAttribute("data-hearts-player", "5");
     const theirs = (await wr.getAttribute("data-ward"))!;
     await expect(page.locator("#wr-ward")).toContainText(theirs.toUpperCase());
     await expect(page.locator("#stage-ward-opponent")).toHaveAttribute("opacity", "1");
     await pad(page, BEATER[theirs]!);
     await expect(page.locator("#wr-caption")).toContainText("You throw");
-    await expect(wr).toHaveAttribute("data-exchange", "2", { timeout: 15_000 });
-    await expect(page.locator("#wr-round")).toContainText("volley 2 of 5", { timeout: 10_000 });
+    await tickUntil(page, wr, "data-exchange", "2", 4_000);
+    await tickUntil(page, wr, "data-phase", "defend", 2_000);
+    await expect(page.locator("#wr-round")).toContainText("volley 2 of 5");
 });
 
 test("Settings offers Ward rhythm, and Reset returns it to Start", async ({ page }) => {

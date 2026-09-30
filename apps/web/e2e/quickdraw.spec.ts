@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { openPaused, tick, tickUntil } from "./clock.js";
 
 // Quickdraw (docs/arcade-duel-ideas.md §1 C): the second arcade game, chosen
 // in Settings → Game or with ?arcade=quickdraw. `?tempo=slow` stretches the
@@ -22,36 +23,40 @@ test("Volley is the default arcade game; ?arcade=quickdraw and the Settings choi
 });
 
 test("a quick draw in the beating colour lands for two hearts when the ring closes", async ({ page }) => {
-    // The bot's colour starts as fire; water quenches fire. The player draws in the first (stretched) second.
-    await page.goto("/?seed=smoke&stage=2d&arcade=quickdraw&tempo=slow");
+    // The bot's colour starts as fire; water quenches fire. The player draws in the first second,
+    // with the fake clock paused (clock.ts), so the quick window cannot slip by on a slow frame. The clash
+    // plays on the stage's Web Animations timeline, which runs on real time, not the fake clock: animations off.
+    await openPaused(page, "/?seed=smoke&stage=2d&arcade=quickdraw&animations=off");
     const qd = page.locator("#quickdraw");
     await page.locator("#quickdraw-start").click();
-    await expect(qd).toHaveAttribute("data-phase", "draw", { timeout: 5_000 });
+    await tickUntil(page, qd, "data-phase", "draw", 1_000);
     await expect(qd).toHaveAttribute("data-quick-window", "open");
     await page.locator('.quickdraw-pad[data-essence="water"]').click();
     await expect(qd).toHaveAttribute("data-essence-player", "water");
-    await expect(qd).toHaveAttribute("data-charge-player", "2", { timeout: 2_000 });
+    await tickUntil(page, qd, "data-charge-player", "2", 500);
     await expect(page.locator("#quickdraw-orb-player")).toHaveClass(/quick/);
     await expect(page.locator("#stage-hand-player")).toHaveAttribute("opacity", "1");
-    // The ring closes (9 s at the slow tempo), the orbs fly, and the round is settled.
-    await expect(qd).toHaveAttribute("data-round", "2", { timeout: 25_000 });
+    // The ring closes (3 s), the orbs fly, and the round is settled.
+    await tickUntil(page, qd, "data-round", "2", 8_000);
     const opponentHearts = await page.locator("#quickdraw-hearts-opponent i.lit").count();
     const playerHearts = await page.locator("#quickdraw-hearts-player i.lit").count();
     expect(opponentHearts + playerHearts).toBeLessThan(10);
 });
 
 test("holding Charge grows the orb and a ward stands against a colour it is not beaten by", async ({ page }) => {
-    await page.goto("/?seed=smoke&stage=2d&arcade=quickdraw&tempo=slow");
+    await openPaused(page, "/?seed=smoke&stage=2d&arcade=quickdraw");
     const qd = page.locator("#quickdraw");
     await page.locator("#quickdraw-start").click();
-    await expect(qd).toHaveAttribute("data-phase", "draw", { timeout: 5_000 });
+    await tickUntil(page, qd, "data-phase", "draw", 1_000);
     await page.locator('.quickdraw-pad[data-essence="shadow"]').click();
     const charge = page.locator("#quickdraw-charge");
     const box = await charge.boundingBox();
     await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
     await page.mouse.down();
-    await expect(qd).toHaveAttribute("data-charge-player", "3", { timeout: 6_000 });
+    // Two charge steps, a second each, held on the fake clock.
+    await tickUntil(page, qd, "data-charge-player", "3", 2_600);
     await page.mouse.up();
+    await tick(page, 50);
     await expect(qd).toHaveAttribute("data-charge-player", "3");
     // A ward replaces the draw and costs two Focus.
     await page.locator("#quickdraw-ward").click();
