@@ -75,7 +75,9 @@ test("a drawn rune is readied with a charge and resolves at impact", async ({ pa
 });
 
 test("drawing again adjusts the answer; a Ward then a Redirect is the Reflect combo", async ({ page }) => {
-    // Three strokes in one exchange: a tenth of the speed, so slow CI frames cannot let the rune land first.
+    // Three strokes in one exchange: a tenth of the speed, so slow CI frames cannot let the rune land first;
+    // at that speed the exchange opens 7 s in, so the spec needs the slow budget (it timed out at 30 s in CI).
+    test.slow();
     await slowPlay(page, 0.1);
     await expect(page.locator("#enemy-intent")).toHaveClass(/show/, { timeout: 10_000 });
     await line(page);
