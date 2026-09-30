@@ -52,6 +52,7 @@ import { createVolleyMode, type VolleyMode } from "./volleyMode.js";
 import { createQuickdrawMode, type QuickdrawMode } from "./quickdrawMode.js";
 import { createBeamMode, type BeamMode } from "./beamMode.js";
 import { createGateTugMode, type GateTugMode } from "./gatetugMode.js";
+import { createWardRhythmMode, type WardRhythmMode } from "./wardrhythmMode.js";
 import { fullscreenApi } from "./fullscreen.js";
 import { updateAvailable } from "./update.js";
 import { loadStats, recordMatchEnd, recordRematch, recordRound, saveStats, summarize, type Stats } from "./stats.js";
@@ -146,6 +147,8 @@ const quickdrawRoot = byId<HTMLElement>("quickdraw");
 const beamRoot = byId<HTMLElement>("beam");
 const gatetugRoot = byId<HTMLElement>("gatetug");
 const settingsArcadeGatetug = byId<HTMLInputElement>("settings-arcade-gatetug");
+const wardrhythmRoot = byId<HTMLElement>("wardrhythm");
+const settingsArcadeWardrhythm = byId<HTMLInputElement>("settings-arcade-wardrhythm");
 const fullscreenToggle = byId<HTMLButtonElement>("fullscreen-toggle");
 const settingsSound = byId<HTMLInputElement>("settings-sound");
 const settingsTelemetry = byId<HTMLInputElement>("settings-telemetry");
@@ -424,15 +427,16 @@ async function mountStage(): Promise<void> {
 }
 
 // --- The game: an arcade game (Volley by default, Quickdraw or Beam clash) or the word duel. One plays at a time.
-type ArcadeGame = VolleyMode | QuickdrawMode | BeamMode | GateTugMode;
+type ArcadeGame = VolleyMode | QuickdrawMode | BeamMode | GateTugMode | WardRhythmMode;
 const arcadeGames: Partial<Record<ArcadeMode, ArcadeGame>> = {};
 const tempoParam = new URLSearchParams(location.search).get("tempo");
-const ARCADE_TITLES: Record<ArcadeMode, string> = { volley: "Volley", quickdraw: "Quickdraw", beam: "Beam clash", gatetug: "Gate tug" };
+const ARCADE_TITLES: Record<ArcadeMode, string> = { volley: "Volley", quickdraw: "Quickdraw", beam: "Beam clash", gatetug: "Gate tug", wardrhythm: "Ward rhythm" };
 const ARCADE_TAGLINES: Record<ArcadeMode, string> = {
     volley: "Return the bolt. Read the colour.",
     quickdraw: "Draw fast, or read and answer.",
     beam: "Push on the beat. Win the wheel.",
-    gatetug: "Push the gate home. Mind its temper."
+    gatetug: "Push the gate home. Mind its temper.",
+    wardrhythm: "Ward on the beat. Throw it back."
 };
 
 /** Each arcade game is built on first use and kept: switching back resumes its board. */
@@ -453,6 +457,9 @@ function arcadeGame(mode: ArcadeMode): ArcadeGame {
                 return createBeamMode({ root: beamRoot, ...shared, cue: name => sound.play(name) });
             case "gatetug":
                 return createGateTugMode({ root: gatetugRoot, ...shared });
+            case "wardrhythm":
+                // A draw is possible here, so its winner may be undefined.
+                return createWardRhythmMode({ root: wardrhythmRoot, ...shared, onOver: winner => log.info(`wardrhythm over: ${winner ?? "draw"}`) });
             default:
                 return createVolleyMode({ root: volleyRoot, ...shared });
         }
@@ -1716,15 +1723,18 @@ function renderSettings(): void {
     const quickdrawOn = settings.game === "arcade" && settings.arcadeMode === "quickdraw";
     const beamOn = settings.game === "arcade" && settings.arcadeMode === "beam";
     const gatetugOn = settings.game === "arcade" && settings.arcadeMode === "gatetug";
+    const wardrhythmOn = settings.game === "arcade" && settings.arcadeMode === "wardrhythm";
     settingsGameArcade.checked = volleyOn;
     settingsArcadeQuickdraw.checked = quickdrawOn;
     settingsArcadeBeam.checked = beamOn;
     settingsArcadeGatetug.checked = gatetugOn;
+    settingsArcadeWardrhythm.checked = wardrhythmOn;
     settingsGameWord.checked = settings.game === "word";
     byId<HTMLElement>("settings-game-arcade-option").classList.toggle("selected", volleyOn);
     byId<HTMLElement>("settings-game-quickdraw-option").classList.toggle("selected", quickdrawOn);
     byId<HTMLElement>("settings-game-beam-option").classList.toggle("selected", beamOn);
     byId<HTMLElement>("settings-game-gatetug-option").classList.toggle("selected", gatetugOn);
+    byId<HTMLElement>("settings-game-wardrhythm-option").classList.toggle("selected", wardrhythmOn);
     byId<HTMLElement>("settings-game-word-option").classList.toggle("selected", settings.game === "word");
     settingsArenaFx.checked = settings.arenaFx;
     settingsArenaFx.disabled = !settings.arena3d;
@@ -1785,6 +1795,7 @@ settingsGameArcade.addEventListener("change", () => applyGameSetting("arcade", "
 settingsArcadeQuickdraw.addEventListener("change", () => applyGameSetting("arcade", "quickdraw"));
 settingsArcadeBeam.addEventListener("change", () => applyGameSetting("arcade", "beam"));
 settingsArcadeGatetug.addEventListener("change", () => applyGameSetting("arcade", "gatetug"));
+settingsArcadeWardrhythm.addEventListener("change", () => applyGameSetting("arcade", "wardrhythm"));
 settingsGameWord.addEventListener("change", () => applyGameSetting("word"));
 settingsArenaFx.addEventListener("change", () => {
     settings = { ...settings, arenaFx: settingsArenaFx.checked };
