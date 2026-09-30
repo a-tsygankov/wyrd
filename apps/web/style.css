@@ -194,6 +194,10 @@ body[data-game="arcade"] #phase-strip, body[data-game="arcade"] .phase-hint, bod
 #beam[data-beat="on"] #beam-push { box-shadow: 0 0 0 3px #ffc457, 0 0 18px rgba(255, 196, 87, 0.5); }
 #beam[data-phase="over"] .volley-pads, #beam[data-phase="over"] .volley-actions, #beam[data-phase="over"] .beam-track { display: none; }
 #beam[data-phase="ready"] .beam-track { display: none; }
+/* Gate tug: the rail's ends are the circles; the gate's cell wears its temper. */
+.gatetug-rail i.gate { background: #f4f0ff; box-shadow: 0 0 10px rgba(244, 240, 255, 0.6); height: 14px; margin-top: -2px; }
+#gatetug[data-quick-window="open"] .volley-pad:not(:disabled) { box-shadow: 0 0 0 2px #ffc457; }
+#gatetug[data-phase="over"] .volley-pads, #gatetug[data-phase="over"] .volley-actions, #gatetug[data-phase="over"] .qd-ring { display: none; }
 
 /* Start: the arcade clock waits for this press; it takes the thumb row until then. */
 .arcade-start { min-height: 56px; font-size: 1.1rem; letter-spacing: 0.08em; }

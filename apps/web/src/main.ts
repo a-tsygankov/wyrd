@@ -51,6 +51,7 @@ import { loadSettings, saveSettings, type ArcadeMode, type Game, type Settings }
 import { createVolleyMode, type VolleyMode } from "./volleyMode.js";
 import { createQuickdrawMode, type QuickdrawMode } from "./quickdrawMode.js";
 import { createBeamMode, type BeamMode } from "./beamMode.js";
+import { createGateTugMode, type GateTugMode } from "./gatetugMode.js";
 import { fullscreenApi } from "./fullscreen.js";
 import { updateAvailable } from "./update.js";
 import { loadStats, recordMatchEnd, recordRematch, recordRound, saveStats, summarize, type Stats } from "./stats.js";
@@ -143,6 +144,8 @@ const settingsArcadeBeam = byId<HTMLInputElement>("settings-arcade-beam");
 const volleyRoot = byId<HTMLElement>("volley");
 const quickdrawRoot = byId<HTMLElement>("quickdraw");
 const beamRoot = byId<HTMLElement>("beam");
+const gatetugRoot = byId<HTMLElement>("gatetug");
+const settingsArcadeGatetug = byId<HTMLInputElement>("settings-arcade-gatetug");
 const fullscreenToggle = byId<HTMLButtonElement>("fullscreen-toggle");
 const settingsSound = byId<HTMLInputElement>("settings-sound");
 const settingsTelemetry = byId<HTMLInputElement>("settings-telemetry");
@@ -357,6 +360,10 @@ function pairStages(svg: Stage, three: Stage): Stage {
                 svg.live?.beams?.(b);
                 three.live?.beams?.(b);
             },
+            gate: (offset, temper) => {
+                svg.live?.gate?.(offset, temper);
+                three.live?.gate?.(offset, temper);
+            },
             caption: text => {
                 svg.live?.caption(text);
                 three.live?.caption(text);
@@ -417,14 +424,15 @@ async function mountStage(): Promise<void> {
 }
 
 // --- The game: an arcade game (Volley by default, Quickdraw or Beam clash) or the word duel. One plays at a time.
-type ArcadeGame = VolleyMode | QuickdrawMode | BeamMode;
+type ArcadeGame = VolleyMode | QuickdrawMode | BeamMode | GateTugMode;
 const arcadeGames: Partial<Record<ArcadeMode, ArcadeGame>> = {};
 const tempoParam = new URLSearchParams(location.search).get("tempo");
-const ARCADE_TITLES: Record<ArcadeMode, string> = { volley: "Volley", quickdraw: "Quickdraw", beam: "Beam clash" };
+const ARCADE_TITLES: Record<ArcadeMode, string> = { volley: "Volley", quickdraw: "Quickdraw", beam: "Beam clash", gatetug: "Gate tug" };
 const ARCADE_TAGLINES: Record<ArcadeMode, string> = {
     volley: "Return the bolt. Read the colour.",
     quickdraw: "Draw fast, or read and answer.",
-    beam: "Push on the beat. Win the wheel."
+    beam: "Push on the beat. Win the wheel.",
+    gatetug: "Push the gate home. Mind its temper."
 };
 
 /** Each arcade game is built on first use and kept: switching back resumes its board. */
@@ -443,6 +451,8 @@ function arcadeGame(mode: ArcadeMode): ArcadeGame {
                 return createQuickdrawMode({ root: quickdrawRoot, ...shared });
             case "beam":
                 return createBeamMode({ root: beamRoot, ...shared, cue: name => sound.play(name) });
+            case "gatetug":
+                return createGateTugMode({ root: gatetugRoot, ...shared });
             default:
                 return createVolleyMode({ root: volleyRoot, ...shared });
         }
@@ -1705,13 +1715,16 @@ function renderSettings(): void {
     const volleyOn = settings.game === "arcade" && settings.arcadeMode === "volley";
     const quickdrawOn = settings.game === "arcade" && settings.arcadeMode === "quickdraw";
     const beamOn = settings.game === "arcade" && settings.arcadeMode === "beam";
+    const gatetugOn = settings.game === "arcade" && settings.arcadeMode === "gatetug";
     settingsGameArcade.checked = volleyOn;
     settingsArcadeQuickdraw.checked = quickdrawOn;
     settingsArcadeBeam.checked = beamOn;
+    settingsArcadeGatetug.checked = gatetugOn;
     settingsGameWord.checked = settings.game === "word";
     byId<HTMLElement>("settings-game-arcade-option").classList.toggle("selected", volleyOn);
     byId<HTMLElement>("settings-game-quickdraw-option").classList.toggle("selected", quickdrawOn);
     byId<HTMLElement>("settings-game-beam-option").classList.toggle("selected", beamOn);
+    byId<HTMLElement>("settings-game-gatetug-option").classList.toggle("selected", gatetugOn);
     byId<HTMLElement>("settings-game-word-option").classList.toggle("selected", settings.game === "word");
     settingsArenaFx.checked = settings.arenaFx;
     settingsArenaFx.disabled = !settings.arena3d;
@@ -1771,6 +1784,7 @@ settingsArena3d.addEventListener("change", () => {
 settingsGameArcade.addEventListener("change", () => applyGameSetting("arcade", "volley"));
 settingsArcadeQuickdraw.addEventListener("change", () => applyGameSetting("arcade", "quickdraw"));
 settingsArcadeBeam.addEventListener("change", () => applyGameSetting("arcade", "beam"));
+settingsArcadeGatetug.addEventListener("change", () => applyGameSetting("arcade", "gatetug"));
 settingsGameWord.addEventListener("change", () => applyGameSetting("word"));
 settingsArenaFx.addEventListener("change", () => {
     settings = { ...settings, arenaFx: settingsArenaFx.checked };

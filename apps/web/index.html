@@ -284,6 +284,47 @@
             <button id="beam-rematch" class="ghost-button hidden" type="button">Play again</button>
         </section>
 
+        <!-- Gate tug (arcade doc §1 D): Quickdraw's draw pushes the gate along a
+             rail. Rules in apps/web/src/gatetug.ts. -->
+        <section id="gatetug" class="volley gatetug card hidden" aria-label="Gate tug">
+            <div class="volley-head">
+                <div class="volley-side">
+                    <span id="gatetug-name-player" class="label">You</span>
+                    <div id="gatetug-focus-player" class="pips focus-pips" role="img" aria-label="7 of 7"></div>
+                </div>
+                <div class="volley-centre">
+                    <span id="gatetug-caption" class="volley-caption" aria-live="polite"></span>
+                    <span id="gatetug-round" class="muted volley-speed"></span>
+                </div>
+                <div class="volley-side right">
+                    <span id="gatetug-name-opponent" class="label">Opponent</span>
+                    <div id="gatetug-focus-opponent" class="pips focus-pips" role="img" aria-label="7 of 7"></div>
+                </div>
+            </div>
+            <div id="gatetug-rail" class="beam-track gatetug-rail" aria-hidden="true"></div>
+            <div class="qd-ring" aria-hidden="true"><span id="gatetug-ring-fill"></span></div>
+            <div class="qd-orbs" aria-hidden="true">
+                <div id="gatetug-orb-player" class="qd-orb"></div>
+                <span class="muted">vs</span>
+                <div id="gatetug-orb-opponent" class="qd-orb"></div>
+            </div>
+            <p class="muted volley-hint">Draw as in Quickdraw: a colour (quick in the first second, +1), Hold to Charge, or Ward. When the ring closes the orbs push the gate. The beating colour cancels the other push; the gate only moves for a colour that beats or matches its own. Near your circle your push counts double.</p>
+            <div class="volley-pads" role="group" aria-label="Draw colour">
+                <button class="volley-pad gatetug-pad fire" data-essence="fire" type="button">▲ FIRE</button>
+                <button class="volley-pad gatetug-pad water" data-essence="water" type="button">▶ WATER</button>
+                <button class="volley-pad gatetug-pad shadow" data-essence="shadow" type="button">▼ SHADOW</button>
+                <button class="volley-pad gatetug-pad life" data-essence="life" type="button">◀ LIFE</button>
+            </div>
+            <div class="volley-actions">
+                <button id="gatetug-ward" class="ghost-button" type="button">Ward · 2</button>
+                <button id="gatetug-charge" class="cast-button volley-return" type="button">HOLD TO CHARGE</button>
+                <span></span>
+            </div>
+            <button id="gatetug-start" class="cast-button arcade-start" type="button">Start</button>
+            <p id="gatetug-verdict" class="volley-verdict hidden"></p>
+            <button id="gatetug-rematch" class="ghost-button hidden" type="button">Play again</button>
+        </section>
+
         <section class="opponent card">
             <div class="section-heading">
                 <div>
@@ -390,6 +431,11 @@
                         <input id="settings-arcade-beam" type="radio" name="arcade" value="beam">
                         <strong>Arcade · Beam clash</strong>
                         <ul><li>Two beams meet in a knot over the gate; push it on the beat.</li><li>The winning colour pushes double; push the knot into their mage for a seal. First to three.</li></ul>
+                    </label>
+                    <label class="settings-option" id="settings-game-gatetug-option">
+                        <input id="settings-arcade-gatetug" type="radio" name="arcade" value="gatetug">
+                        <strong>Arcade · Gate tug</strong>
+                        <ul><li>Quickdraw's draw, but the orbs push the gate along a rail; push it into their circle.</li><li>The gate takes the colour of the last push: beat or match it to move it again.</li></ul>
                     </label>
                     <label class="settings-option" id="settings-game-word-option">
                         <input id="settings-game-word" type="radio" name="game" value="word">

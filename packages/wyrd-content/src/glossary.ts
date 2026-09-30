@@ -49,7 +49,7 @@ export const GLOSSARY_GROUPS: readonly GlossaryGroup[] = [
     {
         id: "arcade",
         title: "Arcade games",
-        intro: "Volley, Quickdraw and Beam clash: one-thumb duels on the four-colour wheel. Volley and Quickdraw play for five hearts each, Beam clash for three seals. Pick the game in Settings → Game. The ruleset and the glyph grammar do not apply here."
+        intro: "Volley, Quickdraw, Beam clash and Gate tug: one-thumb duels on the four-colour wheel. Volley and Quickdraw play for five hearts each, Beam clash for three seals, Gate tug for the gate. Pick the game in Settings → Game. The ruleset and the glyph grammar do not apply here."
     }
 ];
 
@@ -156,9 +156,15 @@ const arcadeEntries: GlossaryEntry[] = [
     { term: "Ward (Beam clash)", text: "Tap Ward (2 Focus, once per clash) to hold your end: pushes past it dent the ward instead of scoring, and it shatters after two. Best raised when the knot is a step from you." },
     { term: "Seals (Beam clash)", text: "The gold diamonds. A seal pauses the clash, gives the mage who was scored on a Focus back, and restarts the knot a step toward them: the scorer keeps a little momentum." },
     { term: "Time (Beam clash)", text: "After 90 seconds the mage with more seals wins. Level at time goes to sudden death: the next seal decides." },
+    { term: "Gate tug", text: "The fourth arcade game: Quickdraw's draw (a colour, a charge or a ward inside the three-second ring), but when the ring closes the orbs push the gate along a rail instead of costing hearts. Push it into the other mage's circle to win." },
+    { term: "Rail", text: "The track under the names: five steps from the middle to either circle. Each round the gate moves by the difference between the two pushes (an orb pushes its magnitude); equal pushes hold it." },
+    { term: "Temper", text: "The gate takes the colour of the last push that moved it, shown on the rail and the gate itself. A push must beat or match that colour to move it; any other colour glances off. A fresh gate has no temper." },
+    { term: "Comeback", text: "With the gate one step from your own circle, your push counts double, so a nearly lost tug can still swing back." },
+    { term: "Ward (Gate tug)", text: "Tap Ward (2 Focus) instead of drawing: you push nothing this round, but the other push is blocked unless its colour beats or matches your ward's." },
+    { term: "Round limit", text: "After fifteen rounds the mage the gate leans away from wins. A gate dead in the middle goes to sudden death: the next push that moves it wins." },
     { term: "Start", text: "No arcade game starts on its own: the clock begins when you press Start, so you can read the board or go fullscreen first." },
-    { term: "Colour pads", text: "The four pads under the stage, placed like the swipes: up FIRE, right WATER, down SHADOW, left LIFE. In Volley a pad returns in that colour, in Quickdraw it draws that colour, in Beam clash it switches your beam." },
-    { term: "Gestures", text: "On the stage itself: in Volley a tap returns, a swipe returns in the colour of its direction and a long press wards; in Quickdraw a swipe picks a colour and press-and-hold charges; in Beam clash any touch on the stage is a push." },
+    { term: "Colour pads", text: "The four pads under the stage, placed like the swipes: up FIRE, right WATER, down SHADOW, left LIFE. In Volley a pad returns in that colour, in Quickdraw it draws that colour, in Beam clash it switches your beam, in Gate tug it draws that colour." },
+    { term: "Gestures", text: "On the stage itself: in Volley a tap returns, a swipe returns in the colour of its direction and a long press wards; in Quickdraw a swipe picks a colour and press-and-hold charges; in Beam clash any touch on the stage is a push; Gate tug plays like Quickdraw." },
     { term: "Play again", text: "Shown when a game ends: a fresh game of the same kind starts straight away." },
     { term: "Reset (arcade)", text: "In the arcade, Reset abandons the game in progress and puts the board back on Start." },
     { term: "Fullscreen", text: "The corner button on the stage (arcade only): hides the header and hints and gives the stage the height; where the browser allows it the page goes truly fullscreen too. Tap it again, or leave fullscreen from the browser, to come back." }
