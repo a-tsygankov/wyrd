@@ -1,4 +1,5 @@
 import { createRuneArena, type ArenaRune, type RuneArenaCamera } from "./runeArena.js";
+import { createStubArena } from "./runeArenaStub.js";
 import { COMBOS, GLIMPSE, beats, chargeOf, classify, openExchange, progress, readStage, ready, resolveExchange, type Exchange, type Point, type Rune } from "./runeDuel.js";
 
 /**
@@ -25,7 +26,8 @@ const timer = $("timer");
 const arena = $("arena");
 const theirRune = $("their-rune");
 const theirPath = document.querySelector<SVGPathElement>("#their-rune path")!;
-const arena3d = createRuneArena(arena);
+// `?arena=off`: no WebGL (the e2e suite on software rendering, or a device without it); same interface.
+const arena3d = new URLSearchParams(location.search).get("arena") === "off" ? createStubArena(arena) : createRuneArena(arena);
 
 type Mode = "fencing" | "parry";
 const names: Record<Rune | "unknown", string> = { line: "PIERCE", arc: "REDIRECT", circle: "WARD", triangle: "POWER", spiral: "ABSORB", unknown: "—" };

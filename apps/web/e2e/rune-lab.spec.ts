@@ -9,15 +9,18 @@ import { expect, test, type Page } from "@playwright/test";
 // every mouse move waits on a slow frame: specs that raced the real clock
 // failed there however slow the game was set. So time is Playwright's fake
 // clock, paused from the start: strokes are drawn with time standing still,
-// and `tick` advances it exactly to the moment a spec needs.
+// and `tick` advances it exactly to the moment a spec needs. Stepping the
+// clock by a second rendered sixty software-WebGL frames at once and
+// Chromium's page fell over in CI, so every spec but the camera ones opens
+// with `?arena=off` (no 3D arena, same data attributes).
 
 const T0 = new Date("2026-01-01T00:00:00Z").getTime();
 
-/** Open the Rune Lab with time paused at T0. */
-async function open(page: Page): Promise<void> {
+/** Open the Rune Lab with time paused at T0; without the 3D arena unless `arena3d`. */
+async function open(page: Page, arena3d = false): Promise<void> {
     await page.clock.install({ time: T0 });
     await page.clock.pauseAt(T0 + 10);
-    await page.goto("/rune-lab.html");
+    await page.goto(arena3d ? "/rune-lab.html" : "/rune-lab.html?arena=off");
     await expect(page.getByText("WYRD · RUNE LAB")).toBeVisible();
 }
 /** Advance the paused clock: timers and frames run as if `ms` had passed. */
@@ -43,8 +46,9 @@ const line = (page: Page): Promise<void> => stroke(page, (t, w, h) => ({ x: 35 +
 const loop = (page: Page): Promise<void> => stroke(page, (t, w, h) => ({ x: w / 2 + Math.cos(Math.PI * 2 * t - Math.PI / 2) * 45, y: h / 2 + Math.sin(Math.PI * 2 * t - Math.PI / 2) * 45 }), 20);
 const arcUp = (page: Page): Promise<void> => stroke(page, (t, w, h) => ({ x: 45 + t * Math.min(180, w - 90), y: h * 0.7 - Math.sin(Math.PI * t) * 75 }), 14);
 
-test.beforeEach(async ({ page }) => {
-    await open(page);
+test.beforeEach(async ({ page }, testInfo) => {
+    // The camera and view specs need the real 3D arena; the rest test rules and HUD.
+    await open(page, /views|camera/.test(testInfo.title));
 });
 
 test("switches and persists all arena views", async ({ page }) => {
@@ -55,6 +59,7 @@ test("switches and persists all arena views", async ({ page }) => {
     }
     await page.getByRole("button", { name: "Top", exact: true }).click();
     await page.reload();
+    await expect(page.getByText("WYRD · RUNE LAB")).toBeVisible();
     await expect(page.locator("#arena")).toHaveAttribute("data-camera", "top");
 });
 
