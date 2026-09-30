@@ -3,13 +3,32 @@ import { expect, test, type Page } from "@playwright/test";
 // Rune Lab (docs/rune-lab.md): the opponent writes a rune stroke by stroke,
 // you read it and ready a counter before it lands; drawing again adjusts the
 // answer or finishes a combo. Rune Parry shows only the opening of their
-// stroke. The rules are unit-tested in test/rune_duel.test.mjs; these specs
-// drive the page with a mouse on the drawing panel.
+// stroke. The rules are unit-tested in test/rune_duel.test.mjs.
+//
+// The duel is a real-time loop, and CI renders its WebGL in software, where
+// every mouse move waits on a slow frame: specs that raced the real clock
+// failed there however slow the game was set. So time is Playwright's fake
+// clock, paused from the start: strokes are drawn with time standing still,
+// and `tick` advances it exactly to the moment a spec needs.
 
-test.beforeEach(async ({ page }) => {
+const T0 = new Date("2026-01-01T00:00:00Z").getTime();
+
+/** Open the Rune Lab with time paused at T0. */
+async function open(page: Page): Promise<void> {
+    await page.clock.install({ time: T0 });
+    await page.clock.pauseAt(T0 + 10);
     await page.goto("/rune-lab.html");
     await expect(page.getByText("WYRD · RUNE LAB")).toBeVisible();
-});
+}
+/** Advance the paused clock: timers and frames run as if `ms` had passed. */
+const tick = (page: Page, ms: number): Promise<void> => page.clock.runFor(ms);
+/** Advance in 50 ms slices until the read reaches `stage` (a hint lasts at least 450 ms of game time). */
+async function tickUntil(page: Page, stage: string, max: number): Promise<void> {
+    for (let t = 0; t <= max && (await page.locator("#arena").getAttribute("data-read")) !== stage; t += 50) await tick(page, 50);
+    await expect(page.locator("#arena")).toHaveAttribute("data-read", stage, { timeout: 1 });
+}
+/** The first exchange opens 700 ms after the duel starts (1× speed). */
+const toFirstRune = (page: Page): Promise<void> => tick(page, 800);
 
 /** Draw one stroke on the rune panel: `f` maps t in [0, 1] to a point relative to the panel's top-left. */
 async function stroke(page: Page, f: (t: number, w: number, h: number) => { x: number; y: number }, steps = 16): Promise<void> {
@@ -27,12 +46,11 @@ async function stroke(page: Page, f: (t: number, w: number, h: number) => { x: n
 }
 const line = (page: Page): Promise<void> => stroke(page, (t, w, h) => ({ x: 35 + t * Math.min(180, w - 80), y: h * 0.65 }), 8);
 const loop = (page: Page): Promise<void> => stroke(page, (t, w, h) => ({ x: w / 2 + Math.cos(Math.PI * 2 * t - Math.PI / 2) * 45, y: h / 2 + Math.sin(Math.PI * 2 * t - Math.PI / 2) * 45 }), 20);
-/** A quarter speed for the visit: several strokes fit inside one exchange, even where frames are slow (software WebGL in CI). */
-async function slowPlay(page: Page, speed = 0.25): Promise<void> {
-    await page.goto(`/rune-lab.html?speed=${speed}`);
-    await expect(page.getByText("WYRD · RUNE LAB")).toBeVisible();
-}
 const arcUp = (page: Page): Promise<void> => stroke(page, (t, w, h) => ({ x: 45 + t * Math.min(180, w - 90), y: h * 0.7 - Math.sin(Math.PI * t) * 75 }), 14);
+
+test.beforeEach(async ({ page }) => {
+    await open(page);
+});
 
 test("switches and persists all arena views", async ({ page }) => {
     await page.getByRole("button", { name: "View" }).click();
@@ -46,26 +64,30 @@ test("switches and persists all arena views", async ({ page }) => {
 });
 
 test("their rune is written stroke by stroke, and the read sharpens from sensing to its name", async ({ page }) => {
-    await expect(page.locator("#enemy-intent")).toHaveClass(/show/, { timeout: 3_000 });
+    await toFirstRune(page);
+    await expect(page.locator("#enemy-intent")).toHaveClass(/show/);
     await expect(page.locator("#their-rune")).toBeVisible();
+    await expect(page.locator("#arena")).toHaveAttribute("data-read", "sensing");
     const early = Number(await page.locator("#their-rune").getAttribute("data-progress"));
-    expect(early).toBeLessThan(0.5);
-    // The hint stage can be as short as 450 ms, which a slow software-WebGL frame may skip; the opening spec
-    // checks the hints at a slower speed. Here: the rune is named before it lands.
-    await expect(page.locator("#arena")).toHaveAttribute("data-read", "named", { timeout: 8_000 });
-    const later = Number(await page.locator("#their-rune").getAttribute("data-progress"));
-    expect(later).toBeGreaterThan(early);
-    // Named at 37-65% written, depending on how late its shape leaves the shared opening.
-    expect(Number(await page.locator("#arena").getAttribute("data-opponent-progress"))).toBeGreaterThan(0.3);
+    expect(early).toBeLessThan(0.2);
+    // Every rune shares the opening, so the shape shows at a different point for each (22-50% written):
+    // step to the hint, then to the name.
+    await tickUntil(page, "hint", 2_000);
+    await tickUntil(page, "named", 2_000);
+    await tick(page, 1200); // named by 65% at the latest: 1.2 s more is past 70% written for every rune
+    expect(Number(await page.locator("#their-rune").getAttribute("data-progress"))).toBeGreaterThan(0.7);
+    expect(Number(await page.locator("#arena").getAttribute("data-opponent-progress"))).toBeGreaterThan(0.7);
 });
 
 test("every rune opens the same way: the read starts as a flat opening before the shape shows", async ({ page }) => {
-    await slowPlay(page);
-    await expect(page.locator("#enemy-intent")).toHaveText("FLAT OPENING…", { timeout: 10_000 });
+    await toFirstRune(page);
+    await expect(page.locator("#enemy-intent")).toHaveText("FLAT OPENING…");
     await expect(page.locator("#arena")).toHaveAttribute("data-read", "sensing");
-    // The shape then shows itself: one of the five hints, then the name.
-    await expect(page.locator("#enemy-intent")).toHaveText(/BOWING UP|BOWING DOWN|CURLING BACK|A CORNER|STILL FLAT/, { timeout: 15_000 });
-    await expect(page.locator("#arena")).toHaveAttribute("data-read", "named", { timeout: 15_000 });
+    await tick(page, 450); // 15% + written: still the shared opening for every rune
+    await expect(page.locator("#enemy-intent")).toHaveText("FLAT OPENING…");
+    await tickUntil(page, "hint", 2_000);
+    await expect(page.locator("#enemy-intent")).toHaveText(/BOWING UP|BOWING DOWN|CURLING BACK|A CORNER|STILL FLAT/);
+    await tickUntil(page, "named", 2_000);
 });
 
 test("Help shows how their runes branch from one opening, and why a partial read is already an answer", async ({ page }) => {
@@ -78,28 +100,24 @@ test("Help shows how their runes branch from one opening, and why a partial read
 });
 
 test("a drawn rune is readied with a charge and resolves at impact", async ({ page }) => {
-    await slowPlay(page);
-    await expect(page.locator("#enemy-intent")).toHaveClass(/show/, { timeout: 10_000 });
+    await toFirstRune(page);
     await line(page);
     await expect(page.locator("#recognized")).toHaveText("PIERCE");
     await expect(page.locator("#confidence")).toContainText("Confidence");
     await expect(page.locator("#quality")).toContainText("Execution");
     await expect(page.locator("#readied")).toContainText("PIERCE");
     await expect(page.locator("#readied")).toContainText("charge");
-    // Nothing resolves on lift: the exchange lands at impact.
-    // At a quarter speed the rune lands about 17 s after the page opens.
-    await expect(page.locator("#result")).toHaveClass(/show/, { timeout: 25_000 });
+    // Nothing resolves on lift: the exchange lands at impact, 3.6 s after it opened.
+    await expect(page.locator("#result")).not.toHaveClass(/show/);
+    await tick(page, 3700);
+    await expect(page.locator("#result")).toHaveClass(/show/);
     await page.getByRole("button", { name: "Log" }).click();
     await expect(page.locator("#combat-log")).toContainText("Readied");
-    await expect(page.locator("#combat-log")).toContainText(/Counter|No answer/);
+    await expect(page.locator("#combat-log")).toContainText(/Counter/);
 });
 
 test("drawing again adjusts the answer; a Ward then a Redirect is the Reflect combo", async ({ page }) => {
-    // Three strokes in one exchange: a tenth of the speed, so slow CI frames cannot let the rune land first;
-    // at that speed the exchange opens 7 s in, so the spec needs the slow budget.
-    test.slow();
-    await slowPlay(page, 0.1);
-    await expect(page.locator("#enemy-intent")).toHaveClass(/show/, { timeout: 10_000 });
+    await toFirstRune(page);
     await line(page);
     await expect(page.locator("#readied")).toContainText("PIERCE");
     await loop(page);
@@ -111,9 +129,16 @@ test("drawing again adjusts the answer; a Ward then a Redirect is the Reflect co
     await expect(page.locator("#combat-log")).toContainText("Combo REFLECT");
 });
 
+test("an answer drawn while their rune is in flight still counts", async ({ page }) => {
+    await toFirstRune(page);
+    await tick(page, 3200); // written (3 s): the rune is in the air, 0.6 s from landing
+    await expect(page.locator("#cast-label")).toHaveText("IN FLIGHT · LAST CHANCE");
+    await line(page);
+    await expect(page.locator("#readied")).toContainText("PIERCE");
+});
+
 test("the combat log reads in order: the duel's start first, the latest entry last", async ({ page }) => {
-    await slowPlay(page);
-    await expect(page.locator("#enemy-intent")).toHaveClass(/show/, { timeout: 10_000 });
+    await toFirstRune(page);
     await line(page);
     await page.getByRole("button", { name: "Log" }).click();
     const items = page.locator("#combat-log li");
@@ -128,8 +153,9 @@ test("parry shows only the opening of their stroke, then a four-second commit; r
     await expect(page.locator("#enemy-intent")).toHaveText("GLIMPSE · THEN HIDDEN");
     await expect(page.locator("#cast-label")).toHaveText("COMMIT BEFORE REVEAL");
     await expect(page.locator("#timer")).toHaveText(/^[34]\./);
-    await expect(page.locator("#their-rune")).toHaveAttribute("data-progress", "0.35", { timeout: 3_000 });
-    await page.waitForTimeout(400);
+    await tick(page, 1200);
+    await expect(page.locator("#their-rune")).toHaveAttribute("data-progress", "0.35");
+    await tick(page, 1000);
     await expect(page.locator("#their-rune")).toHaveAttribute("data-progress", "0.35");
     await page.getByRole("button", { name: "RESET" }).click();
     await expect(page.locator("#timer")).toHaveText(/^[34]\./);
@@ -186,7 +212,7 @@ test("rune guide shows drawing instructions including inverted-arc Absorb", asyn
 });
 
 test("downward open arc is recognized as Absorb", async ({ page }) => {
-    await expect(page.locator("#enemy-intent")).toHaveClass(/show/, { timeout: 3_000 });
+    await toFirstRune(page);
     await stroke(page, (t, w, h) => ({ x: 45 + t * Math.min(180, w - 90), y: h * 0.35 + Math.sin(Math.PI * t) * 75 }), 14);
     await expect(page.locator("#recognized")).toHaveText("ABSORB");
 });
