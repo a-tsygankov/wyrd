@@ -49,7 +49,7 @@ export const GLOSSARY_GROUPS: readonly GlossaryGroup[] = [
     {
         id: "arcade",
         title: "Arcade games",
-        intro: "Volley, Quickdraw, Beam clash and Gate tug: one-thumb duels on the four-colour wheel. Volley and Quickdraw play for five hearts each, Beam clash for three seals, Gate tug for the gate. Pick the game in Settings → Game. The ruleset and the glyph grammar do not apply here."
+        intro: "Volley, Quickdraw, Beam clash, Gate tug and Ward rhythm: one-thumb duels on the four-colour wheel. Volley, Quickdraw and Ward rhythm play for five hearts each, Beam clash for three seals, Gate tug for the gate. Pick the game in Settings → Game. The ruleset and the glyph grammar do not apply here."
     }
 ];
 
@@ -162,9 +162,15 @@ const arcadeEntries: GlossaryEntry[] = [
     { term: "Comeback", text: "With the gate one step from your own circle, your push counts double, so a nearly lost tug can still swing back." },
     { term: "Ward (Gate tug)", text: "Tap Ward (2 Focus) instead of drawing: you push nothing this round, but the other push is blocked unless its colour beats or matches your ward's." },
     { term: "Round limit", text: "After fifteen rounds the mage the gate leans away from wins. A gate dead in the middle goes to sudden death: the next push that moves it wins." },
+    { term: "Ward rhythm", text: "The fifth and gentlest arcade game: they throw a volley of coloured bolts on a beat and you ward each one as it lands, then you throw one back at their ward. Five volleys and five throws; five hearts each, the most hearts at the end win." },
+    { term: "Lane", text: "The strip under the names in Ward rhythm: their bolts slide in from the right toward the gold hit line and glow gold when due. Volleys grow longer and quicker as the match goes on." },
+    { term: "Ward tap", text: "As a bolt reaches the line, tap the pad that beats its colour (water on fire, fire on life, life on shadow, shadow on water) for a clean block. The first tap in a bolt's window is your answer, so tapping every pad does not work; a wrong colour or no tap costs a heart." },
+    { term: "Absorb", text: "Tap a bolt's own colour instead and you take it in: no damage, and +1 to your next throw, up to 3. A riskier read than the block, since a neutral colour costs a heart." },
+    { term: "Throw", text: "After each volley, 2.5 seconds to throw: tap the colour that beats their ward for a strike worth 1 plus what you absorbed; a neutral colour glances for 1; their ward's own colour, or one it beats, is held. Throw late: a bot that sees an early throw can switch its ward. No throw and your last colour goes for you." },
+    { term: "Their ward", text: "The colour their ward shows while you throw, on the card and the stage. The Trickster reads early throws, the Warden guesses right most often, the Aggressor throws longer volleys but guards worst." },
     { term: "Start", text: "No arcade game starts on its own: the clock begins when you press Start, so you can read the board or go fullscreen first." },
-    { term: "Colour pads", text: "The four pads under the stage, placed like the swipes: up FIRE, right WATER, down SHADOW, left LIFE. In Volley a pad returns in that colour, in Quickdraw it draws that colour, in Beam clash it switches your beam, in Gate tug it draws that colour." },
-    { term: "Gestures", text: "On the stage itself: in Volley a tap returns, a swipe returns in the colour of its direction and a long press wards; in Quickdraw a swipe picks a colour and press-and-hold charges; in Beam clash any touch on the stage is a push; Gate tug plays like Quickdraw." },
+    { term: "Colour pads", text: "The four pads under the stage, placed like the swipes: up FIRE, right WATER, down SHADOW, left LIFE. In Volley a pad returns in that colour, in Quickdraw it draws that colour, in Beam clash it switches your beam, in Gate tug it draws that colour, in Ward rhythm it wards or throws that colour." },
+    { term: "Gestures", text: "On the stage itself: in Volley a tap returns, a swipe returns in the colour of its direction and a long press wards; in Quickdraw a swipe picks a colour and press-and-hold charges; in Beam clash any touch on the stage is a push; Gate tug plays like Quickdraw; in Ward rhythm a swipe is the pad of its direction." },
     { term: "Play again", text: "Shown when a game ends: a fresh game of the same kind starts straight away." },
     { term: "Reset (arcade)", text: "In the arcade, Reset abandons the game in progress and puts the board back on Start." },
     { term: "Fullscreen", text: "The corner button on the stage (arcade only): hides the header and hints and gives the stage the height; where the browser allows it the page goes truly fullscreen too. Tap it again, or leave fullscreen from the browser, to come back." }

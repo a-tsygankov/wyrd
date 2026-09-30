@@ -72,6 +72,7 @@ test("the arcade game is a setting: Volley by default, Quickdraw on request, ?ar
     assert.equal(loadSettings(store, new URLSearchParams("arcade=volley")).arcadeMode, "volley");
     assert.equal(loadSettings(store, new URLSearchParams("arcade=beam")).arcadeMode, "beam");
     assert.equal(loadSettings(store, new URLSearchParams("arcade=gatetug")).arcadeMode, "gatetug");
+    assert.equal(loadSettings(store, new URLSearchParams("arcade=wardrhythm")).arcadeMode, "wardrhythm");
     assert.equal(loadSettings(store, new URLSearchParams("arcade=pinball")).arcadeMode, "volley", "unknown values fall back");
     saveSettings(store, { ...DEFAULT_SETTINGS, arcadeMode: "quickdraw" });
     assert.equal(loadSettings(store, new URLSearchParams()).arcadeMode, "quickdraw", "remembered");

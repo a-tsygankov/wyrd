@@ -325,6 +325,37 @@
             <button id="gatetug-rematch" class="ghost-button hidden" type="button">Play again</button>
         </section>
 
+        <!-- Ward rhythm (arcade doc §1 E): block their volley on the beat, then
+             throw. Rules in apps/web/src/wardrhythm.ts. -->
+        <section id="wardrhythm" class="volley wardrhythm card hidden" aria-label="Ward rhythm">
+            <div class="volley-head">
+                <div class="volley-side">
+                    <span id="wr-name-player" class="label">You</span>
+                    <div id="wr-hearts-player" class="pips hearts" role="img" aria-label="5 of 5"></div>
+                </div>
+                <div class="volley-centre">
+                    <span id="wr-caption" class="volley-caption" aria-live="polite"></span>
+                    <span id="wr-round" class="muted volley-speed"></span>
+                </div>
+                <div class="volley-side right">
+                    <span id="wr-name-opponent" class="label">Opponent</span>
+                    <div id="wr-hearts-opponent" class="pips hearts" role="img" aria-label="5 of 5"></div>
+                </div>
+            </div>
+            <div id="wr-lane" class="wr-lane" aria-hidden="true"></div>
+            <span id="wr-ward" class="wr-ward hidden"></span>
+            <p class="muted volley-hint">Their bolts slide to the line: as each lands, tap the colour that beats it (water on fire, fire on life, life on shadow, shadow on water). Its own colour absorbs it: +1 to your throw. Then throw: pick the colour that beats their ward, late enough that they cannot read it.</p>
+            <div class="volley-pads" role="group" aria-label="Ward and throw colour">
+                <button class="volley-pad wr-pad fire" data-essence="fire" type="button">▲ FIRE</button>
+                <button class="volley-pad wr-pad water" data-essence="water" type="button">▶ WATER</button>
+                <button class="volley-pad wr-pad shadow" data-essence="shadow" type="button">▼ SHADOW</button>
+                <button class="volley-pad wr-pad life" data-essence="life" type="button">◀ LIFE</button>
+            </div>
+            <button id="wr-start" class="cast-button arcade-start" type="button">Start</button>
+            <p id="wr-verdict" class="volley-verdict hidden"></p>
+            <button id="wr-rematch" class="ghost-button hidden" type="button">Play again</button>
+        </section>
+
         <section class="opponent card">
             <div class="section-heading">
                 <div>
@@ -436,6 +467,11 @@
                         <input id="settings-arcade-gatetug" type="radio" name="arcade" value="gatetug">
                         <strong>Arcade · Gate tug</strong>
                         <ul><li>Quickdraw's draw, but the orbs push the gate along a rail; push it into their circle.</li><li>The gate takes the colour of the last push: beat or match it to move it again.</li></ul>
+                    </label>
+                    <label class="settings-option" id="settings-game-wardrhythm-option">
+                        <input id="settings-arcade-wardrhythm" type="radio" name="arcade" value="wardrhythm">
+                        <strong>Arcade · Ward rhythm</strong>
+                        <ul><li>Their volley lands on a beat: tap the colour that beats each bolt, or its own colour to absorb it.</li><li>Then throw at their ward. The gentlest arcade game.</li></ul>
                     </label>
                     <label class="settings-option" id="settings-game-word-option">
                         <input id="settings-game-word" type="radio" name="game" value="word">
