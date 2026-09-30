@@ -1,5 +1,5 @@
 import { createRuneArena, type ArenaRune, type RuneArenaCamera } from "./runeArena.js";
-import { COMBOS, GLIMPSE, beats, chargeOf, classify, openExchange, progress, readStage, ready, resolveExchange, type Exchange, type Point, type Rune } from "./runeDuel.js";
+import { COMBOS, GLIMPSE, STROKES, beats, chargeOf, classify, openExchange, progress, readStage, ready, resolveExchange, type Exchange, type Point, type Rune } from "./runeDuel.js";
 
 /**
  * The Rune Lab page (docs/rune-lab.md). The rules live in runeDuel.ts; this
@@ -30,16 +30,10 @@ const arena3d = createRuneArena(arena);
 type Mode = "fencing" | "parry";
 const names: Record<Rune | "unknown", string> = { line: "PIERCE", arc: "REDIRECT", circle: "WARD", triangle: "POWER", spiral: "ABSORB", unknown: "—" };
 const glyphs: Record<Rune, string> = { line: "—", arc: "⌒", circle: "○", triangle: "△", spiral: "⌣" };
-/** The shape of their rune on the HUD, drawn the way they write it (the same paths as the Help cards). */
-const shapes: Record<Rune, string> = {
-    line: "M15 35 H85",
-    arc: "M18 48 Q50 8 82 48",
-    circle: "M50 10 C77 10 88 27 88 35 C88 55 69 62 50 62 C27 62 12 51 12 35 C12 18 31 10 50 10 Z",
-    triangle: "M50 8 L88 60 L12 60 Z",
-    spiral: "M18 20 Q50 60 82 20"
-};
-/** What the first strokes suggest, before the rune is plain. */
-const hints: Record<Rune, string> = { triangle: "ANGULAR · POWER?", circle: "CLOSING · WARD?", spiral: "DIPPING · ABSORB?", arc: "RISING · REDIRECT?", line: "DIRECT · PIERCE?" };
+/** Their rune on the HUD: the shared-opening stroke they actually write (runeDuel.ts STROKES). */
+const pathOf = (rune: Rune): string => STROKES[rune].map((p, i) => `${i === 0 ? "M" : "L"}${p.x} ${p.y}`).join(" ");
+/** The first sign of the shape once it leaves the shared flat opening. */
+const hints: Record<Rune, string> = { triangle: "A CORNER · POWER?", circle: "CURLING BACK · WARD?", spiral: "BOWING DOWN · ABSORB?", arc: "BOWING UP · REDIRECT?", line: "STILL FLAT · PIERCE?" };
 
 let gameSpeed = 1;
 let mode: Mode = "fencing";
@@ -205,7 +199,7 @@ window.addEventListener("rune-test-damage", e => {
 function showTheirRune(rune: Rune | undefined, p: number): void {
     theirRune.classList.toggle("hidden", rune === undefined);
     if (!rune) return;
-    theirPath.setAttribute("d", shapes[rune]);
+    theirPath.setAttribute("d", pathOf(rune));
     theirPath.style.strokeDashoffset = String(1 - p);
     theirRune.dataset.progress = p.toFixed(2);
 }
@@ -240,7 +234,7 @@ function scheduleFencing(): void {
         arena3d.showOpponentRune(threat as ArenaRune, true);
         arena3d.setOpponentProgress(0);
         arena3d.pulseOpponentCast();
-        intent.textContent = "SENSING…";
+        intent.textContent = "FLAT OPENING…";
         intent.classList.add("show");
         $("cast-label").textContent = "READ IT · READY YOUR COUNTER";
         log("They begin to write a rune");
@@ -271,7 +265,7 @@ function fencingFrame(now: number): void {
     arena3d.setOpponentProgress(p);
     showTheirRune(exchange.threat, p);
     const stage = readStage(exchange, now);
-    intent.textContent = stage === "sensing" ? "SENSING…" : stage === "hint" ? hints[exchange.threat] : `${glyphs[exchange.threat]} ${names[exchange.threat]}`;
+    intent.textContent = stage === "sensing" ? "FLAT OPENING…" : stage === "hint" ? hints[exchange.threat] : `${glyphs[exchange.threat]} ${names[exchange.threat]}`;
     arena.dataset.read = stage;
     if (!released && now >= exchange.drawnAt) {
         // Written: the rune leaves their hand. Your answer still counts until it lands.
@@ -424,6 +418,26 @@ window.setInterval(() => {
         if (clockLeft === 0) finish(hpYou === hpEnemy ? undefined : hpYou > hpEnemy, "time");
     }
 }, 100);
+
+// --- Help: the five strokes over each other, the shared opening in white, each branch in its own colour.
+(function drawOpenings(): void {
+    const svg = document.getElementById("help-openings-diagram");
+    if (!svg) return;
+    // Pierce in pink, not white, so the white shared lead stands out from it.
+    const colours: Record<Rune, string> = { line: "#ff9fb2", triangle: "#ffc86b", arc: "#65d9ff", spiral: "#9b6cff", circle: "#72e5a0" };
+    const ns = "http://www.w3.org/2000/svg";
+    for (const rune of ["circle", "triangle", "arc", "spiral", "line"] as const) {
+        const path = document.createElementNS(ns, "path");
+        path.setAttribute("d", pathOf(rune));
+        path.setAttribute("stroke", colours[rune]);
+        path.dataset.rune = rune;
+        svg.append(path);
+    }
+    const lead = document.createElementNS(ns, "path");
+    lead.setAttribute("d", "M12 50 H34");
+    lead.setAttribute("class", "lead");
+    svg.append(lead);
+})();
 
 // --- Drawers, speed and camera.
 $("log-toggle").onclick = () => $("combat-log-panel").classList.toggle("hidden");

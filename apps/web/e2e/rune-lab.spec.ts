@@ -50,11 +50,31 @@ test("their rune is written stroke by stroke, and the read sharpens from sensing
     await expect(page.locator("#their-rune")).toBeVisible();
     const early = Number(await page.locator("#their-rune").getAttribute("data-progress"));
     expect(early).toBeLessThan(0.5);
-    await expect(page.locator("#arena")).toHaveAttribute("data-read", "hint", { timeout: 3_000 });
-    await expect(page.locator("#arena")).toHaveAttribute("data-read", "named", { timeout: 3_000 });
+    // The hint stage can be as short as 450 ms, which a slow software-WebGL frame may skip; the opening spec
+    // checks the hints at a slower speed. Here: the rune is named before it lands.
+    await expect(page.locator("#arena")).toHaveAttribute("data-read", "named", { timeout: 8_000 });
     const later = Number(await page.locator("#their-rune").getAttribute("data-progress"));
     expect(later).toBeGreaterThan(early);
-    expect(Number(await page.locator("#arena").getAttribute("data-opponent-progress"))).toBeGreaterThan(0.6);
+    // Named at 37-65% written, depending on how late its shape leaves the shared opening.
+    expect(Number(await page.locator("#arena").getAttribute("data-opponent-progress"))).toBeGreaterThan(0.3);
+});
+
+test("every rune opens the same way: the read starts as a flat opening before the shape shows", async ({ page }) => {
+    await slowPlay(page);
+    await expect(page.locator("#enemy-intent")).toHaveText("FLAT OPENING…", { timeout: 10_000 });
+    await expect(page.locator("#arena")).toHaveAttribute("data-read", "sensing");
+    // The shape then shows itself: one of the five hints, then the name.
+    await expect(page.locator("#enemy-intent")).toHaveText(/BOWING UP|BOWING DOWN|CURLING BACK|A CORNER|STILL FLAT/, { timeout: 15_000 });
+    await expect(page.locator("#arena")).toHaveAttribute("data-read", "named", { timeout: 15_000 });
+});
+
+test("Help shows how their runes branch from one opening, and why a partial read is already an answer", async ({ page }) => {
+    await page.getByRole("button", { name: "Help" }).click();
+    const reading = page.locator("#help-reading");
+    await expect(reading).toContainText("same opening");
+    await expect(reading).toContainText("Pierce and Power are undone by the same runes");
+    await expect(page.locator("#help-openings-diagram path[data-rune]")).toHaveCount(5);
+    await expect(page.locator("#help-openings-diagram path.lead")).toHaveCount(1);
 });
 
 test("a drawn rune is readied with a charge and resolves at impact", async ({ page }) => {
@@ -75,7 +95,9 @@ test("a drawn rune is readied with a charge and resolves at impact", async ({ pa
 });
 
 test("drawing again adjusts the answer; a Ward then a Redirect is the Reflect combo", async ({ page }) => {
-    // Three strokes in one exchange: a tenth of the speed, so slow CI frames cannot let the rune land first.
+    // Three strokes in one exchange: a tenth of the speed, so slow CI frames cannot let the rune land first;
+    // at that speed the exchange opens 7 s in, so the spec needs the slow budget.
+    test.slow();
     await slowPlay(page, 0.1);
     await expect(page.locator("#enemy-intent")).toHaveClass(/show/, { timeout: 10_000 });
     await line(page);

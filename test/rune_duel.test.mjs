@@ -3,7 +3,10 @@ import test from "node:test";
 import {
     COMBOS,
     COUNTERS,
+    DIVERGE,
     DRAW_MS,
+    STROKES,
+    OPENING,
     FLIGHT_MS,
     GLIMPSE,
     RUNES,
@@ -46,12 +49,50 @@ test("an exchange: the opponent writes for DRAW_MS, then the rune flies for FLIG
     assert.equal(slow.impactAt, 2 * (DRAW_MS + FLIGHT_MS));
 });
 
-test("the read sharpens as the rune is written: sensing, then a hint, then the name", () => {
-    const ex = openExchange("arc", 0);
-    assert.equal(readStage(ex, 0), "sensing");
-    assert.equal(readStage(ex, DRAW_MS * 0.4), "hint");
-    assert.equal(readStage(ex, DRAW_MS * 0.8), "named");
+test("every rune is written from the same opening: a flat stroke from the left", () => {
+    for (const rune of RUNES) {
+        const stroke = STROKES[rune];
+        assert.ok(stroke.length >= 48, rune);
+        assert.deepEqual(stroke[0], OPENING.from, `${rune} starts where the others do`);
+        // Everything within the opening's length lies on the flat lead, heading right.
+        let walked = 0;
+        for (let i = 1; i < stroke.length; i++) {
+            walked += Math.hypot(stroke[i].x - stroke[i - 1].x, stroke[i].y - stroke[i - 1].y);
+            if (walked > OPENING.length) break;
+            assert.ok(Math.abs(stroke[i].y - OPENING.from.y) < 0.5, `${rune} leaves the lead early at point ${i}`);
+            assert.ok(stroke[i].x > stroke[i - 1].x, `${rune} turns back inside the lead`);
+        }
+    }
+});
+
+test("each rune leaves the opening at its own point; Pierce never does, Power only at its corner", () => {
+    for (const rune of RUNES) assert.ok(DIVERGE[rune] > 0.2 && DIVERGE[rune] < 1, rune);
+    assert.ok(DIVERGE.triangle > DIVERGE.arc && DIVERGE.triangle > DIVERGE.circle, "Power stays flat along its base");
+    assert.ok(DIVERGE.line > DIVERGE.triangle, "Pierce is known only by staying flat past Power's corner");
+    // Redirect bows up, Absorb bows down, right after the opening.
+    const after = rune => STROKES[rune][Math.ceil(STROKES[rune].length * (DIVERGE[rune] + 0.12))];
+    assert.ok(after("arc").y < OPENING.from.y - 2, "Redirect rises");
+    assert.ok(after("spiral").y > OPENING.from.y + 2, "Absorb dips");
+});
+
+test("the read follows the shape: sensing until the rune leaves the opening, then a hint, then its name", () => {
+    for (const rune of RUNES) {
+        const ex = openExchange(rune, 0);
+        assert.equal(readStage(ex, DRAW_MS * 0.2), "sensing", `${rune} is still the shared opening at 20%`);
+        assert.equal(readStage(ex, DRAW_MS * (DIVERGE[rune] + 0.01)), "hint", rune);
+        assert.equal(readStage(ex, DRAW_MS * 0.99), "named", rune);
+    }
+    // Power is still sensing when Redirect has already bowed.
+    const at = DRAW_MS * ((DIVERGE.arc + DIVERGE.triangle) / 2);
+    assert.equal(readStage(openExchange("triangle", 0), at), "sensing");
+    assert.equal(readStage(openExchange("arc", 0), at), "hint");
     assert.ok(GLIMPSE > 0.2 && GLIMPSE < 0.5, "the parry glimpse shows an opening, not the rune");
+});
+
+test("the opening's families share their counters: a partial read is already an answer", () => {
+    // Flat (Pierce, Power) and bowed (Redirect, Absorb) families are undone by the same runes.
+    assert.deepEqual([...COUNTERS.line].sort(), [...COUNTERS.triangle].sort());
+    assert.deepEqual([...COUNTERS.arc].sort(), [...COUNTERS.spiral].sort());
 });
 
 test("readying early charges the answer; the charge is the share of the exchange still to come", () => {

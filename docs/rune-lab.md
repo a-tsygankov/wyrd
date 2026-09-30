@@ -1,6 +1,6 @@
 # Wyrd — Rune Lab: gameplay
 
-Status: prototype (`/rune-lab.html`, PRs #51-#53), reading pass 2026-09-30. Rules in `apps/web/src/runeDuel.ts` (pure, `test/rune_duel.test.mjs`); the page in `runeLab.ts`, the 3D arena in `runeArena.ts`; the in-page Help drawer is the player-facing version of this document and must change with it.
+Status: prototype (`/rune-lab.html`, PRs #51-#53), reading pass and shared openings 2026-09-30. Rules in `apps/web/src/runeDuel.ts` (pure, `test/rune_duel.test.mjs`); the page in `runeLab.ts`, the 3D arena in `runeArena.ts`; the in-page Help drawer is the player-facing version of this document and must change with it.
 
 ## The idea
 
@@ -29,9 +29,23 @@ Magic in Wyrd is a written language. Your opponent writes a rune in the air, str
 11. **A stroke-clearing race**: the 220 ms tidy-up after a stroke no longer wipes a stroke begun inside it (a quick combo finisher lost its first points).
 12. `?speed=` sets the game speed for one visit (slow play; the e2e suite runs multi-stroke specs at 0.1-0.25× because software WebGL makes each mouse move slow).
 
-## Ideas considered, not built yet
+## Shared openings (second pass, 2026-09-30)
 
-- **Shared openings**: have runes begin alike (Pierce, Redirect and Absorb all leave the hand heading right) so the first strokes are genuinely ambiguous and the read is a skill, not a glance. The current shapes separate by ~30% written; tuning the stroke paths would move that later.
+The first pass drew each rune the way the Help cards do, so the opening stroke of each was different and the rune showed itself in the first strokes. Now the opponent writes **every rune from the same opening**, a flat stroke from the left (`OPENING` in `runeDuel.ts`), and each rune departs from it at its own point (`DIVERGE`, measured from the geometry, not hand-tuned):
+
+| Rune | Leaves the opening | How it shows |
+|---|---|---|
+| ⌒ Redirect | ~22% | bows up |
+| ⌣ Absorb | ~25% | bows down |
+| ○ Ward | ~25% | runs a little further, then curls back into a loop |
+| △ Power | ~40% | stays flat along its whole base, then a sharp corner |
+| — Pierce | never | known only once it has stayed flat past Power's corner (~50%) |
+
+The read stages follow the shape: FLAT OPENING until the rune leaves it, a hint for 15% of the stroke ("BOWING UP · REDIRECT?"), then the name. The counter chart already pairs the families: **Pierce and Power are undone by the same runes (Ward, Redirect), so are Redirect and Absorb (Power, Pierce)**, so "still flat" or "it bowed" is already an answer; waiting for the name buys the right combo, not the counter. The strokes (`STROKES`, 64 evenly spaced points in the Help cards' 100 x 70 box) feed the HUD, the arena and a Help diagram of all five branching from the white opening, so the three never disagree. The player still draws their own runes the usual way; only the opponent's calligraphy shares the opening.
+
+Known tell: every rune is written in the same 3 s, so a short rune's pen moves slower (Pierce's flat stroke grows more slowly than Power's base). A reader who notices pen speed can split Pierce from Power early; since they share their counters, it only matters for combos. A constant pen speed (draw time by length) would remove it and make Pierce the quickest rune to land.
+
+## Ideas considered, not built yet
 - **Feints** (an opponent that changes its stroke mid-rune) and **tempo** (faster writers) belong with opponent skills, deliberately left to the RPG/strategy layer.
 - **Your stroke as a telegraph**: in a two-player version, your rune would be written visibly too, and both sides read each other.
 - **Combo chains of three** and a combo meter, once two-rune combos are proven on phones.

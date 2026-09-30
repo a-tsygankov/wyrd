@@ -73,15 +73,110 @@ export function openExchange(threat: Rune, now: number, speed = 1): Exchange {
     return { threat, startedAt: now, drawnAt: now + draw, impactAt: now + draw + FLIGHT_MS / speed };
 }
 
+// --- How the opponent writes: every rune from the same opening.
+//
+// All five begin as a flat stroke from the left, so the first strokes do not
+// give the rune away. Then Redirect bows up and Absorb bows down, Ward curls
+// back into a loop, Power turns at the corner at the end of its base, and
+// Pierce simply stays flat to the end. The counter chart pairs them up
+// (Pierce and Power share their answers, as do Redirect and Absorb), so a
+// partial read is already worth something. Coordinates are a 100 x 70 box,
+// y down, the same box as the Help cards; the HUD, the arena and the Help's
+// diagram all draw these points.
+export type StrokePoint = { x: number; y: number };
+
+/** The shared start and the length every rune spends on the flat lead before any can differ. */
+export const OPENING = { from: { x: 12, y: 50 }, length: 22 } as const;
+
+const STROKE_POINTS = 64;
+
+function sampleLine(a: StrokePoint, b: StrokePoint, n = 24): StrokePoint[] {
+    return Array.from({ length: n + 1 }, (_, i) => ({ x: a.x + ((b.x - a.x) * i) / n, y: a.y + ((b.y - a.y) * i) / n }));
+}
+function sampleQuad(a: StrokePoint, c: StrokePoint, b: StrokePoint, n = 48): StrokePoint[] {
+    return Array.from({ length: n + 1 }, (_, i) => {
+        const t = i / n;
+        const u = 1 - t;
+        return { x: u * u * a.x + 2 * u * t * c.x + t * t * b.x, y: u * u * a.y + 2 * u * t * c.y + t * t * b.y };
+    });
+}
+function sampleCubic(a: StrokePoint, c1: StrokePoint, c2: StrokePoint, b: StrokePoint, n = 48): StrokePoint[] {
+    return Array.from({ length: n + 1 }, (_, i) => {
+        const t = i / n;
+        const u = 1 - t;
+        return {
+            x: u * u * u * a.x + 3 * u * u * t * c1.x + 3 * u * t * t * c2.x + t * t * t * b.x,
+            y: u * u * u * a.y + 3 * u * u * t * c1.y + 3 * u * t * t * c2.y + t * t * t * b.y
+        };
+    });
+}
+/** Join pieces end to start, dropping each piece's repeated first point. */
+const join = (...pieces: StrokePoint[][]): StrokePoint[] => pieces.flatMap((piece, i) => (i === 0 ? piece : piece.slice(1)));
+
+/** Resample to `n` points evenly spaced along the stroke, so progress is a share of its length. */
+function even(ps: StrokePoint[], n: number): StrokePoint[] {
+    const lengths = [0];
+    for (let i = 1; i < ps.length; i++) lengths.push(lengths[i - 1]! + Math.hypot(ps[i]!.x - ps[i - 1]!.x, ps[i]!.y - ps[i - 1]!.y));
+    const total = lengths.at(-1)!;
+    const out: StrokePoint[] = [];
+    let j = 1;
+    for (let k = 0; k < n; k++) {
+        const target = (total * k) / (n - 1);
+        while (j < ps.length - 1 && lengths[j]! < target) j++;
+        const span = lengths[j]! - lengths[j - 1]! || 1;
+        const t = (target - lengths[j - 1]!) / span;
+        const round = (v: number): number => Math.round(v * 1000) / 1000;
+        out.push({ x: round(ps[j - 1]!.x + (ps[j]!.x - ps[j - 1]!.x) * t), y: round(ps[j - 1]!.y + (ps[j]!.y - ps[j - 1]!.y) * t) });
+    }
+    return out;
+}
+
+const O = OPENING.from;
+const LEAD_END = { x: O.x + OPENING.length, y: O.y };
+export const STROKES: Record<Rune, readonly StrokePoint[]> = {
+    // Flat all the way: the rune that is only known by not turning.
+    line: even(sampleLine(O, { x: 88, y: O.y }), STROKE_POINTS),
+    // The lead, then a bow up (and back down to the baseline).
+    arc: even(join(sampleLine(O, LEAD_END), sampleQuad(LEAD_END, { x: 61, y: 2 }, { x: 88, y: O.y })), STROKE_POINTS),
+    // The lead, then a bow down.
+    spiral: even(join(sampleLine(O, LEAD_END), sampleQuad(LEAD_END, { x: 61, y: 82 }, { x: 88, y: O.y })), STROKE_POINTS),
+    // The lead a little further, then curling up and back round to close where it began.
+    circle: even(join(sampleLine(O, { x: 48, y: O.y }), sampleCubic({ x: 48, y: O.y }, { x: 80, y: O.y }, { x: 86, y: 10 }, { x: 50, y: 10 }), sampleCubic({ x: 50, y: 10 }, { x: 16, y: 10 }, { x: 12, y: 30 }, O)), STROKE_POINTS),
+    // The base, flat like a Pierce, then the corner: up to the apex and back down to close.
+    triangle: even(join(sampleLine(O, { x: 88, y: O.y }), sampleLine({ x: 88, y: O.y }, { x: 50, y: 8 }), sampleLine({ x: 50, y: 8 }, O)), STROKE_POINTS)
+};
+
+/** Where a stroke first leaves the flat lead, as a share of its length (the index of the first point off it). */
+function leaves(stroke: readonly StrokePoint[]): number {
+    for (let i = 1; i < stroke.length; i++) {
+        if (Math.abs(stroke[i]!.y - O.y) > 1 || stroke[i]!.x < stroke[i - 1]!.x) return (i - 1) / (stroke.length - 1);
+    }
+    return 1;
+}
+
+/**
+ * When each rune stops looking like the shared opening. Pierce never leaves
+ * it, so it reads only once it has stayed flat past the point where Power
+ * would have turned its corner.
+ */
+export const DIVERGE: Record<Rune, number> = (() => {
+    const d = { line: 1, arc: leaves(STROKES.arc), spiral: leaves(STROKES.spiral), circle: leaves(STROKES.circle), triangle: leaves(STROKES.triangle) };
+    return { ...d, line: Math.min(0.9, d.triangle + 0.1) };
+})();
+
+/** How long after leaving the opening a rune reads plainly. */
+const NAMED_AFTER = 0.15;
+
 /** How much of their rune is written: 0 at the start, 1 when it leaves their hand. */
 export function progress(ex: Exchange, now: number): number {
     return Math.min(1, Math.max(0, (now - ex.startedAt) / (ex.drawnAt - ex.startedAt)));
 }
 
-/** How clearly their rune reads: a stroke begun, the shape of it, then plainly the rune. */
+/** How clearly their rune reads: the shared opening, the first sign of its shape, then plainly the rune. */
 export function readStage(ex: Exchange, now: number): "sensing" | "hint" | "named" {
     const p = progress(ex, now);
-    return p < 0.3 ? "sensing" : p < 0.65 ? "hint" : "named";
+    const d = DIVERGE[ex.threat];
+    return p < d ? "sensing" : p < d + NAMED_AFTER ? "hint" : "named";
 }
 
 /** The share of the exchange still to come when your answer was readied: 1 at the start, 0 at impact. */

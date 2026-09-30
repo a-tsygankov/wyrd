@@ -34,7 +34,8 @@
         .readout .readied{color:#ffc86b;font-weight:800;font-size:11px;margin-top:2px}.cast[data-combo]:not([data-combo=""]) .readied{color:#72e5ff}
         .help-section{margin-top:10px}.help-section h3{margin:0 0 4px;font-size:12px;letter-spacing:.08em;color:#ffc86b}.help-section p{margin:3px 0;color:#cdbfe2;line-height:1.45}.help-section ol,.help-section ul{margin:3px 0;padding-left:18px;color:#cdbfe2;line-height:1.45}
         .counter-chart{width:100%;border-collapse:collapse;margin-top:4px}.counter-chart th,.counter-chart td{border-bottom:1px solid #2f2445;padding:4px 3px;text-align:left;vertical-align:top;color:#cdbfe2}.counter-chart th{color:#f4ebff;white-space:nowrap}.counter-chart b{color:#f4ebff}
-        #rune-help{max-height:62dvh;overflow:auto}</style>
+        #rune-help{max-height:62dvh;overflow:auto}
+        .openings{display:grid;grid-template-columns:120px 1fr;gap:8px;align-items:center}.openings svg{width:120px;height:84px;border:1px solid #35284d;border-radius:10px;background:#0b0916}.openings svg path{fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;opacity:.85}.openings svg path.lead{stroke:#fff;stroke-width:6;opacity:1}</style>
 <script type="importmap">{ "imports": { "three": "./vendor/three/three.module.js", "three/addons/": "./vendor/three/addons/" } }</script>
 </head>
 <body>
@@ -46,11 +47,19 @@
 <p>Magic in Wyrd is a written language. Your opponent writes a rune in the air, stroke by stroke. You read it <b>while it is still being written</b> and draw the rune that undoes it before it lands.</p>
 <p>Reading is the skill. The earlier you read their rune, the more your answer is charged. Read early enough and you have time to chain two runes into a combo. Drawing cleanly adds power. Guessing wrong costs you, but a misread can be corrected while their rune is still in the air.</p></section>
 <section class="help-section" id="help-exchange"><h3>AN EXCHANGE (RUNE FENCING)</h3>
-<ol><li><b>They write.</b> Their rune grows over three seconds, big above the arena and in the air by their hand. The read goes from SENSING to a hint to its name.</li>
+<ol><li><b>They write.</b> Their rune grows over three seconds, big above the arena and in the air by their hand. Every rune begins with the same flat opening; the read goes from FLAT OPENING to the first sign of its shape to its name.</li>
 <li><b>You ready a counter.</b> Draw a rune and lift your finger: it is <b>readied</b>, not fired. The readout shows it and its charge.</li>
 <li><b>Adjust or combo.</b> Drawing again replaces your answer, which restarts its charge, or finishes a combo if the pair is one.</li>
 <li><b>Impact.</b> Their rune flies and lands. Your readied rune meets it. A counter hurts them, more the earlier you readied it (up to +60%). A wrong rune hurts you less the cleaner it was drawn. No rune takes the full blow.</li></ol>
 <p>First to empty the other's HP wins. When the minute runs out, the healthier mage wins.</p></section>
+<section class="help-section" id="help-reading"><h3>READING THEIR RUNE</h3>
+<div class="openings"><svg id="help-openings-diagram" viewBox="0 0 100 70" aria-label="The five runes branching from one flat opening"></svg><p>They write every rune from the <b>same opening</b>: a flat stroke from the left (white). Then it shows itself:</p></div>
+<ul><li><b>⌒ Redirect</b> bows up, <b>⌣ Absorb</b> bows down: the earliest to show, about a quarter of the way.</li>
+<li><b>○ Ward</b> runs a little further, then curls back into a loop.</li>
+<li><b>△ Power</b> stays flat along its whole base, then turns at a sharp corner.</li>
+<li><b>— Pierce</b> never turns: you only know it once it has stayed flat past where Power would have cornered.</li></ul>
+<p>You do not need the whole rune to answer. Pierce and Power are undone by the same runes (Ward, Redirect), and so are Redirect and Absorb (Power, Pierce). "Still flat" already tells you a Ward or a Redirect will do; "it bowed" says Power or Pierce. Wait for the name only when you want the combo that needs it.</p>
+<p>You draw your own runes the usual way (see How to draw); only theirs share the opening.</p></section>
 <section class="help-section" id="help-counters"><h3>WHAT UNDOES WHAT</h3>
 <table class="counter-chart"><tr><th>Their rune</th><th>Undone by</th></tr>
 <tr><th>— Pierce</th><td><b>○ Ward</b> blocks it · <b>⌒ Redirect</b> deflects it</td></tr>
@@ -74,7 +83,7 @@
 </div><p>Ward and Power both close on themselves; Power is told apart by its three corners, so make them sharp.</p></section>
 <section class="help-section" id="help-modes"><h3>THE TWO MODES</h3>
 <p><b>Rune Fencing</b>: the real-time duel above, exchange after exchange for a minute.</p>
-<p><b>Rune Parry</b>: you glimpse only the <b>opening</b> of their stroke (about a third) and must commit your rune within four seconds; then both are revealed. The glimpse narrows it down, it does not give it away: think about which runes could start that way.</p></section>
+<p><b>Rune Parry</b>: you glimpse only the <b>opening</b> of their stroke (about a third) and must commit your rune within four seconds; then both are revealed. A bow up or down may already show in the glimpse; a stroke still flat could be Pierce, Power or a Ward about to curl. Pick the rune that answers the most of what it could be.</p></section>
 <section class="help-section" id="help-controls"><h3>CONTROLS</h3>
 <p><b>Speed</b> slows or quickens everything, the minute included. <b>View</b> changes the camera: drag the arena to rotate, pinch or ± to zoom. <b>Log</b> lists the duel from the first exchange down to the latest. <b>Reset</b> starts the mode again.</p></section>
 </aside>
