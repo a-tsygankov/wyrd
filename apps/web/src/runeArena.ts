@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { ARENA_CLIPS, ARENA_MODELS, POSITIONS, isBodyPart } from "./arenaMap.js";
+import { STROKES } from "./runeDuel.js";
 
 export type RuneArenaCamera = "behind" | "side" | "top" | "abstract";
 export type ArenaRune = "line" | "arc" | "circle" | "triangle" | "spiral" | "unknown";
@@ -42,14 +43,11 @@ function evenPoints(pts: THREE.Vector3[], n = 48): THREE.Vector3[] {
     return out;
 }
 
+/** The opponent writes the shared-opening strokes (runeDuel.ts STROKES), mapped from the 100 x 70 box to a plane by its hand. */
 function runePoints(rune: ArenaRune): THREE.Vector3[] {
-    const p: THREE.Vector3[] = [];
-    if (rune === "line") return [new THREE.Vector3(-.62,0,0), new THREE.Vector3(.62,0,0)];
-    if (rune === "arc") for (let i=0;i<=24;i++){const a=Math.PI+(Math.PI*i/24);p.push(new THREE.Vector3(Math.cos(a)*.62,Math.sin(a)*.48,0));}
-    if (rune === "circle") for (let i=0;i<=36;i++){const a=Math.PI*2*i/36;p.push(new THREE.Vector3(Math.cos(a)*.56,Math.sin(a)*.56,0));}
-    if (rune === "triangle") return [new THREE.Vector3(0,.62,0),new THREE.Vector3(-.58,-.45,0),new THREE.Vector3(.58,-.45,0),new THREE.Vector3(0,.62,0)];
-    if (rune === "spiral") for (let i=0;i<=24;i++){const a=Math.PI*i/24;p.push(new THREE.Vector3(-.62+1.24*i/24,-Math.sin(a)*.48,0));}
-    return p;
+    if (rune === "unknown") return [];
+    const scale = 0.62 / 38;
+    return STROKES[rune].map(p => new THREE.Vector3((p.x - 50) * scale, (35 - p.y) * scale, 0));
 }
 
 export function createRuneArena(container: HTMLElement): RuneArena {

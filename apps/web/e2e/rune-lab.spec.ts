@@ -25,6 +25,11 @@ async function open(page: Page, arena3d = false): Promise<void> {
 }
 /** Advance the paused clock: timers and frames run as if `ms` had passed. */
 const tick = (page: Page, ms: number): Promise<void> => page.clock.runFor(ms);
+/** Advance in 50 ms slices until the read reaches `stage` (a hint lasts at least 450 ms of game time). */
+async function tickUntil(page: Page, stage: string, max: number): Promise<void> {
+    for (let t = 0; t <= max && (await page.locator("#arena").getAttribute("data-read")) !== stage; t += 50) await tick(page, 50);
+    await expect(page.locator("#arena")).toHaveAttribute("data-read", stage, { timeout: 1 });
+}
 /** The first exchange opens 700 ms after the duel starts (1× speed). */
 const toFirstRune = (page: Page): Promise<void> => tick(page, 800);
 
@@ -70,12 +75,33 @@ test("their rune is written stroke by stroke, and the read sharpens from sensing
     await expect(page.locator("#arena")).toHaveAttribute("data-read", "sensing");
     const early = Number(await page.locator("#their-rune").getAttribute("data-progress"));
     expect(early).toBeLessThan(0.2);
-    await tick(page, 1200); // 40% written
-    await expect(page.locator("#arena")).toHaveAttribute("data-read", "hint");
-    await tick(page, 1200); // 80% written
-    await expect(page.locator("#arena")).toHaveAttribute("data-read", "named");
+    // Every rune shares the opening, so the shape shows at a different point for each (22-50% written):
+    // step to the hint, then to the name.
+    await tickUntil(page, "hint", 2_000);
+    await tickUntil(page, "named", 2_000);
+    await tick(page, 1200); // named by 65% at the latest: 1.2 s more is past 70% written for every rune
     expect(Number(await page.locator("#their-rune").getAttribute("data-progress"))).toBeGreaterThan(0.7);
     expect(Number(await page.locator("#arena").getAttribute("data-opponent-progress"))).toBeGreaterThan(0.7);
+});
+
+test("every rune opens the same way: the read starts as a flat opening before the shape shows", async ({ page }) => {
+    await toFirstRune(page);
+    await expect(page.locator("#enemy-intent")).toHaveText("FLAT OPENING…");
+    await expect(page.locator("#arena")).toHaveAttribute("data-read", "sensing");
+    await tick(page, 450); // 15% + written: still the shared opening for every rune
+    await expect(page.locator("#enemy-intent")).toHaveText("FLAT OPENING…");
+    await tickUntil(page, "hint", 2_000);
+    await expect(page.locator("#enemy-intent")).toHaveText(/BOWING UP|BOWING DOWN|CURLING BACK|A CORNER|STILL FLAT/);
+    await tickUntil(page, "named", 2_000);
+});
+
+test("Help shows how their runes branch from one opening, and why a partial read is already an answer", async ({ page }) => {
+    await page.getByRole("button", { name: "Help" }).click();
+    const reading = page.locator("#help-reading");
+    await expect(reading).toContainText("same opening");
+    await expect(reading).toContainText("Pierce and Power are undone by the same runes");
+    await expect(page.locator("#help-openings-diagram path[data-rune]")).toHaveCount(5);
+    await expect(page.locator("#help-openings-diagram path.lead")).toHaveCount(1);
 });
 
 test("a drawn rune is readied with a charge and resolves at impact", async ({ page }) => {
