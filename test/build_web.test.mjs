@@ -69,3 +69,10 @@ test("build_web ships the Rune Trace + Arcane Parry page", () => {
     assert.match(html, /Rune Trace \+ Arcane Parry/);
     assert.match(html, /strokeDuelPage\.js/);
 });
+
+
+test("build_web ships the Sigil Weave page", () => {
+    const html = readFileSync("apps/web/dist/sigil-weave.html", "utf8");
+    assert.match(html, /Sigil Weave/);
+    assert.match(html, /sigilWeavePage\.js/);
+});
