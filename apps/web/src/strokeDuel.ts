@@ -35,6 +35,10 @@ export type IncomingPath = {
     height: number;
     launchedAt: number;
     impactAt: number;
+    /** Vertical lane as a 0..1 fraction of the canvas height. Default 0.5. */
+    laneY?: number;
+    /** Full damage if the incoming spell is not controlled. Default 14. */
+    damage?: number;
 };
 
 type XY = { x: number; y: number };
@@ -190,7 +194,7 @@ export function projectilePosition(path: IncomingPath, time: number): XY {
     const progress = clamp01((time - path.launchedAt) / Math.max(1, path.impactAt - path.launchedAt));
     return {
         x: path.width * (0.88 - 0.76 * progress),
-        y: path.height * 0.5
+        y: path.height * (path.laneY ?? 0.5)
     };
 }
 
@@ -220,7 +224,7 @@ type Crossing = {
 };
 
 function crossings(points: readonly Point[], path: IncomingPath): Crossing[] {
-    const y = path.height * 0.5;
+    const y = path.height * (path.laneY ?? 0.5);
     const result: Crossing[] = [];
 
     for (let i = 1; i < points.length; i++) {
@@ -256,7 +260,7 @@ export function evaluateParry(points: readonly Point[], path: IncomingPath): Par
             crossingAngleDeg: 0,
             curvature: 0,
             quality: 0,
-            incomingDamage: 14,
+            incomingDamage: path.damage ?? 14,
             counterDamage: 0,
             detail: "No complete parry stroke."
         };
@@ -273,7 +277,7 @@ export function evaluateParry(points: readonly Point[], path: IncomingPath): Par
             crossingAngleDeg: best?.angleDeg ?? 0,
             curvature,
             quality: 0,
-            incomingDamage: 14,
+            incomingDamage: path.damage ?? 14,
             counterDamage: 0,
             detail: best ? "The stroke crossed the lane, but the projectile was not there yet." : "The stroke never crossed the spell trajectory."
         };
@@ -300,7 +304,7 @@ export function evaluateParry(points: readonly Point[], path: IncomingPath): Par
         detail = "An angled crossing pushed the spell off line.";
     } else {
         outcome = "miss";
-        incomingDamage = 10;
+        incomingDamage = Math.max(8, Math.round((path.damage ?? 14) * 0.75));
         detail = "The stroke was too parallel to take control of the spell.";
     }
 
@@ -312,7 +316,7 @@ export function evaluateParry(points: readonly Point[], path: IncomingPath): Par
         quality,
         incomingDamage,
         counterDamage,
-        intersection: { x: best.x, y: path.height * 0.5, t: best.t },
+        intersection: { x: best.x, y: path.height * (path.laneY ?? 0.5), t: best.t },
         detail
     };
 }
