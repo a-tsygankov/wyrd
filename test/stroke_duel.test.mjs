@@ -99,3 +99,24 @@ test("a stroke that never crosses the trajectory misses", () => {
     assert.equal(result.outcome, "miss");
     assert.equal(result.timing, 0);
 });
+
+
+test("custom incoming lane and damage are respected", () => {
+    const path = {
+        width: 1000,
+        height: 600,
+        launchedAt: 0,
+        impactAt: 2000,
+        laneY: 0.35,
+        damage: 19
+    };
+    const miss = evaluateParry([], path);
+    assert.equal(miss.incomingDamage, 19);
+
+    const block = evaluateParry([
+        { x: 500, y: 90, t: 930 },
+        { x: 500, y: 330, t: 1070 }
+    ], path);
+    assert.equal(block.outcome, "block");
+    assert.equal(block.intersection?.y, 210);
+});
