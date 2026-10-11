@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+    <meta name="theme-color" content="#071019">
+    <title>Wyrd · Rune Trace + Arcane Parry</title>
+    <style>
+        :root{font-family:Inter,ui-sans-serif,system-ui,sans-serif;color:#f6f3ff;background:#071019;--cyan:#62ddff;--violet:#a978ff;--gold:#ffc86b;--red:#ff6e72;--green:#72e5ac}
+        *{box-sizing:border-box}body{margin:0;min-height:100dvh;background:radial-gradient(circle at 50% -10%,#17345a 0,#0b1422 35%,#05090f 76%);overscroll-behavior:none}
+        button{font:inherit;color:inherit}.shell{width:min(100%,560px);margin:auto;min-height:100dvh;padding:max(10px,env(safe-area-inset-top)) 12px calc(16px + env(safe-area-inset-bottom))}
+        header{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:8px 2px}.brand{font-size:11px;font-weight:950;letter-spacing:.14em}.links{display:flex;gap:10px}.links a{color:#b6aec7;text-decoration:none;font-size:12px}
+        h1{font-size:clamp(22px,7vw,34px);line-height:1.02;margin:8px 0 4px;letter-spacing:-.035em}.lede{color:#9da6b7;font-size:13px;line-height:1.45;margin:0 0 12px}
+        .card{border:1px solid #263b55;border-radius:20px;background:#0d1724dd;box-shadow:0 18px 50px #0006;margin:10px 0;padding:14px}.top{display:flex;align-items:center;justify-content:space-between;gap:10px}.eyebrow{font-size:10px;color:#86a7c7;font-weight:900;letter-spacing:.12em;text-transform:uppercase}.phase{font-size:12px;font-weight:900;padding:7px 10px;border-radius:99px;background:#162a40;color:#a9eaff}.prompt{font-size:20px;font-weight:950;margin:4px 0}.hint{font-size:12px;color:#9aa8b9;margin:2px 0}
+        .score{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:center}.score strong{font-size:26px;display:block}.score .center{text-align:center}.score .right{text-align:right}.hp{height:7px;border-radius:9px;overflow:hidden;background:#172232;margin-top:4px}.hp i{display:block;height:100%;width:100%;background:linear-gradient(90deg,#5ac7ff,#9b7cff);transition:width .25s}.hp.enemy i{background:linear-gradient(90deg,#ffbd69,#ff6377)}
+        .surface{position:relative;height:min(44dvh,360px);min-height:290px;border:1px solid #314966;border-radius:18px;overflow:hidden;background:radial-gradient(circle at 50% 45%,#112a41 0,#08121e 58%,#05090f 100%);touch-action:none}.surface canvas{display:block;width:100%;height:100%;touch-action:none}.surface:after{content:"";position:absolute;inset:auto 0 0;height:34%;pointer-events:none;background:linear-gradient(transparent,#03060b99)}
+        .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px}.metric{border:1px solid #22344a;background:#0a121d;border-radius:12px;padding:8px 4px;text-align:center}.metric b{display:block;font-size:15px}.metric span{font-size:9px;color:#8292a6;text-transform:uppercase;letter-spacing:.08em}
+        .result{margin-top:10px;border-radius:13px;padding:10px 12px;background:#0a121d;border:1px solid #22344a;min-height:42px;font-size:12px;line-height:1.4}.result.good{border-color:#2d7e68;color:#a8f5cf}.result.bad{border-color:#7d3945;color:#ffc1c7}
+        .actions{display:flex;gap:8px;margin-top:10px}.actions button{flex:1;border:1px solid #365475;background:#13253a;border-radius:13px;padding:11px;font-weight:850}.actions .primary{background:linear-gradient(135deg,#375eff,#8a4dff);border-color:#866dff}.hidden{display:none!important}
+        .legend{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:9px}.legend div{font-size:10px;color:#9aa8b9;background:#0a121d;border:1px solid #203247;border-radius:10px;padding:8px}.legend b{color:#f6f3ff;display:block;margin-bottom:3px}
+        .log{max-height:150px;overflow:auto;margin:8px 0 0;padding-left:19px;color:#9daaba;font-size:11px;line-height:1.4}.log li+li{margin-top:5px}
+        @media(min-width:520px){.surface{height:350px}.card{padding:16px}}
+    </style>
+</head>
+<body>
+<main class="shell" id="stroke-duel">
+    <header>
+        <span class="brand">WYRD · STROKE DUEL</span>
+        <nav class="links"><a href="./">Game</a><a href="./rune-lab.html">Rune Lab</a></nav>
+    </header>
+
+    <h1>Rune Trace + Arcane Parry</h1>
+    <p class="lede">Trace a spell fast and clean to attack. Then read the incoming bolt and cross its path with the right geometry at the right moment.</p>
+
+    <section class="card score">
+        <div><span class="eyebrow">You</span><strong id="hp-you-label">100</strong><div class="hp"><i id="hp-you"></i></div></div>
+        <div class="center"><span class="eyebrow">Exchange</span><strong id="round">1</strong></div>
+        <div class="right"><span class="eyebrow">Opponent</span><strong id="hp-enemy-label">100</strong><div class="hp enemy"><i id="hp-enemy"></i></div></div>
+    </section>
+
+    <section class="card">
+        <div class="top">
+            <div><span class="eyebrow" id="phase-label">Offense · Rune Trace</span><div class="prompt" id="prompt">Trace PIERCE</div></div>
+            <span class="phase" id="phase-pill">TRACE</span>
+        </div>
+        <p class="hint" id="hint">Follow the ghost rune from left to right. Shape, speed and direction all matter.</p>
+        <div class="surface" id="stroke-surface">
+            <canvas id="stroke-canvas" aria-label="Stroke input surface"></canvas>
+        </div>
+        <div class="metrics">
+            <div class="metric"><b id="metric-a">—</b><span id="metric-a-label">Accuracy</span></div>
+            <div class="metric"><b id="metric-b">—</b><span id="metric-b-label">Form</span></div>
+            <div class="metric"><b id="metric-c">—</b><span id="metric-c-label">Direction</span></div>
+            <div class="metric"><b id="metric-d">—</b><span id="metric-d-label">Speed</span></div>
+        </div>
+        <div id="stroke-result" class="result">Trace the glowing guide to cast.</div>
+        <div class="actions">
+            <button id="reset" type="button">New duel</button>
+            <button id="next" class="primary hidden" type="button">Next exchange</button>
+        </div>
+    </section>
+
+    <section class="card">
+        <span class="eyebrow">Arcane Parry geometry</span>
+        <div class="legend">
+            <div><b>BLOCK</b>Cross steeply through the bolt.</div>
+            <div><b>DEFLECT</b>Cut across it on a diagonal.</div>
+            <div><b>REFLECT</b>Curve through it at the exact moment.</div>
+        </div>
+        <ol id="combat-log" class="log"><li>Duel ready.</li></ol>
+    </section>
+</main>
+<script type="module" src="./apps/web/src/strokeDuelPage.js"></script>
+</body>
+</html>
