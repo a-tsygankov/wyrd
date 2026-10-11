@@ -97,12 +97,18 @@ function shapeAccuracy(points: readonly Point[], target: TraceRune): number {
     const canonical = normalize(resample(canonicalPoints(target), 32));
     if (drawn.length !== canonical.length || drawn.length === 0) return 0;
 
-    const error = drawn.reduce((sum, point, index) => {
-        const expected = canonical[index]!;
-        return sum + Math.hypot(point.x - expected.x, point.y - expected.y);
-    }, 0) / drawn.length;
+    const errorAgainst = (template: readonly XY[]): number =>
+        drawn.reduce((sum, point, index) => {
+            const expected = template[index]!;
+            return sum + Math.hypot(point.x - expected.x, point.y - expected.y);
+        }, 0) / drawn.length;
 
-    return clamp01(1 - error / 0.55);
+    // Shape and direction are intentionally separate skills. A perfectly
+    // reversed rune is still the right form, but directionScore() will make
+    // it materially weaker.
+    const forwardError = errorAgainst(canonical);
+    const reverseError = errorAgainst([...canonical].reverse());
+    return clamp01(1 - Math.min(forwardError, reverseError) / 0.55);
 }
 
 /**
