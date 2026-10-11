@@ -511,5 +511,4 @@ window.addEventListener("pagehide", () => {
 root.dataset.dynamic = String(dynamicMode.checked);
 updateHp();
 log("New dynamic Rune Trace + Arcane Parry duel.");
-chooseScenario();
 beginTrace();
