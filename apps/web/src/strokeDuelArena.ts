@@ -16,8 +16,8 @@ export type StrokeDuelArena = {
 type Side = "player" | "opponent";
 type Mage = {
     root: THREE.Group;
-    mixer?: THREE.AnimationMixer;
-    idle?: THREE.AnimationAction;
+    mixer: THREE.AnimationMixer | undefined;
+    idle: THREE.AnimationAction | undefined;
     actions: Map<string, THREE.AnimationAction>;
 };
 
@@ -105,8 +105,8 @@ export function createStrokeDuelArena(container: HTMLElement): StrokeDuelArena {
 
     const loader = new GLTFLoader();
     const mages: Record<Side, Mage> = {
-        player: { root: new THREE.Group(), actions: new Map() },
-        opponent: { root: new THREE.Group(), actions: new Map() }
+        player: { root: new THREE.Group(), mixer: undefined, idle: undefined, actions: new Map() },
+        opponent: { root: new THREE.Group(), mixer: undefined, idle: undefined, actions: new Map() }
     };
 
     function loadMage(side: Side, file: string): void {
