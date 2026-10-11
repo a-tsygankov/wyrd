@@ -62,3 +62,10 @@ test("build_web vendors the bloom chain the arena imports through the import map
     const shaders = new Set(readdirSync("apps/web/dist/vendor/three/addons/shaders"));
     for (const file of ["CopyShader.js", "LuminosityHighPassShader.js", "OutputShader.js"]) assert.ok(shaders.has(file), `${file} not vendored`);
 });
+
+
+test("build_web ships the Rune Trace + Arcane Parry page", () => {
+    const html = readFileSync("apps/web/dist/stroke-duel.html", "utf8");
+    assert.match(html, /Rune Trace \+ Arcane Parry/);
+    assert.match(html, /strokeDuelPage\.js/);
+});
