@@ -24,6 +24,14 @@ const result = $("stroke-result");
 const next = $<HTMLButtonElement>("next");
 const reset = $<HTMLButtonElement>("reset");
 const logRoot = $<HTMLOListElement>("combat-log");
+const recognized = $("recognized");
+const effect = $("effect");
+const qualityFill = $("quality-fill");
+const surfaceLabel = $("surface-label");
+const helpToggle = $<HTMLButtonElement>("help-toggle");
+const helpCard = $("help-card");
+
+const INCOMING_BOLT_DAMAGE = 14;
 
 const runeNames: Record<TraceRune, string> = {
     line: "PIERCE",
@@ -156,6 +164,14 @@ function percent(value: number): string {
     return Math.round(value * 100) + "%";
 }
 
+function qualityTier(value: number): string {
+    if (value >= 0.9) return "MASTERFUL";
+    if (value >= 0.75) return "STRONG";
+    if (value >= 0.55) return "STABLE";
+    if (value >= 0.35) return "WEAK";
+    return "FAILED";
+}
+
 function setMetrics(a: string, b: string, c: string, d: string, labels = ["Accuracy", "Form", "Direction", "Speed"]): void {
     $("metric-a").textContent = a;
     $("metric-b").textContent = b;
@@ -165,6 +181,12 @@ function setMetrics(a: string, b: string, c: string, d: string, labels = ["Accur
     $("metric-b-label").textContent = labels[1]!;
     $("metric-c-label").textContent = labels[2]!;
     $("metric-d-label").textContent = labels[3]!;
+}
+
+function setReadout(read: string, gameEffect: string, quality: number): void {
+    recognized.textContent = read;
+    effect.textContent = gameEffect;
+    qualityFill.style.width = Math.round(Math.max(0, Math.min(1, quality)) * 100) + "%";
 }
 
 function setResult(text: string, good: boolean | undefined): void {
@@ -188,12 +210,19 @@ function updateHp(): void {
     $("round").textContent = String(round);
 }
 
+function highlightTarget(): void {
+    document.querySelectorAll<HTMLElement>(".spell-card").forEach(card => {
+        card.classList.toggle("active", card.dataset.rune === target);
+    });
+}
+
 function finish(): void {
     phase = "finished";
     root.dataset.phase = phase;
     phasePill.textContent = hpEnemy <= 0 ? "VICTORY" : "DEFEAT";
     prompt.textContent = hpEnemy <= 0 ? "You broke their guard." : "Your ward collapsed.";
     hint.textContent = "Start a new duel to keep testing stroke quality.";
+    surfaceLabel.textContent = "Duel complete";
     next.classList.add("hidden");
     setResult(hpEnemy <= 0 ? "Victory. Your traced spells won the duel." : "Defeat. The incoming magic got through.", hpEnemy <= 0);
     log(hpEnemy <= 0 ? "Victory." : "Defeat.");
@@ -208,7 +237,8 @@ function endExchange(): void {
     root.dataset.phase = phase;
     phasePill.textContent = "RESOLVED";
     prompt.textContent = "Exchange complete";
-    hint.textContent = "Review the scores, then begin the next exchange.";
+    hint.textContent = "Review the recognized stroke, quality, exact game effect and combat log before continuing.";
+    surfaceLabel.textContent = "Review resolved stroke";
     next.classList.remove("hidden");
 }
 
@@ -220,12 +250,15 @@ function beginTrace(): void {
     points = [];
     target = TRACE_RUNES[(round - 1) % TRACE_RUNES.length]!;
     canvas.dataset.target = target;
+    highlightTarget();
     phaseLabel.textContent = "Offense · Rune Trace";
     phasePill.textContent = "TRACE";
     prompt.textContent = "Trace " + runeNames[target];
-    hint.textContent = "Follow the ghost rune from left to right. Shape, speed and direction all matter.";
+    hint.textContent = "Start at the green dot and follow the gold ghost rune to the gold end dot. Release once.";
+    surfaceLabel.textContent = "Draw " + runeNames[target] + " · green → gold";
     setMetrics("—", "—", "—", "—");
-    setResult("Trace the glowing guide to cast.", undefined);
+    setReadout("Waiting for " + runeNames[target], "Successful trace deals 6–24 damage based on quality", 0);
+    setResult("No stroke resolved yet. Draw the highlighted rune; the game will explain recognition, quality and effect.", undefined);
     next.classList.add("hidden");
     redraw(performance.now());
 }
@@ -241,29 +274,65 @@ function beginParry(): void {
     phaseLabel.textContent = "Defense · Arcane Parry";
     phasePill.textContent = "PARRY";
     prompt.textContent = "Cross the incoming bolt";
-    hint.textContent = "Steep = block · diagonal = deflect · curve = reflect. Timing decides whether you touch it at all.";
+    hint.textContent = "Choose your geometry: steep = BLOCK, diagonal = DEFLECT, curved = REFLECT. You must intersect the bolt itself.";
+    surfaceLabel.textContent = "Parry the moving bolt";
     setMetrics("—", "—", "—", "—", ["Timing", "Angle", "Curve", "Quality"]);
-    setResult("Wait for the bolt, then draw one decisive stroke across its path.", undefined);
+    // Keep the offensive stroke readout/result visible until the parry resolves.
+    result.textContent += " Incoming bolt: draw one parry stroke now.";
     redraw(performance.now());
 }
 
 function applyTrace(score: TraceScore): void {
     setMetrics(percent(score.accuracy), percent(score.form), percent(score.direction), percent(score.speed));
+    const targetName = runeNames[score.target];
+    const recognizedName = score.recognized === "unknown"
+        ? "UNKNOWN"
+        : runeNames[score.recognized as TraceRune] ?? String(score.recognized).toUpperCase();
+
     if (score.correct) {
         hpEnemy = Math.max(0, hpEnemy - score.attackDamage);
         updateHp();
+        const tier = qualityTier(score.total);
+        setReadout(
+            targetName + " recognized · " + percent(score.total),
+            tier + " cast · " + score.attackDamage + " damage",
+            score.total
+        );
         setResult(
-            runeNames[score.target] + " landed for " + score.attackDamage + " · cast quality " + percent(score.total) + ".",
+            targetName + " landed. Overall quality " + percent(score.total) + " (" + tier + ") produced " + score.attackDamage + " damage.",
             true
         );
-        log("Rune Trace: " + runeNames[score.target] + " · quality " + percent(score.total) + " · " + score.attackDamage + " damage.");
+        log(
+            "Rune Trace: " + targetName +
+            " · quality " + percent(score.total) + " (" + tier + ")" +
+            " · accuracy " + percent(score.accuracy) +
+            " · form " + percent(score.form) +
+            " · direction " + percent(score.direction) +
+            " · speed " + percent(score.speed) +
+            " · " + score.attackDamage + " damage."
+        );
     } else {
-        setResult("Miscast: the stroke read as " + String(score.recognized).toUpperCase() + ". No attack damage.", false);
-        log("Rune Trace miscast: target " + runeNames[score.target] + ", recognized " + score.recognized + ".");
+        setReadout(
+            recognizedName + " recognized instead of " + targetName,
+            "MISCAST · 0 damage",
+            score.total
+        );
+        setResult(
+            "Miscast: requested " + targetName + ", recognized " + recognizedName + ". No attack damage.",
+            false
+        );
+        log("Rune Trace miscast: target " + targetName + ", recognized " + recognizedName + " · 0 damage.");
     }
 
     if (hpEnemy <= 0) finish();
-    else window.setTimeout(beginParry, 700);
+    else window.setTimeout(beginParry, 900);
+}
+
+function parryEffect(score: ParryScore): string {
+    if (score.outcome === "block") return INCOMING_BOLT_DAMAGE + " damage prevented";
+    if (score.outcome === "deflect") return INCOMING_BOLT_DAMAGE + " prevented + " + score.counterDamage + " counter";
+    if (score.outcome === "reflect") return INCOMING_BOLT_DAMAGE + " prevented + " + score.counterDamage + " reflected";
+    return score.incomingDamage + " damage taken";
 }
 
 function applyParry(score: ParryScore): void {
@@ -280,20 +349,37 @@ function applyParry(score: ParryScore): void {
     updateHp();
 
     const label = score.outcome.toUpperCase();
-    const suffix = score.counterDamage > 0 ? " · counter " + score.counterDamage : score.incomingDamage > 0 ? " · took " + score.incomingDamage : "";
-    setResult(label + suffix + " · " + score.detail, score.outcome !== "miss");
-    log("Arcane Parry: " + label + " · timing " + percent(score.timing) + " · angle " + Math.round(score.crossingAngleDeg) + "°" + suffix + ".");
+    const tier = score.outcome === "miss" ? "FAILED" : qualityTier(score.quality);
+    setReadout(
+        label + " recognized · " + percent(score.quality),
+        tier + " parry · " + parryEffect(score),
+        score.quality
+    );
+    setResult(
+        label + " · " + parryEffect(score) + ". " + score.detail +
+        " Timing " + percent(score.timing) + ", crossing angle " + Math.round(score.crossingAngleDeg) + "°, curve " + percent(score.curvature) + ".",
+        score.outcome !== "miss"
+    );
+    log(
+        "Arcane Parry: " + label +
+        " · quality " + percent(score.quality) +
+        " · timing " + percent(score.timing) +
+        " · angle " + Math.round(score.crossingAngleDeg) + "°" +
+        " · curve " + percent(score.curvature) +
+        " · effect: " + parryEffect(score) + "."
+    );
     endExchange();
 }
 
 function missedImpact(): void {
     if (phase !== "parry" || parryResolved) return;
     parryResolved = true;
-    hpYou = Math.max(0, hpYou - 14);
+    hpYou = Math.max(0, hpYou - INCOMING_BOLT_DAMAGE);
     updateHp();
     setMetrics("0%", "—", "—", "0%", ["Timing", "Angle", "Curve", "Quality"]);
-    setResult("TOO SLOW · the bolt landed before your parry.", false);
-    log("Arcane Parry: too slow · 14 damage.");
+    setReadout("NO PARRY", "FAILED · " + INCOMING_BOLT_DAMAGE + " damage taken", 0);
+    setResult("TOO SLOW · the bolt landed before a valid parry. You took " + INCOMING_BOLT_DAMAGE + " damage.", false);
+    log("Arcane Parry: TOO SLOW · " + INCOMING_BOLT_DAMAGE + " damage taken.");
     endExchange();
 }
 
@@ -301,6 +387,7 @@ surface.addEventListener("pointerdown", event => {
     if (phase !== "trace" && phase !== "parry") return;
     drawing = true;
     points = [pointOf(event)];
+    recognized.textContent = "Drawing… release to resolve";
     canvas.setPointerCapture(event.pointerId);
     redraw(performance.now());
 });
@@ -342,6 +429,12 @@ reset.addEventListener("click", () => {
     log("New Rune Trace + Arcane Parry duel.");
     updateHp();
     beginTrace();
+});
+
+helpToggle.addEventListener("click", () => {
+    const hidden = helpCard.classList.toggle("hidden");
+    helpToggle.textContent = hidden ? "Help" : "Hide help";
+    helpToggle.setAttribute("aria-expanded", String(!hidden));
 });
 
 function frame(now: number): void {
