@@ -326,6 +326,11 @@ function beginParry(): void {
     if (!state.parryPending || phase !== "weave") return;
     currentSpell = pickOpponentSpell(random, previousSpellId);
     previousSpellId = currentSpell.id;
+    parryPoints = [];
+    parryResolved = false;
+    setPhase("parry");
+    parryPanel.classList.remove("hidden");
+    resizeParry();
     const { width, height } = parrySize();
     const launchedAt = performance.now() + currentSpell.launchDelayMs;
     incoming = {
@@ -336,9 +341,6 @@ function beginParry(): void {
         laneY: currentSpell.laneY,
         damage: currentSpell.damage
     };
-    parryPoints = [];
-    parryResolved = false;
-    setPhase("parry");
     parrySpellLabel.textContent = currentSpell.name + " · " + currentSpell.damage + " DMG";
     parryHint.textContent = currentSpell.tip + " A successful parry protects the weave; DEFLECT/REFLECT can add charge.";
     arena?.presentInterrupt(currentSpell);
