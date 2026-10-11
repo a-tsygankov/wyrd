@@ -20,14 +20,33 @@ async function stroke(
     await page.mouse.up();
 }
 
-test("Rune Trace flows into a timed Arcane Parry", async ({ page }) => {
+test("stroke duel explains options, quality and game effects", async ({ page }) => {
     await page.clock.install({ time: T0 });
     await page.clock.pauseAt(T0 + 10);
     await page.goto("/stroke-duel.html");
 
     await expect(page.getByRole("heading", { name: "Rune Trace + Arcane Parry" })).toBeVisible();
+
+    await expect(page.locator("#help-card")).toBeVisible();
+    await expect(page.locator("#help-card")).toContainText("How the prototype scores you");
+    await expect(page.locator("#spell-grid")).toContainText("PIERCE");
+    await expect(page.locator("#spell-grid")).toContainText("REDIRECT");
+    await expect(page.locator("#spell-grid")).toContainText("POWER");
+    await expect(page.locator('.spell-card[data-rune="line"]')).toHaveClass(/active/);
+
+    await expect(page.getByText("BLOCK", { exact: true })).toBeVisible();
+    await expect(page.getByText("DEFLECT", { exact: true })).toBeVisible();
+    await expect(page.getByText("REFLECT", { exact: true })).toBeVisible();
+
+    await page.getByRole("button", { name: "Hide help" }).click();
+    await expect(page.locator("#help-card")).toBeHidden();
+    await page.getByRole("button", { name: "Help" }).click();
+    await expect(page.locator("#help-card")).toBeVisible();
+
     await expect(page.locator("#stroke-duel")).toHaveAttribute("data-phase", "trace");
     await expect(page.locator("#stroke-canvas")).toHaveAttribute("data-target", "line");
+    await expect(page.locator("#recognized")).toContainText("Waiting for PIERCE");
+    await expect(page.locator("#effect")).toContainText("6–24 damage");
 
     const box = await page.locator("#stroke-canvas").boundingBox();
     expect(box).not.toBeNull();
@@ -40,10 +59,14 @@ test("Rune Trace flows into a timed Arcane Parry", async ({ page }) => {
     );
 
     await expect(page.locator("#stroke-result")).toContainText("PIERCE landed");
+    await expect(page.locator("#recognized")).toContainText("PIERCE recognized");
+    await expect(page.locator("#effect")).toContainText("damage");
     await expect(page.locator("#hp-enemy-label")).not.toHaveText("100");
 
-    await page.clock.runFor(750);
+    await page.clock.runFor(950);
     await expect(page.locator("#stroke-duel")).toHaveAttribute("data-phase", "parry");
+    await expect(page.locator("#surface-label")).toContainText("Parry the moving bolt");
+    await expect(page.locator("#stroke-result")).toContainText("Incoming bolt");
 
     // The projectile launches 350 ms into the phase and takes 2.2 s to cross.
     // At +1.45 s it is at the midpoint; cross vertically through that point.
@@ -55,6 +78,8 @@ test("Rune Trace flows into a timed Arcane Parry", async ({ page }) => {
     );
 
     await expect(page.locator("#stroke-result")).toContainText("BLOCK");
+    await expect(page.locator("#recognized")).toContainText("BLOCK recognized");
+    await expect(page.locator("#effect")).toContainText("damage prevented");
     await expect(page.locator("#stroke-duel")).toHaveAttribute("data-phase", "round-over");
     await expect(page.getByRole("button", { name: "Next exchange" })).toBeVisible();
 });
