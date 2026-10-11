@@ -48,6 +48,7 @@ test("stroke duel explains options, quality and game effects", async ({ page }) 
     await expect(page.locator("#recognized")).toContainText("Waiting for PIERCE");
     await expect(page.locator("#effect")).toContainText("6–24 damage");
 
+    await page.locator("#stroke-canvas").scrollIntoViewIfNeeded();
     const box = await page.locator("#stroke-canvas").boundingBox();
     expect(box).not.toBeNull();
     if (!box) return;
