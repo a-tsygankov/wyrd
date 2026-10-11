@@ -105,6 +105,22 @@ function shapeAccuracy(points: readonly Point[], target: TraceRune): number {
     return clamp01(1 - error / 0.55);
 }
 
+/**
+ * Trace mode has a visible target template, so recognition should compare the
+ * completed stroke to the trace vocabulary rather than reuse Rune Lab's
+ * intentionally forgiving free-draw classifier. Rune Lab's opponent runes
+ * share long openings; that makes its canonical Redirect look line-like to
+ * the generic classifier even though it is the exact Redirect trace.
+ */
+function recognizeTrace(points: readonly Point[]): { rune: TraceRune | "unknown"; score: number } {
+    if (points.length < 5) return { rune: "unknown", score: 0 };
+    const ranked = TRACE_RUNES
+        .map(rune => ({ rune, score: shapeAccuracy(points, rune) }))
+        .sort((a, b) => b.score - a.score);
+    const best = ranked[0]!;
+    return best.score >= 0.46 ? best : { rune: "unknown", score: best.score };
+}
+
 function directionScore(points: readonly Point[], target: TraceRune): number {
     const drawn = resample(points, 16);
     const canonical = resample(canonicalPoints(target), 16);
@@ -130,7 +146,8 @@ export function traceSpeedScore(durationMs: number): number {
 }
 
 export function scoreTrace(points: readonly Point[], target: TraceRune): TraceScore {
-    const recognition = classify(points);
+    const recognition = recognizeTrace(points);
+    const genericRecognition = classify(points);
     const started = points[0]?.t ?? 0;
     const ended = points.at(-1)?.t ?? started;
     const durationMs = Math.max(0, ended - started);
@@ -138,7 +155,12 @@ export function scoreTrace(points: readonly Point[], target: TraceRune): TraceSc
     const direction = directionScore(points, target);
     const speed = traceSpeedScore(durationMs);
     const correct = recognition.rune === target;
-    const form = correct ? recognition.score : recognition.rune === "unknown" ? 0 : recognition.score * 0.25;
+    // Keep the existing free-draw classifier as a secondary form signal when
+    // it agrees; template similarity remains authoritative for Trace mode.
+    const genericBonus = genericRecognition.rune === target ? genericRecognition.score * 0.15 : 0;
+    const form = correct
+        ? clamp01(recognition.score * 0.85 + genericBonus)
+        : recognition.rune === "unknown" ? 0 : recognition.score * 0.25;
 
     const raw = accuracy * 0.45 + form * 0.25 + direction * 0.15 + speed * 0.15;
     const total = correct ? clamp01(raw) : Math.min(0.35, clamp01(raw * 0.45));
