@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+    <meta name="theme-color" content="#090713">
+    <title>Wyrd · Sigil Weave</title>
+    <style>
+        :root{font-family:Inter,ui-sans-serif,system-ui,sans-serif;color:#f7f3ff;background:#090713;--violet:#a978ff;--gold:#ffc86b;--cyan:#62ddff;--green:#72e5ac;--red:#ff6e72}
+        *{box-sizing:border-box}body{margin:0;min-height:100dvh;background:radial-gradient(circle at 50% -8%,#241746 0,#0d0b18 38%,#05060b 78%);overscroll-behavior:none}button,input{font:inherit}
+        .shell{width:min(100%,700px);margin:auto;min-height:100dvh;padding:max(10px,env(safe-area-inset-top)) 12px calc(18px + env(safe-area-inset-bottom))}
+        header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 2px}.brand{font-size:11px;font-weight:950;letter-spacing:.14em}.links{display:flex;align-items:center;gap:9px;flex-wrap:wrap;justify-content:flex-end}.links a,.link-button{color:#b8accd;text-decoration:none;background:none;border:0;padding:0;font-size:11px;cursor:pointer}
+        h1{font-size:clamp(25px,7vw,38px);letter-spacing:-.04em;line-height:1;margin:9px 0 5px}.lede{color:#a59ab7;font-size:13px;line-height:1.48;margin:0 0 12px}
+        .card{border:1px solid #34274d;border-radius:20px;background:#100d1bdc;box-shadow:0 20px 55px #0007;margin:10px 0;padding:14px}.eyebrow{font-size:9px;color:#9f8cbe;font-weight:900;letter-spacing:.13em;text-transform:uppercase}.top{display:flex;justify-content:space-between;gap:10px;align-items:center}.phase{font-size:10px;font-weight:900;color:#d7c9ff;background:#23183a;border:1px solid #49356c;border-radius:99px;padding:6px 9px}
+        .quick{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}.quick div{background:#0b0914;border:1px solid #2f2444;border-radius:11px;padding:8px;font-size:9px;color:#a99dbc;line-height:1.35}.quick b{color:#fff;display:block;margin-bottom:2px}.help-copy{font-size:11px;line-height:1.5;color:#a99dbc}.help-copy strong{color:#fff}.hidden{display:none!important}
+        .recipes{display:grid;grid-template-columns:repeat(2,1fr);gap:7px;margin-top:9px}.recipe{border:1px solid #35284e;background:#0b0914;color:#cbbfe0;border-radius:13px;padding:10px;text-align:left}.recipe strong{display:block;font-size:12px}.recipe span{display:block;color:#9184a6;font-size:9px;margin-top:3px;line-height:1.35}.recipe.active{border-color:#b18cff;background:#1a1128;box-shadow:0 0 0 1px #a978ff55 inset}.recipe.free{grid-column:1/-1}
+        .arena-wrap{position:relative;height:320px;border:1px solid #42315d;border-radius:18px;overflow:hidden;background:radial-gradient(circle at 50% 48%,#24163e,#080711 72%)}.sigil-arena-canvas{position:absolute;inset:0;width:100%;height:100%;z-index:0}.arena-fallback{display:grid;place-items:center;height:100%;font-size:11px;color:#8d829e}
+        .anchor{position:absolute;z-index:3;width:42px;height:42px;border-radius:50%;border:1px solid #6d5a8a;background:#120c20cc;color:#e7ddfa;font-weight:900;display:grid;place-items:center;box-shadow:0 5px 18px #0008;transform:translate(-50%,-50%)}.anchor span{pointer-events:none}.anchor.next{border-color:#ffc86b;box-shadow:0 0 0 2px #ffc86b44,0 0 22px #ffc86b55}.anchor.occupied{border-color:#8f6aff;background:#211239e8;color:#fff}.anchor[data-anchor="0"]{left:50%;top:17%}.anchor[data-anchor="1"]{left:73%;top:34%}.anchor[data-anchor="2"]{left:73%;top:68%}.anchor[data-anchor="3"]{left:50%;top:83%}.anchor[data-anchor="4"]{left:27%;top:68%}.anchor[data-anchor="5"]{left:27%;top:34%}
+        .arena-caption{position:absolute;z-index:2;left:10px;right:10px;bottom:8px;display:flex;justify-content:space-between;font-size:8px;color:#8f84a2;text-transform:uppercase;letter-spacing:.1em;pointer-events:none}.arena-caption b{color:#ddd0ff}
+        .controls{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}.toggle{display:flex;align-items:center;gap:7px;background:#0b0914;border:1px solid #35284e;border-radius:11px;padding:8px 10px;font-size:10px;color:#c7bbd8}.toggle input{accent-color:#9b6cff}
+        .recipe-head{margin-top:10px}.recipe-head h2{font-size:20px;margin:3px 0}.recipe-head p{margin:2px 0;color:#a99dbc;font-size:11px;line-height:1.45}.effect{color:#d8caec!important}
+        .steps{padding:0;margin:10px 0 0;list-style:none;display:grid;gap:6px}.steps li{position:relative;border:1px solid #2d2340;border-radius:11px;background:#0b0914;padding:8px 9px 8px 31px;color:#81768f}.steps li:before{content:"○";position:absolute;left:10px;top:8px}.steps li strong{display:block;color:#b4a6c9;font-size:10px}.steps li span{display:block;font-size:9px;margin-top:2px;line-height:1.35}.steps li.current{border-color:#7858a9;color:#bcb0ce}.steps li.current:before{content:"◆";color:#ffc86b}.steps li.current strong{color:#fff}.steps li.done{border-color:#315b50;color:#7f9d95}.steps li.done:before{content:"✓";color:#72e5ac}.steps li.done strong{color:#aeeecf}
+        .instruction{margin-top:9px;padding:10px;border-radius:12px;background:#161026;border:1px solid #493666;font-size:11px;color:#e1d8f0;line-height:1.45}
+        .runes{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:9px}.rune{border:1px solid #35284e;background:#0b0914;color:#b8abc9;border-radius:12px;padding:9px 4px;text-align:center}.rune b{display:block;font-size:24px;line-height:1;color:#9c7cff}.rune span{display:block;font-size:8px;margin-top:4px}.rune.active{border-color:#ffc86b;background:#1b1421}.rune.active b{color:#ffc86b}
+        .meters{display:grid;grid-template-columns:1fr 1fr auto;gap:7px;margin-top:9px}.meter{background:#0b0914;border:1px solid #302443;border-radius:11px;padding:8px}.meter span{font-size:8px;color:#8f82a2;text-transform:uppercase;letter-spacing:.09em}.meter strong{display:block;font-size:14px;margin-top:2px}.track{height:5px;border-radius:6px;background:#241b31;overflow:hidden;margin-top:5px}.track i{display:block;width:70%;height:100%;background:linear-gradient(90deg,#ff6e72,#ffc86b,#72e5ac);transition:width .2s}.status{display:grid;place-items:center;min-width:78px;color:#ffc86b;font-size:10px;font-weight:900}
+        .result{margin-top:8px;padding:10px 11px;border:1px solid #34284a;border-radius:12px;background:#0b0914;color:#b9aec9;font-size:11px;line-height:1.45}.result.good{border-color:#2f6958;color:#abefd0}.result.bad{border-color:#743844;color:#ffc0c8}
+        .actions{display:flex;gap:7px;margin-top:9px}.actions button{flex:1;border-radius:12px;padding:11px;border:1px solid #493666;background:#171025;color:#f5f0ff;font-weight:850}.actions .release{background:linear-gradient(135deg,#5033ad,#8a4dff);opacity:.45}.actions .release.ready{opacity:1;box-shadow:0 0 22px #8a4dff44}
+        .parry{margin-top:10px;border:1px solid #315777;border-radius:14px;background:#09131f;padding:10px}.parry-head{display:flex;justify-content:space-between;gap:9px;align-items:center}.parry strong{font-size:12px}.parry p{margin:4px 0 8px;color:#91abc1;font-size:10px;line-height:1.4}.parry-surface{height:190px;border-radius:12px;overflow:hidden;border:1px solid #29445d;background:radial-gradient(circle,#12304a,#07101a);touch-action:none}.parry canvas{display:block;width:100%;height:100%;touch-action:none}
+        .log{max-height:160px;overflow:auto;padding-left:19px;margin:8px 0 0;color:#998da9;font-size:10px;line-height:1.4}.log li+li{margin-top:5px}
+        @media(max-width:430px){.quick{grid-template-columns:repeat(2,1fr)}.quick div:last-child{grid-column:1/-1}.arena-wrap{height:290px}.rune span{font-size:7px}.recipes{grid-template-columns:1fr 1fr}.meters{grid-template-columns:1fr 1fr}.status{grid-column:1/-1;min-height:32px}}
+    </style>
+</head>
+<body>
+<main class="shell" id="sigil-weave">
+    <header>
+        <span class="brand">WYRD · SIGIL WEAVE</span>
+        <nav class="links"><a href="./">Game</a><a href="./rune-lab.html">Rune Lab</a><a href="./stroke-duel.html">Trace + Parry</a><button id="help-toggle" class="link-button" type="button" aria-expanded="true">Hide instructions</button></nav>
+    </header>
+
+    <h1>Sigil Weave</h1>
+    <p class="lede">Build a spell as a spatial structure. Place rune layers on the field, connect the geometry, survive optional Arcade Parry interruptions, then release the completed sigil.</p>
+
+    <section class="card" id="help-card">
+        <div class="quick">
+            <div><b>1 · CHOOSE</b>Pick one of three guided recipes, or Free Weave.</div>
+            <div><b>2 · SELECT</b>Tap the rune named by the current step.</div>
+            <div><b>3 · ANCHOR</b>Tap the glowing point on the 3D field. Order and geometry both matter.</div>
+            <div><b>4 · PARRY</b>If enabled, enemy magic can interrupt between layers. Cross the moving bolt.</div>
+            <div><b>5 · RELEASE</b>When the structure closes, release it. Stability + charge become coherence.</div>
+        </div>
+        <div class="help-copy">
+            <p><strong>Why this is different from Rune Trace:</strong> Trace tests how cleanly you draw one rune. Sigil Weave tests <strong>composition and spatial memory</strong>: which rune belongs in which layer, where it is anchored, and how the layers connect.</p>
+            <p><strong>Arcade Parry is optional.</strong> BLOCK protects the structure, DEFLECT adds a little charge, REFLECT adds the most charge, and a MISS frays stability. Turn it off for a pure composition puzzle.</p>
+            <p><strong>Mistakes are recoverable.</strong> The wrong rune or anchor lowers stability but does not advance the recipe. Correct the same step and continue.</p>
+        </div>
+    </section>
+
+    <section class="card">
+        <div class="top"><div><span class="eyebrow">Choose gameplay</span><div style="font-weight:900;margin-top:3px">Three recipes + sandbox</div></div><span class="phase">STEP-BY-STEP</span></div>
+        <div class="recipes">
+            <button class="recipe active" data-recipe="aegis" type="button"><strong>AEGIS SPIRAL</strong><span>Intro · defense / redirection · 3 layers</span></button>
+            <button class="recipe" data-recipe="breach" type="button"><strong>BREACH KNOT</strong><span>Tactical · attack / recovery · 3 layers</span></button>
+            <button class="recipe" data-recipe="mirror" type="button"><strong>MIRROR CROWN</strong><span>Advanced · control / return · 4 layers</span></button>
+            <button class="recipe free" data-recipe="free" type="button"><strong>FREE WEAVE</strong><span>Sandbox · 3–5 layers · build your own geometry</span></button>
+        </div>
+        <div class="controls">
+            <label class="toggle"><input id="parry-toggle" type="checkbox" checked> Arcade Parry interruptions</label>
+            <label class="toggle"><input id="hints-toggle" type="checkbox" checked> Guided anchor hints</label>
+        </div>
+    </section>
+
+    <section class="card">
+        <div class="top">
+            <div class="recipe-head"><span class="eyebrow">Current weave</span><h2 id="recipe-title">AEGIS SPIRAL</h2></div>
+            <span class="phase" id="weave-status">0 LAYERS</span>
+        </div>
+        <div id="recipe-subtitle" class="lede" style="margin:2px 0">INTRO</div>
+        <p id="recipe-effect" class="lede effect"></p>
+
+        <div class="arena-wrap" id="sigil-arena" aria-label="3D Sigil Weave field">
+            <div class="arena-fallback">Loading 3D weave field…</div>
+            <button class="anchor" data-anchor="0" type="button" aria-label="Anchor 1"><span>1</span></button>
+            <button class="anchor" data-anchor="1" type="button" aria-label="Anchor 2"><span>2</span></button>
+            <button class="anchor" data-anchor="2" type="button" aria-label="Anchor 3"><span>3</span></button>
+            <button class="anchor" data-anchor="3" type="button" aria-label="Anchor 4"><span>4</span></button>
+            <button class="anchor" data-anchor="4" type="button" aria-label="Anchor 5"><span>5</span></button>
+            <button class="anchor" data-anchor="5" type="button" aria-label="Anchor 6"><span>6</span></button>
+            <div class="arena-caption"><span><b>You</b> · weave from the left</span><span>six-anchor field</span><span><b>Opponent</b> · interrupts from the right</span></div>
+        </div>
+
+        <div class="instruction" id="instruction">Choose WARD and tap anchor 1.</div>
+        <ol class="steps" id="weave-steps"></ol>
+
+        <span class="eyebrow" style="display:block;margin-top:11px">Rune palette</span>
+        <div class="runes">
+            <button class="rune" data-rune="line" type="button"><b>—</b><span>PIERCE</span></button>
+            <button class="rune" data-rune="arc" type="button"><b>⌒</b><span>REDIRECT</span></button>
+            <button class="rune active" data-rune="circle" type="button"><b>○</b><span>WARD</span></button>
+            <button class="rune" data-rune="triangle" type="button"><b>△</b><span>POWER</span></button>
+            <button class="rune" data-rune="spiral" type="button"><b>⌣</b><span>ABSORB</span></button>
+        </div>
+
+        <div class="meters">
+            <div class="meter"><span>Stability</span><strong id="stability-text">70%</strong><div class="track"><i id="stability-fill"></i></div></div>
+            <div class="meter"><span>Charge</span><strong id="charge-text">0/10</strong><div class="track"><i style="width:0;background:linear-gradient(90deg,#62ddff,#a978ff)"></i></div></div>
+            <div class="status" id="status-chip">STRUCTURE</div>
+        </div>
+
+        <div id="weave-result" class="result">Select the highlighted rune and place it on the field.</div>
+
+        <section class="parry hidden" id="parry-panel" aria-label="Arcade Parry interruption">
+            <div class="parry-head"><div><span class="eyebrow">Arcade Parry</span><strong id="parry-spell">Incoming spell</strong></div><span class="phase">INTERRUPT</span></div>
+            <p id="parry-hint">Cross the moving bolt: steep block, diagonal deflect, curved reflect.</p>
+            <div class="parry-surface"><canvas id="parry-canvas" aria-label="Parry gesture surface"></canvas></div>
+        </section>
+
+        <div class="actions">
+            <button id="reset-weave" type="button">Reset gameplay</button>
+            <button id="release-weave" class="release" type="button" disabled>Release sigil</button>
+        </div>
+    </section>
+
+    <section class="card">
+        <span class="eyebrow">Weave log</span>
+        <ol id="weave-log" class="log"><li>Started Aegis Spiral.</li></ol>
+    </section>
+</main>
+<script type="importmap">{ "imports": { "three": "./vendor/three/three.module.js", "three/addons/": "./vendor/three/addons/" } }</script>
+<script type="module" src="./apps/web/src/sigilWeavePage.js"></script>
+</body>
+</html>
