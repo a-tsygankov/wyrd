@@ -29,8 +29,8 @@ test("dynamic stroke duel randomizes scenarios and advances automatically", asyn
     await expect(page.locator("#dynamic-mode")).toBeChecked();
     await expect(page.locator("#suggestions-mode")).toBeChecked();
     await expect(page.locator("#stroke-duel")).toHaveAttribute("data-dynamic", "true");
-    await expect(page.locator("#stroke-arena")).toHaveAttribute("data-phase", "trace");
     await expect(page.locator("#stroke-arena")).toBeVisible();
+    await expect(page.getByText("wide establishing view")).toBeVisible();
 
     await expect(page.locator("#spell-grid")).toContainText("PIERCE");
     await expect(page.locator("#spell-grid")).toContainText("REDIRECT");
