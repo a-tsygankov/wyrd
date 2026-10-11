@@ -45,7 +45,8 @@ export function createStrokeDuelArena(container: HTMLElement): StrokeDuelArena {
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.domElement.className = "stroke-arena-canvas";
-    container.replaceChildren(renderer.domElement);
+    container.querySelector(".arena-fallback")?.remove();
+    container.prepend(renderer.domElement);
 
     const scene = new THREE.Scene();
     scene.fog = new THREE.FogExp2(0x0b0714, 0.027);
@@ -267,7 +268,7 @@ export function createStrokeDuelArena(container: HTMLElement): StrokeDuelArena {
             ro.disconnect();
             for (const item of bolts) scene.remove(item.mesh);
             renderer.dispose();
-            container.replaceChildren();
+            renderer.domElement.remove();
         }
     };
 }
