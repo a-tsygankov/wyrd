@@ -272,6 +272,7 @@ function advanceExchange(): void {
     if (phase !== "round-over") return;
     clearAutoTimer();
     round++;
+    updateHp();
     beginTrace();
 }
 
