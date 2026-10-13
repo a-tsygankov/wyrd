@@ -76,3 +76,19 @@ test("build_web ships the Sigil Weave page", () => {
     assert.match(html, /Sigil Weave/);
     assert.match(html, /sigilWeavePage\.js/);
 });
+
+
+test("build_web ships the POC launcher page", () => {
+    const html = readFileSync("apps/web/dist/pocs.html", "utf8");
+    assert.match(html, /Choose a Wyrd POC/);
+    assert.match(html, /Word Duel/);
+    assert.match(html, /Volley/);
+    assert.match(html, /Quickdraw/);
+    assert.match(html, /Beam Clash/);
+    assert.match(html, /Gate Tug/);
+    assert.match(html, /Ward Rhythm/);
+    assert.match(html, /Rune Fencing/);
+    assert.match(html, /Rune Parry/);
+    assert.match(html, /Rune Trace \+ Arcane Parry/);
+    assert.match(html, /Sigil Weave/);
+});

@@ -507,4 +507,5 @@ try {
 setCamera(initialCamera);
 document.querySelectorAll<HTMLButtonElement>(".tab").forEach(b => (b.onclick = () => setMode(b.dataset.mode as Mode)));
 $("reset").onclick = () => setMode(mode);
-setMode("fencing");
+const requestedMode = new URLSearchParams(location.search).get("mode");
+setMode(requestedMode === "parry" ? "parry" : "fencing");
