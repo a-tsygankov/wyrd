@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#0b0812">
+    <title>Wyrd · Gameplay POCs</title>
+    <style>
+        :root{
+            font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+            color:#f8f4ff;background:#08060e;--panel:#100c18;--line:#312641;--muted:#9d91ad;
+            --violet:#a978ff;--cyan:#62ddff;--gold:#ffc86b;--green:#72e5ac;--red:#ff7080;
+        }
+        *{box-sizing:border-box}body{margin:0;min-height:100dvh;background:
+            radial-gradient(circle at 50% -14%,#31204c 0,#130d20 28%,#090711 58%,#050408 100%)}
+        a{color:inherit}.shell{width:min(1180px,100%);margin:auto;padding:max(14px,env(safe-area-inset-top)) 14px calc(28px + env(safe-area-inset-bottom))}
+        header{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:5px 2px 18px}.brand{font-size:11px;font-weight:950;letter-spacing:.14em}.toplinks{display:flex;gap:12px;flex-wrap:wrap}.toplinks a{font-size:11px;color:#b9adca;text-decoration:none}
+        .hero{padding:18px 2px 24px}.kicker{font-size:10px;font-weight:900;letter-spacing:.15em;color:#a995c4;text-transform:uppercase}.hero h1{font-size:clamp(32px,8vw,62px);line-height:.94;letter-spacing:-.055em;margin:8px 0 10px;max-width:760px}.hero p{max-width:760px;color:#aaa0b8;font-size:14px;line-height:1.55;margin:0}.summary{display:flex;gap:8px;flex-wrap:wrap;margin-top:15px}.pill{border:1px solid #3a2c50;background:#120d1d;border-radius:99px;padding:7px 10px;color:#c9bdd8;font-size:10px}
+        .section-head{display:flex;justify-content:space-between;gap:12px;align-items:end;margin:24px 2px 10px}.section-head h2{font-size:19px;margin:0}.section-head p{font-size:10px;color:#8e829f;margin:0;text-align:right}
+        .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}
+        .poc{position:relative;overflow:hidden;border:1px solid var(--line);border-radius:22px;background:linear-gradient(180deg,#130f1ddd,#0b0912f2);box-shadow:0 20px 45px #0005}
+        .visual{position:relative;height:230px;background:radial-gradient(circle at 50% 45%,#23163b 0,#0c0914 68%);overflow:hidden;border-bottom:1px solid #2f2440}.visual svg{display:block;width:100%;height:100%}.visual:after{content:"";position:absolute;inset:auto 0 0;height:32%;background:linear-gradient(transparent,#0b0912cc);pointer-events:none}
+        .badge{position:absolute;z-index:2;left:11px;top:11px;padding:5px 8px;border-radius:99px;background:#100b1bd9;border:1px solid #4c3967;color:#ccbcea;font-size:8px;font-weight:900;letter-spacing:.12em;text-transform:uppercase}
+        .badge.new{border-color:#4e7467;color:#aef2d2}.badge.core{border-color:#725f38;color:#ffe0a0}
+        .body{padding:14px}.title-row{display:flex;justify-content:space-between;gap:10px;align-items:start}.title-row h3{margin:0;font-size:20px;letter-spacing:-.025em}.number{font-size:9px;color:#736881;font-weight:900;letter-spacing:.1em}.tagline{font-size:11px;color:#d5c9e4;margin:5px 0 8px;font-weight:750}.desc{font-size:11px;color:#9e93ad;line-height:1.52;margin:0}
+        .loop{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin:11px 0}.loop span{font-size:9px;border:1px solid #30243f;border-radius:7px;background:#0a0710;padding:5px 7px;color:#b7aac7}.loop i{font-style:normal;color:#685d75;font-size:9px}
+        .meta{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:8px}.meta div{border:1px solid #2b2139;border-radius:10px;background:#0a0710;padding:7px 8px}.meta b{display:block;color:#eee8f7;font-size:9px}.meta span{font-size:8px;color:#81758f;display:block;margin-top:2px}
+        .actions{display:flex;gap:7px;margin-top:12px;flex-wrap:wrap}.play,.secondary{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;border-radius:11px;padding:10px 13px;font-size:10px;font-weight:900}.play{background:linear-gradient(135deg,#6142d5,#8c56ff);border:1px solid #9a7aff;color:white;flex:1}.secondary{border:1px solid #413151;background:#130d1c;color:#c8bbd6}
+        .note{margin-top:22px;padding:13px 14px;border:1px solid #2e243c;border-radius:15px;background:#0c0912;color:#8f849d;font-size:10px;line-height:1.5}
+        .legend{font-size:8px;fill:#aa9abb;font-weight:700;letter-spacing:.08em}.mage{fill:#18111f;stroke:#8c73aa;stroke-width:2}.enemy{stroke:#b26f72}.glow-v{stroke:#ad82ff}.glow-c{stroke:#68ddff}.glow-g{stroke:#ffc86b}.glow-e{stroke:#72e5ac}
+        @media(max-width:720px){.grid{grid-template-columns:1fr}.visual{height:215px}.hero h1{font-size:42px}.section-head{align-items:start;flex-direction:column}.section-head p{text-align:left}}
+    </style>
+</head>
+<body>
+<main class="shell">
+    <header>
+        <span class="brand">WYRD · PLAYGROUND</span>
+        <nav class="toplinks"><a href="./">Main game</a><a href="./rune-lab.html">Rune Lab</a><a href="./stroke-duel.html">Trace + Parry</a><a href="./sigil-weave.html">Sigil Weave</a></nav>
+    </header>
+
+    <section class="hero">
+        <span class="kicker">All playable gameplay experiments · old + new</span>
+        <h1>Choose a Wyrd POC.</h1>
+        <p>One page for every gameplay direction we have built so far. Each card shows the central interaction, explains the loop, and launches directly into that prototype without hunting through Settings.</p>
+        <div class="summary"><span class="pill">10 gameplay POCs</span><span class="pill">Phone-first</span><span class="pill">3D where available</span><span class="pill">Solo + hot-seat</span></div>
+    </section>
+
+    <div class="section-head"><h2>Language & tactical duels</h2><p>Read, compose, counter, discover.</p></div>
+    <section class="grid">
+        <article class="poc" id="word-duel">
+            <div class="visual">
+                <span class="badge core">Core POC</span>
+                <svg viewBox="0 0 520 230" role="img" aria-label="Opponent telegraph above a row of spell glyph cards and a reaction choice">
+                    <defs><filter id="g1"><feGaussianBlur stdDeviation="5"/></filter></defs>
+                    <circle cx="90" cy="82" r="25" class="mage"/><circle cx="430" cy="82" r="25" class="mage enemy"/>
+                    <path d="M115 82 C185 28 333 28 405 82" fill="none" stroke="#8a6cff" stroke-width="3" stroke-dasharray="9 7"/>
+                    <g transform="translate(164 48)"><rect width="54" height="42" rx="8" fill="#1c1429" stroke="#765aa5"/><text x="27" y="26" text-anchor="middle" fill="#d8c8ff" font-size="16">FIRE</text></g>
+                    <g transform="translate(232 48)"><rect width="54" height="42" rx="8" fill="#1c1429" stroke="#765aa5"/><text x="27" y="26" text-anchor="middle" fill="#d8c8ff" font-size="16">?</text></g>
+                    <g transform="translate(300 48)"><rect width="54" height="42" rx="8" fill="#1c1429" stroke="#765aa5"/><text x="27" y="26" text-anchor="middle" fill="#d8c8ff" font-size="16">SEEK</text></g>
+                    <text x="260" y="118" text-anchor="middle" class="legend">READ TELEGRAPH → CHOOSE REACTION → COMPOSE</text>
+                    <g transform="translate(102 142)">
+                        <rect x="0" y="0" width="64" height="50" rx="9" fill="#15101f" stroke="#674c8a"/><text x="32" y="29" text-anchor="middle" fill="#e0d5ed" font-size="12">WARD</text>
+                        <rect x="74" y="0" width="64" height="50" rx="9" fill="#15101f" stroke="#674c8a"/><text x="106" y="29" text-anchor="middle" fill="#e0d5ed" font-size="12">FIRE</text>
+                        <rect x="148" y="0" width="64" height="50" rx="9" fill="#15101f" stroke="#ffc86b"/><text x="180" y="29" text-anchor="middle" fill="#ffe5ad" font-size="12">SEEK</text>
+                        <rect x="222" y="0" width="64" height="50" rx="9" fill="#15101f" stroke="#674c8a"/><text x="254" y="29" text-anchor="middle" fill="#e0d5ed" font-size="12">ENEMY</text>
+                    </g>
+                </svg>
+            </div>
+            <div class="body">
+                <div class="title-row"><h3>Word Duel</h3><span class="number">01</span></div>
+                <p class="tagline">Read the spell. Shape the counter.</p>
+                <p class="desc">The original Wyrd language game: infer a partly hidden enemy spell, choose a reaction, then compose a legal 2–4 glyph counter under a Focus budget. The resolver explains every outcome.</p>
+                <div class="loop"><span>Read</span><i>→</i><span>React</span><i>→</i><span>Compose</span><i>→</i><span>Resolve</span></div>
+                <div class="meta"><div><b>Main skill</b><span>Reasoning + grammar</span></div><div><b>Format</b><span>Solo or 2-player hot-seat</span></div></div>
+                <div class="actions"><a class="play" href="./?game=word&deck=on">Play solo →</a><a class="secondary" href="./?game=word&mode=hotseat&deck=off">Hot-seat</a></div>
+            </div>
+        </article>
+
+        <article class="poc" id="rune-fencing">
+            <div class="visual">
+                <span class="badge new">Rune Lab</span>
+                <svg viewBox="0 0 520 230" role="img" aria-label="An opponent draws a rune stroke over time while the player draws a counter rune">
+                    <circle cx="92" cy="154" r="24" class="mage"/><circle cx="428" cy="76" r="24" class="mage enemy"/>
+                    <path d="M392 92 H330 Q294 92 270 58" fill="none" stroke="#ffad70" stroke-width="7" stroke-linecap="round"/>
+                    <circle cx="270" cy="58" r="7" fill="#ffd9b5"/><path d="M270 58 Q238 26 202 67" fill="none" stroke="#ffad70" stroke-width="7" stroke-linecap="round" stroke-dasharray="46 40"/>
+                    <path d="M113 144 Q171 82 232 144" fill="none" class="glow-c" stroke-width="8" stroke-linecap="round"/>
+                    <text x="260" y="192" text-anchor="middle" class="legend">READ WHILE THEY WRITE · ANSWER BEFORE IMPACT</text>
+                    <path d="M333 102 C310 118 283 129 247 137" fill="none" stroke="#a278ff" stroke-width="2" stroke-dasharray="5 5"/>
+                </svg>
+            </div>
+            <div class="body">
+                <div class="title-row"><h3>Rune Fencing</h3><span class="number">02</span></div>
+                <p class="tagline">Recognize the threat before the stroke is finished.</p>
+                <p class="desc">The opponent writes a rune over time. Read its shape as early as possible and draw the rune that counters it. Early reads charge harder; a second rune can complete Empower, Reflect, or Siphon combos.</p>
+                <div class="loop"><span>Watch stroke</span><i>→</i><span>Read</span><i>→</i><span>Draw counter</span><i>→</i><span>Combo</span></div>
+                <div class="meta"><div><b>Main skill</b><span>Visual reading + memory</span></div><div><b>Pressure</b><span>Real-time 60-second duel</span></div></div>
+                <div class="actions"><a class="play" href="./rune-lab.html?mode=fencing">Play Rune Fencing →</a></div>
+            </div>
+        </article>
+
+        <article class="poc" id="rune-parry">
+            <div class="visual">
+                <span class="badge new">Rune Lab</span>
+                <svg viewBox="0 0 520 230" role="img" aria-label="A partially visible enemy rune is hidden behind a veil while the player commits a counter">
+                    <rect x="285" y="34" width="176" height="118" rx="18" fill="#100c18" stroke="#433153"/>
+                    <path d="M315 103 H357 Q380 103 395 78" fill="none" stroke="#ffad70" stroke-width="7" stroke-linecap="round"/>
+                    <rect x="385" y="48" width="52" height="82" rx="12" fill="#24182f" opacity=".96"/><text x="411" y="94" text-anchor="middle" fill="#8d809a" font-size="28">?</text>
+                    <circle cx="91" cy="125" r="24" class="mage"/><path d="M120 126 L225 126" fill="none" class="glow-g" stroke-width="8" stroke-linecap="round"/>
+                    <circle cx="225" cy="126" r="6" fill="#ffe0a1"/>
+                    <text x="260" y="190" text-anchor="middle" class="legend">GLIMPSE OPENING · COMMIT IN 4s · REVEAL BOTH</text>
+                </svg>
+            </div>
+            <div class="body">
+                <div class="title-row"><h3>Rune Parry</h3><span class="number">03</span></div>
+                <p class="tagline">Make the best read from incomplete handwriting.</p>
+                <p class="desc">A faster information-game variant of Rune Lab. You glimpse only the opening of the enemy rune, commit a response within four seconds, then both runes are revealed and compared.</p>
+                <div class="loop"><span>Glimpse</span><i>→</i><span>Infer</span><i>→</i><span>Commit</span><i>→</i><span>Reveal</span></div>
+                <div class="meta"><div><b>Main skill</b><span>Inference under uncertainty</span></div><div><b>Round</b><span>One read + one commitment</span></div></div>
+                <div class="actions"><a class="play" href="./rune-lab.html?mode=parry">Play Rune Parry →</a></div>
+            </div>
+        </article>
+    </section>
+
+    <div class="section-head"><h2>Original arcade POCs</h2><p>Fast one-thumb experiments using the shared 3D arena.</p></div>
+    <section class="grid">
+        <article class="poc" id="volley">
+            <div class="visual">
+                <span class="badge">Original arcade</span>
+                <svg viewBox="0 0 520 230" role="img" aria-label="A magic bolt travels back and forth between two mages over a gate">
+                    <circle cx="78" cy="152" r="25" class="mage"/><circle cx="442" cy="78" r="25" class="mage enemy"/>
+                    <path d="M115 142 Q258 18 408 90" fill="none" stroke="#6d5b83" stroke-width="2" stroke-dasharray="6 7"/>
+                    <circle cx="258" cy="61" r="13" fill="#ffc86b"/><circle cx="258" cy="61" r="23" fill="none" stroke="#ffc86b" stroke-width="2" opacity=".45"/>
+                    <path d="M245 62 L225 68" class="glow-g" stroke-width="3"/><path d="M271 58 L292 52" class="glow-g" stroke-width="3"/>
+                    <path d="M230 178 Q260 134 290 178" fill="none" stroke="#7d669c" stroke-width="5"/>
+                    <text x="260" y="205" text-anchor="middle" class="legend">TIME THE RETURN · CHOOSE COLOUR · BOLT GETS FASTER</text>
+                </svg>
+            </div>
+            <div class="body"><div class="title-row"><h3>Volley</h3><span class="number">04</span></div><p class="tagline">Magic ping-pong with an elemental wheel.</p><p class="desc">Return one persistent bolt over the gate. Hit the timing window, choose a colour that beats or matches the incoming element, and spend Focus on Ward or Smash as the rally accelerates.</p><div class="loop"><span>Read colour</span><i>→</i><span>Time return</span><i>→</i><span>Accelerate</span></div><div class="meta"><div><b>Main skill</b><span>Timing + element choice</span></div><div><b>Win</b><span>Drain 5 hearts</span></div></div><div class="actions"><a class="play" href="./?game=arcade&arcade=volley">Play Volley →</a></div></div>
+        </article>
+
+        <article class="poc" id="quickdraw">
+            <div class="visual">
+                <span class="badge">Original arcade</span>
+                <svg viewBox="0 0 520 230" role="img" aria-label="Two mages charge colored orbs as a circular countdown closes">
+                    <circle cx="83" cy="147" r="25" class="mage"/><circle cx="437" cy="147" r="25" class="mage enemy"/>
+                    <circle cx="160" cy="108" r="22" fill="#72cfff"/><circle cx="360" cy="108" r="30" fill="#b678ff"/>
+                    <circle cx="260" cy="100" r="68" fill="none" stroke="#5e4a77" stroke-width="8"/><path d="M260 32 A68 68 0 0 1 326 84" fill="none" stroke="#ffc86b" stroke-width="8" stroke-linecap="round"/>
+                    <text x="260" y="188" text-anchor="middle" class="legend">QUICK DRAW OR HOLD TO CHARGE · WARD INSTEAD</text>
+                </svg>
+            </div>
+            <div class="body"><div class="title-row"><h3>Quickdraw</h3><span class="number">05</span></div><p class="tagline">Commit fast, charge hard, or spend Focus to ward.</p><p class="desc">Both mages choose once inside a three-second ring. Draw in the first second for a quick bonus, hold to grow an orb, or ward instead. When the ring closes, both choices collide.</p><div class="loop"><span>Read orb</span><i>→</i><span>Draw / charge / ward</span><i>→</i><span>Clash</span></div><div class="meta"><div><b>Main skill</b><span>Risk vs information</span></div><div><b>Input</b><span>One-thumb hold/tap</span></div></div><div class="actions"><a class="play" href="./?game=arcade&arcade=quickdraw">Play Quickdraw →</a></div></div>
+        </article>
+
+        <article class="poc" id="beam">
+            <div class="visual">
+                <span class="badge">Original arcade</span>
+                <svg viewBox="0 0 520 230" role="img" aria-label="Two beams collide in a central knot that moves along a track">
+                    <circle cx="72" cy="120" r="24" class="mage"/><circle cx="448" cy="120" r="24" class="mage enemy"/>
+                    <line x1="105" y1="120" x2="258" y2="120" class="glow-c" stroke-width="12"/><line x1="415" y1="120" x2="262" y2="120" stroke="#ff7979" stroke-width="12"/>
+                    <circle cx="260" cy="120" r="18" fill="#fff"/><circle cx="260" cy="120" r="30" fill="none" stroke="#ffc86b" stroke-width="3" opacity=".55"/>
+                    <line x1="165" y1="174" x2="355" y2="174" stroke="#5e526d" stroke-width="4"/><g fill="#927da8"><circle cx="190" cy="174" r="5"/><circle cx="225" cy="174" r="5"/><circle cx="260" cy="174" r="5"/><circle cx="295" cy="174" r="5"/><circle cx="330" cy="174" r="5"/></g>
+                    <text x="260" y="207" text-anchor="middle" class="legend">PUSH ON THE BEAT · MOVE THE KNOT INTO THEM</text>
+                </svg>
+            </div>
+            <div class="body"><div class="title-row"><h3>Beam Clash</h3><span class="number">06</span></div><p class="tagline">A rhythm tug-of-war inside a spell collision.</p><p class="desc">Two beams meet in a central knot. Push on the beat to move it toward the opponent; a perfect beat pushes farther, and the elemental advantage can double the force.</p><div class="loop"><span>Choose colour</span><i>→</i><span>Hit beat</span><i>→</i><span>Push knot</span></div><div class="meta"><div><b>Main skill</b><span>Rhythm + adaptation</span></div><div><b>Win</b><span>First to 3 seals</span></div></div><div class="actions"><a class="play" href="./?game=arcade&arcade=beam">Play Beam Clash →</a></div></div>
+        </article>
+
+        <article class="poc" id="gate-tug">
+            <div class="visual">
+                <span class="badge">Original arcade</span>
+                <svg viewBox="0 0 520 230" role="img" aria-label="Two charged orbs push a magical gate left and right on a five-position rail">
+                    <circle cx="74" cy="151" r="24" class="mage"/><circle cx="446" cy="151" r="24" class="mage enemy"/>
+                    <line x1="130" y1="120" x2="390" y2="120" stroke="#5f506e" stroke-width="5"/><g fill="#89749c"><circle cx="160" cy="120" r="5"/><circle cx="210" cy="120" r="5"/><circle cx="260" cy="120" r="5"/><circle cx="310" cy="120" r="5"/><circle cx="360" cy="120" r="5"/></g>
+                    <path d="M248 161 Q260 95 272 161" fill="none" stroke="#a47cff" stroke-width="8"/><circle cx="187" cy="82" r="18" fill="#65d9ff"/><circle cx="340" cy="82" r="23" fill="#ff826f"/>
+                    <path d="M204 90 L232 106" class="glow-c" stroke-width="3"/><path d="M323 90 L288 107" stroke="#ff826f" stroke-width="3"/>
+                    <text x="260" y="207" text-anchor="middle" class="legend">DRAW / CHARGE · PUSH GATE ON ITS RAIL · MIND ITS COLOUR</text>
+                </svg>
+            </div>
+            <div class="body"><div class="title-row"><h3>Gate Tug</h3><span class="number">07</span></div><p class="tagline">Quickdraw choices, but the battlefield remembers.</p><p class="desc">Use Quickdraw’s colour/charge/ward choice to push a shared gate along a five-step rail. The gate inherits the last push’s colour, so the next exchange must beat or match its current temper.</p><div class="loop"><span>Draw</span><i>→</i><span>Resolve push</span><i>→</i><span>Change gate</span></div><div class="meta"><div><b>Main skill</b><span>Tempo + board state</span></div><div><b>Win</b><span>Push gate into enemy circle</span></div></div><div class="actions"><a class="play" href="./?game=arcade&arcade=gatetug">Play Gate Tug →</a></div></div>
+        </article>
+
+        <article class="poc" id="ward-rhythm">
+            <div class="visual">
+                <span class="badge">Original arcade</span>
+                <svg viewBox="0 0 520 230" role="img" aria-label="A sequence of magic bolts approaches a defense line on a rhythm">
+                    <circle cx="86" cy="152" r="24" class="mage"/><line x1="145" y1="43" x2="145" y2="176" stroke="#62ddff" stroke-width="4" opacity=".6"/>
+                    <g><circle cx="214" cy="77" r="13" fill="#ff806f"/><circle cx="277" cy="106" r="13" fill="#73dd9d"/><circle cx="341" cy="136" r="13" fill="#9171ff"/><circle cx="402" cy="165" r="13" fill="#66d7ff"/></g>
+                    <path d="M205 80 L155 108 M268 108 L155 124 M332 138 L155 140 M393 165 L155 156" fill="none" stroke="#584965" stroke-width="2" stroke-dasharray="5 5"/>
+                    <g transform="translate(174 190)" fill="#24172e" stroke="#70588c"><rect width="36" height="22" rx="5"/><rect x="46" width="36" height="22" rx="5"/><rect x="92" width="36" height="22" rx="5"/><rect x="138" width="36" height="22" rx="5"/></g>
+                    <text x="260" y="35" text-anchor="middle" class="legend">BLOCK EACH BOLT ON THE BEAT · THEN THROW BACK</text>
+                </svg>
+            </div>
+            <div class="body"><div class="title-row"><h3>Ward Rhythm</h3><span class="number">08</span></div><p class="tagline">Defend a rhythm volley, then turn defense into attack.</p><p class="desc">Several elemental bolts arrive on a beat. Tap the colour that beats each bolt—or match it to absorb power—then use what you stored to throw back at the opponent’s ward.</p><div class="loop"><span>Read sequence</span><i>→</i><span>Ward on beat</span><i>→</i><span>Throw</span></div><div class="meta"><div><b>Main skill</b><span>Rhythm + colour wheel</span></div><div><b>Feel</b><span>Gentlest arcade mode</span></div></div><div class="actions"><a class="play" href="./?game=arcade&arcade=wardrhythm">Play Ward Rhythm →</a></div></div>
+        </article>
+    </section>
+
+    <div class="section-head"><h2>Gesture & spatial magic</h2><p>The newest experiments: physical execution and field composition.</p></div>
+    <section class="grid">
+        <article class="poc" id="trace-parry">
+            <div class="visual">
+                <span class="badge new">New POC</span>
+                <svg viewBox="0 0 520 230" role="img" aria-label="Player traces a rune then crosses an incoming projectile with a parry gesture">
+                    <text x="129" y="42" text-anchor="middle" class="legend">TRACE</text><path d="M55 118 Q126 45 196 118" fill="none" stroke="#a77eff" stroke-width="8" stroke-linecap="round" stroke-dasharray="8 7"/><circle cx="55" cy="118" r="6" fill="#72e5ac"/><circle cx="196" cy="118" r="6" fill="#ffc86b"/>
+                    <line x1="258" y1="35" x2="258" y2="188" stroke="#3f354b" stroke-width="2"/>
+                    <text x="388" y="42" text-anchor="middle" class="legend">PARRY</text><circle cx="437" cy="115" r="14" fill="#ff806f"/><path d="M430 115 H319" fill="none" stroke="#ff806f" stroke-width="4"/><path d="M350 62 L350 168" fill="none" stroke="#62ddff" stroke-width="8" stroke-linecap="round"/><path d="M334 79 Q357 62 374 91" fill="none" stroke="#ffc86b" stroke-width="3"/>
+                    <text x="260" y="210" text-anchor="middle" class="legend">QUALITY OF THE STROKE CHANGES THE SPELL RESULT</text>
+                </svg>
+            </div>
+            <div class="body">
+                <div class="title-row"><h3>Rune Trace + Arcane Parry</h3><span class="number">09</span></div>
+                <p class="tagline">Draw accurately to attack; physically intercept magic to defend.</p>
+                <p class="desc">Each exchange asks for a random offensive rune. Accuracy, form, direction and speed determine the cast. Then an opponent spell crosses the cinematic 3D arena and you Block, Deflect, or Reflect it with another stroke.</p>
+                <div class="loop"><span>Trace</span><i>→</i><span>Cast</span><i>→</i><span>Read attack</span><i>→</i><span>Parry</span></div>
+                <div class="meta"><div><b>Main skill</b><span>Stroke execution + reaction</span></div><div><b>Flow</b><span>Dynamic auto-advance</span></div></div>
+                <div class="actions"><a class="play" href="./stroke-duel.html">Play Trace + Parry →</a></div>
+            </div>
+        </article>
+
+        <article class="poc" id="sigil-weave">
+            <div class="visual">
+                <span class="badge new">Newest POC</span>
+                <svg viewBox="0 0 520 230" role="img" aria-label="Six spatial anchors connected into a glowing sigil while an opponent projectile approaches">
+                    <g transform="translate(260 112)" fill="none" stroke-width="4">
+                        <circle cx="0" cy="-78" r="10" stroke="#ffc86b"/><circle cx="68" cy="-39" r="10" stroke="#a978ff"/><circle cx="68" cy="39" r="10" stroke="#62ddff"/><circle cx="0" cy="78" r="10" stroke="#72e5ac"/><circle cx="-68" cy="39" r="10" stroke="#a978ff"/><circle cx="-68" cy="-39" r="10" stroke="#62ddff"/>
+                        <path d="M0 -78 L68 39 L-68 39 Z" stroke="#a978ff"/><path d="M68 -39 L0 78 L-68 -39 Z" stroke="#62ddff" opacity=".75"/>
+                        <circle cx="0" cy="0" r="15" fill="#d8c9ff" stroke="#d8c9ff"/>
+                    </g>
+                    <circle cx="65" cy="157" r="23" class="mage"/><circle cx="455" cy="83" r="23" class="mage enemy"/><circle cx="391" cy="104" r="10" fill="#ff7b69"/><path d="M382 108 L344 119" stroke="#ff7b69" stroke-width="3"/>
+                    <text x="260" y="217" text-anchor="middle" class="legend">PLACE RUNES ON ANCHORS · CONNECT LAYERS · RELEASE SIGIL</text>
+                </svg>
+            </div>
+            <div class="body">
+                <div class="title-row"><h3>Sigil Weave</h3><span class="number">10</span></div>
+                <p class="tagline">Build magic as a spatial structure, not a single gesture.</p>
+                <p class="desc">Choose one of three guided recipes—or improvise in Free Weave—then place rune layers on six anchors. Geometry, order, stability and charge determine the final coherence. Optional Arcade Parry interrupts the construction.</p>
+                <div class="loop"><span>Select rune</span><i>→</i><span>Anchor</span><i>→</i><span>Connect</span><i>→</i><span>Release</span></div>
+                <div class="meta"><div><b>Main skill</b><span>Composition + spatial memory</span></div><div><b>Variants</b><span>3 recipes + sandbox</span></div></div>
+                <div class="actions"><a class="play" href="./sigil-weave.html">Play Sigil Weave →</a><a class="secondary" href="./sigil-weave.html?parry=off">No Parry</a></div>
+            </div>
+        </article>
+    </section>
+
+    <p class="note"><strong>What is not a separate POC?</strong> Weather rounds, Sudden Death, Press the Round, teaching decks, rulesets, arena FX, and similar switches are modifiers inside the Word Duel rather than standalone gameplay experiments, so they stay on the Word Duel card instead of inflating this list.</p>
+</main>
+</body>
+</html>
