@@ -19,8 +19,9 @@ test("POC launcher lists every gameplay prototype with an illustration and play 
         "Rune Trace + Arcane Parry",
         "Sigil Weave"
     ]) {
-        const card = page.locator("article.poc", { hasText: title });
-        await expect(card).toBeVisible();
+        const heading = page.getByRole("heading", { name: title, exact: true });
+        await expect(heading).toBeVisible();
+        const card = heading.locator("xpath=ancestor::article[contains(concat(' ', normalize-space(@class), ' '), ' poc ')]");
         await expect(card.locator("svg")).toHaveCount(1);
         await expect(card.getByRole("link", { name: /Play/ }).first()).toBeVisible();
     }
